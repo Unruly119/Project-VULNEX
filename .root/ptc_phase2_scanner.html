@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 2 — Security Scanner Core</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Fira+Code:wght@400;500;600&family=Unbounded:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c0e14;
+  --s1:#131620;
+  --s2:#181c2a;
+  --s3:#1e2438;
+  --bd:#252d45;
+  --bd2:#2e3850;
+  --cyan:#22d3ee;
+  --cyan2:#06b6d4;
+  --lime:#84cc16;
+  --amber:#f59e0b;
+  --rose:#f43f5e;
+  --violet:#a78bfa;
+  --sky:#38bdf8;
+  --text:#e2e8f8;
+  --muted:#64748b;
+  --dim:#374155;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Noto Sans Thai',sans-serif;
+  font-size:15px;
+  line-height:1.7;
+  overflow-x:hidden;
+}
+
+/* noise texture */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;opacity:.4;
+}
+
+/* ─── TOP STRIP ─── */
+.strip{
+  background:linear-gradient(90deg,#0c0e14,#131a2e,#0c0e14);
+  border-bottom:1px solid var(--bd);
+  height:44px;
+  display:flex;align-items:center;
+  padding:0 28px;
+  gap:16px;
+  position:sticky;top:0;z-index:200;
+}
+.strip-dots{display:flex;gap:5px}
+.dot{width:11px;height:11px;border-radius:50%}
+.dr{background:#ff5f57}.dy{background:#febc2e}.dg{background:#28c840}
+.strip-path{
+  font-family:'Fira Code',monospace;
+  font-size:11px;color:var(--muted);
+  margin-left:4px;
+}
+.strip-path span{color:var(--cyan);opacity:.8}
+.strip-phase{
+  margin-left:auto;
+  background:rgba(34,211,238,.1);
+  border:1px solid rgba(34,211,238,.2);
+  color:var(--cyan);
+  font-family:'Fira Code',monospace;
+  font-size:10px;
+  padding:3px 12px;border-radius:2px;
+  letter-spacing:.08em;
+}
+
+/* ─── HERO ─── */
+.hero{
+  padding:52px 48px 44px;
+  position:relative;z-index:1;
+  border-bottom:1px solid var(--bd);
+  background:linear-gradient(180deg,rgba(34,211,238,.04) 0%,transparent 100%);
+}
+.hero-tag{
+  font-family:'Fira Code',monospace;
+  font-size:11px;color:var(--cyan);
+  letter-spacing:.15em;text-transform:uppercase;
+  margin-bottom:14px;
+  display:flex;align-items:center;gap:10px;
+}
+.hero-tag::before{content:'';width:20px;height:1px;background:var(--cyan);opacity:.5}
+h1{
+  font-family:'Unbounded',sans-serif;
+  font-size:clamp(28px,4vw,48px);
+  font-weight:900;
+  line-height:1.05;
+  letter-spacing:-.03em;
+  margin-bottom:14px;
+  color:#fff;
+}
+h1 em{color:var(--cyan);font-style:normal}
+.hero-desc{
+  font-size:15px;color:var(--muted);
+  max-width:580px;line-height:1.8;
+}
+.roadmap-mini{
+  display:flex;gap:0;margin-top:32px;
+  flex-wrap:wrap;
+}
+.rm-step{
+  display:flex;align-items:center;gap:0;
+}
+.rm-box{
+  font-family:'Fira Code',monospace;
+  font-size:11px;
+  padding:6px 14px;
+  border:1px solid var(--bd2);
+  color:var(--muted);
+  background:var(--s2);
+  white-space:nowrap;
+}
+.rm-box.done{border-color:var(--lime);color:var(--lime);background:rgba(132,204,22,.07)}
+.rm-box.active{border-color:var(--cyan);color:var(--cyan);background:rgba(34,211,238,.1)}
+.rm-arrow{color:var(--dim);font-size:16px;padding:0 4px}
+
+/* ─── LESSON LAYOUT ─── */
+.lessons{
+  max-width:1040px;
+  margin:0 auto;
+  padding:40px 48px 100px;
+  position:relative;z-index:1;
+}
+
+/* ─── LESSON CARD ─── */
+.lesson{
+  border:1px solid var(--bd);
+  border-radius:12px;
+  background:var(--s1);
+  margin-bottom:24px;
+  overflow:hidden;
+  transition:border-color .2s;
+}
+.lesson:hover{border-color:var(--bd2)}
+.lesson.active-lesson{border-color:var(--cyan);border-width:1.5px}
+
+.lesson-head{
+  padding:20px 24px;
+  display:flex;align-items:center;gap:16px;
+  cursor:pointer;
+  user-select:none;
+  border-bottom:1px solid transparent;
+  transition:background .15s;
+}
+.lesson-head:hover{background:rgba(255,255,255,.02)}
+.lesson.open .lesson-head{border-bottom-color:var(--bd)}
+
+.ln{
+  font-family:'Unbounded',sans-serif;
+  font-size:18px;
+  color:var(--cyan);
+  opacity:.25;
+  min-width:36px;
+  font-weight:900;
+}
+.lesson.open .ln{opacity:.6}
+
+.lesson-info{flex:1}
+.lesson-title{
+  font-size:16px;font-weight:700;
+  color:var(--text);margin-bottom:2px;
+}
+.lesson-meta{
+  font-family:'Fira Code',monospace;
+  font-size:11px;color:var(--muted);
+  display:flex;gap:14px;
+}
+.lm-file{color:var(--sky)}
+.lm-time{color:var(--muted)}
+
+.lesson-tags{display:flex;gap:6px;flex-wrap:wrap}
+.ltag{
+  font-size:11px;
+  padding:3px 9px;border-radius:3px;
+  font-family:'Fira Code',monospace;
+  letter-spacing:.03em;
+}
+.ltag-new{background:rgba(132,204,22,.1);color:var(--lime);border:1px solid rgba(132,204,22,.2)}
+.ltag-concept{background:rgba(34,211,238,.08);color:var(--cyan);border:1px solid rgba(34,211,238,.15)}
+.ltag-code{background:rgba(167,139,250,.08);color:var(--violet);border:1px solid rgba(167,139,250,.15)}
+
+.chevron{
+  font-size:11px;color:var(--dim);
+  transition:transform .2s;
+}
+.lesson.open .chevron{transform:rotate(90deg)}
+
+/* ─── LESSON BODY ─── */
+.lesson-body{
+  display:none;
+  padding:28px 28px 24px;
+}
+.lesson.open .lesson-body{display:block}
+
+/* ─── EXPLAIN BLOCK ─── */
+.explain{
+  background:var(--s2);
+  border-left:3px solid var(--cyan);
+  border-radius:0 8px 8px 0;
+  padding:16px 20px;
+  margin-bottom:20px;
+  font-size:14.5px;
+  color:#a0aec0;
+  line-height:1.9;
+}
+.explain strong{color:var(--text)}
+.explain .hl{
+  background:rgba(34,211,238,.12);
+  color:var(--cyan);
+  padding:1px 6px;border-radius:3px;
+  font-family:'Fira Code',monospace;
+  font-size:12px;
+}
+
+/* ─── CODE BLOCK ─── */
+.code-wrap{
+  border-radius:10px;
+  overflow:hidden;
+  margin:16px 0;
+  border:1px solid var(--bd);
+}
+.code-top{
+  background:var(--s3);
+  border-bottom:1px solid var(--bd);
+  padding:10px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.code-fname{
+  font-family:'Fira Code',monospace;
+  font-size:12px;
+  color:var(--sky);
+  display:flex;align-items:center;gap:8px;
+}
+.code-fname::before{
+  content:'';
+  width:8px;height:8px;border-radius:50%;
+  background:var(--amber);
+  flex-shrink:0;
+}
+.copy-btn{
+  font-family:'Fira Code',monospace;
+  font-size:10px;
+  color:var(--muted);
+  background:none;
+  border:1px solid var(--bd2);
+  border-radius:4px;
+  padding:3px 10px;
+  cursor:pointer;
+  transition:all .15s;
+}
+.copy-btn:hover{background:var(--bd2);color:var(--text)}
+.copy-btn.ok{color:var(--lime);border-color:var(--lime)}
+
+/* annotated code */
+.code-body{
+  background:#0a0d14;
+  padding:0;
+  font-family:'Fira Code',monospace;
+  font-size:13px;
+  line-height:1;
+  overflow-x:auto;
+}
+.code-line{
+  display:flex;
+  min-height:28px;
+  transition:background .1s;
+}
+.code-line:hover{background:rgba(255,255,255,.025)}
+.code-line.highlight-line{background:rgba(34,211,238,.06)!important;border-left:2px solid var(--cyan)}
+.code-line.comment-line{opacity:.55}
+.ln-num{
+  min-width:42px;
+  padding:5px 12px 5px 8px;
+  text-align:right;
+  color:var(--dim);
+  font-size:11px;
+  user-select:none;
+  flex-shrink:0;
+  border-right:1px solid var(--bd);
+  line-height:18px;
+  padding-top:5px;
+}
+.ln-code{
+  padding:5px 16px;
+  white-space:pre;
+  color:#c9d5e8;
+  flex:1;
+  line-height:18px;
+}
+
+/* syntax colors */
+.kw{color:#f472b6}     /* keywords: import, def, if, return */
+.fn{color:#60a5fa}     /* functions */
+.st{color:#34d399}     /* strings */
+.cm{color:#4a5568;font-style:italic}  /* comments */
+.nm{color:#fbbf24}     /* numbers/constants */
+.op{color:#94a3b8}     /* operators */
+.ty{color:#a78bfa}     /* types/classes */
+.vr{color:#e2e8f8}     /* variables */
+.dc{color:#22d3ee}     /* decorators / special */
+
+/* annotation pill */
+.ann{
+  display:inline-block;
+  background:rgba(34,211,238,.12);
+  border:1px solid rgba(34,211,238,.2);
+  color:var(--cyan);
+  font-size:10px;
+  padding:1px 8px;
+  border-radius:3px;
+  margin-left:12px;
+  font-style:normal;
+  vertical-align:middle;
+  white-space:nowrap;
+}
+.ann-amber{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.2);color:var(--amber)}
+.ann-lime{background:rgba(132,204,22,.1);border-color:rgba(132,204,22,.2);color:var(--lime)}
+.ann-rose{background:rgba(244,63,94,.1);border-color:rgba(244,63,94,.2);color:var(--rose)}
+
+/* ─── CALLOUT ─── */
+.box{
+  border-radius:8px;
+  padding:14px 18px;
+  margin:14px 0;
+  display:flex;gap:12px;
+  font-size:14px;line-height:1.75;
+}
+.box-ico{font-size:18px;flex-shrink:0;margin-top:1px}
+.box-txt strong{display:block;margin-bottom:3px}
+
+.box-info{background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.2);color:#93c5fd}
+.box-warn{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);color:#fcd34d}
+.box-ok{background:rgba(132,204,22,.07);border:1px solid rgba(132,204,22,.2);color:#bef264}
+.box-tip{background:rgba(167,139,250,.07);border:1px solid rgba(167,139,250,.2);color:#c4b5fd}
+
+/* ─── OUTPUT BLOCK ─── */
+.output-block{
+  background:#050810;
+  border:1px solid var(--bd);
+  border-radius:8px;
+  padding:16px 20px;
+  margin:14px 0;
+}
+.output-label{
+  font-family:'Fira Code',monospace;
+  font-size:10px;color:var(--lime);
+  letter-spacing:.1em;text-transform:uppercase;
+  margin-bottom:10px;
+  display:flex;align-items:center;gap:6px;
+}
+.output-label::before{
+  content:'▶';font-size:8px;
+}
+.output-txt{
+  font-family:'Fira Code',monospace;
+  font-size:12.5px;
+  color:#7dd3a8;
+  line-height:2;
+  white-space:pre;
+}
+
+/* ─── CONCEPT CARD ─── */
+.concept-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;margin:16px 0;
+}
+@media(max-width:600px){.concept-grid{grid-template-columns:1fr}}
+.concept-card{
+  background:var(--s2);
+  border:1px solid var(--bd2);
+  border-radius:8px;
+  padding:16px;
+}
+.cc-title{
+  font-size:13px;font-weight:700;
+  color:var(--text);margin-bottom:6px;
+  display:flex;align-items:center;gap:8px;
+}
+.cc-body{font-size:13px;color:var(--muted);line-height:1.65}
+
+/* ─── QUIZ ─── */
+.quiz{
+  background:var(--s2);
+  border:1px solid var(--bd2);
+  border-radius:10px;
+  padding:20px;
+  margin:20px 0;
+}
+.quiz-q{
+  font-size:14.5px;font-weight:600;
+  color:var(--text);margin-bottom:14px;
+  display:flex;gap:10px;align-items:flex-start;
+}
+.quiz-q::before{
+  content:'?';
+  background:rgba(34,211,238,.15);
+  color:var(--cyan);
+  width:24px;height:24px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Fira Code',monospace;
+  font-size:12px;flex-shrink:0;margin-top:1px;
+}
+.quiz-opts{display:flex;flex-direction:column;gap:8px}
+.quiz-opt{
+  padding:10px 14px;
+  background:var(--bg);
+  border:1px solid var(--bd2);
+  border-radius:6px;
+  cursor:pointer;
+  font-size:13.5px;
+  color:var(--muted);
+  transition:all .15s;
+  display:flex;align-items:center;gap:10px;
+}
+.quiz-opt::before{
+  content:'○';
+  font-size:14px;color:var(--dim);
+  flex-shrink:0;
+}
+.quiz-opt:hover{border-color:var(--bd);color:var(--text)}
+.quiz-opt.correct{
+  background:rgba(132,204,22,.08);
+  border-color:var(--lime);color:var(--lime);
+}
+.quiz-opt.correct::before{content:'✓';color:var(--lime)}
+.quiz-opt.wrong{
+  background:rgba(244,63,94,.06);
+  border-color:var(--rose);color:var(--rose);
+}
+.quiz-opt.wrong::before{content:'✗';color:var(--rose)}
+.quiz-feedback{
+  margin-top:12px;padding:10px 14px;
+  border-radius:6px;
+  font-size:13.5px;
+  display:none;
+}
+.quiz-feedback.show{display:block}
+.qf-ok{background:rgba(132,204,22,.08);border:1px solid rgba(132,204,22,.2);color:#bef264}
+.qf-no{background:rgba(244,63,94,.06);border:1px solid rgba(244,63,94,.2);color:#fda4af}
+
+/* ─── NAV BUTTONS ─── */
+.nav-btns{
+  display:flex;justify-content:space-between;
+  align-items:center;
+  margin-top:28px;
+  padding-top:20px;
+  border-top:1px solid var(--bd);
+}
+.btn{
+  padding:10px 24px;
+  border-radius:7px;
+  font-size:14px;font-weight:700;
+  cursor:pointer;border:none;
+  transition:all .2s;
+  font-family:'Noto Sans Thai',sans-serif;
+  display:flex;align-items:center;gap:8px;
+}
+.btn-p{background:var(--cyan);color:#000}
+.btn-p:hover{background:var(--cyan2);transform:translateY(-1px);box-shadow:0 4px 20px rgba(34,211,238,.3)}
+.btn-s{background:transparent;color:var(--muted);border:1px solid var(--bd2)}
+.btn-s:hover{background:var(--bd);color:var(--text)}
+.btn:disabled{opacity:.3;cursor:not-allowed;transform:none!important}
+
+/* ─── PROGRESS TRACK ─── */
+.lesson-progress{
+  display:flex;gap:8px;
+  margin-bottom:32px;
+  align-items:center;
+}
+.lp-dot{
+  width:28px;height:28px;border-radius:50%;
+  border:1.5px solid var(--bd2);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Fira Code',monospace;
+  font-size:11px;color:var(--dim);
+  cursor:pointer;
+  transition:all .2s;
+  flex-shrink:0;
+}
+.lp-dot.done{
+  background:rgba(132,204,22,.15);
+  border-color:var(--lime);color:var(--lime);
+}
+.lp-dot.current{
+  background:rgba(34,211,238,.15);
+  border-color:var(--cyan);color:var(--cyan);
+}
+.lp-line{
+  flex:1;height:1px;background:var(--bd);
+  max-width:40px;
+}
+.lp-line.done{background:var(--lime)}
+.lp-label{
+  font-family:'Fira Code',monospace;
+  font-size:11px;color:var(--muted);
+  margin-left:8px;
+}
+
+@media(max-width:700px){
+  .hero,.lessons{padding-left:20px;padding-right:20px}
+  .hero{padding-top:32px}
+}
+</style>
+</head>
+<body>
+
+<!-- STRIP -->
+<div class="strip">
+  <div class="strip-dots">
+    <div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div>
+  </div>
+  <span class="strip-path">ptc-ai-web-shield / <span>phase-2</span> / security-scanner</span>
+  <span class="strip-phase">PHASE 2 OF 4</span>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-tag">CODING LESSON · SECURITY SCANNER CORE</div>
+  <h1>เขียน<em> Scanner</em><br>ตัวแรก</h1>
+  <p class="hero-desc">สร้างโมดูลตรวจสอบความปลอดภัยเว็บไซต์ ทีละไฟล์ อธิบายทุกบรรทัด เข้าใจก่อน copy</p>
+
+  <div class="roadmap-mini">
+    <div class="rm-step"><div class="rm-box done">✓ Phase1: Setup</div><div class="rm-arrow">→</div></div>
+    <div class="rm-step"><div class="rm-box active">● Phase2: Scanner</div><div class="rm-arrow">→</div></div>
+    <div class="rm-step"><div class="rm-box">Phase3: AI Engine</div><div class="rm-arrow">→</div></div>
+    <div class="rm-step"><div class="rm-box">Phase4: UI+Deploy</div></div>
+  </div>
+</div>
+
+<!-- LESSONS -->
+<div class="lessons">
+
+  <!-- Progress dots -->
+  <div class="lesson-progress">
+    <div class="lp-dot current" id="ld1" onclick="openLesson(1)">1</div>
+    <div class="lp-line" id="ll1"></div>
+    <div class="lp-dot" id="ld2" onclick="openLesson(2)">2</div>
+    <div class="lp-line" id="ll2"></div>
+    <div class="lp-dot" id="ld3" onclick="openLesson(3)">3</div>
+    <div class="lp-line" id="ll3"></div>
+    <div class="lp-dot" id="ld4" onclick="openLesson(4)">4</div>
+    <div class="lp-line" id="ll4"></div>
+    <div class="lp-dot" id="ld5" onclick="openLesson(5)">5</div>
+    <span class="lp-label" id="lpLabel">บทที่ 1/5</span>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- LESSON 1: แนวคิด HTTP Headers       -->
+  <!-- ════════════════════════════════════ -->
+  <div class="lesson open active-lesson" id="lesson1">
+    <div class="lesson-head" onclick="toggleLesson(1)">
+      <span class="ln">01</span>
+      <div class="lesson-info">
+        <div class="lesson-title">HTTP Headers คืออะไร? — ก่อนเขียนโค้ด ต้องเข้าใจก่อน</div>
+        <div class="lesson-meta">
+          <span class="lm-file">แนวคิด</span>
+          <span class="lm-time">⏱ 5 นาที</span>
+        </div>
+      </div>
+      <div class="lesson-tags">
+        <span class="ltag ltag-concept">concept</span>
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="lesson-body">
+
+      <div class="explain">
+        ทุกครั้งที่เบราว์เซอร์ขอเว็บไซต์ เซิร์ฟเวอร์จะตอบกลับมา 2 ส่วนคือ <strong>"ส่วนหัว (Headers)"</strong> และ <strong>"เนื้อหา (Body)"</strong><br><br>
+        Headers คือข้อมูล metadata ที่ซ่อนอยู่ ผู้ใช้ทั่วไปมองไม่เห็น แต่ <strong>นักทดสอบความปลอดภัยใช้ดูว่าเว็บไซต์ตั้งค่าความปลอดภัยถูกต้องไหม</strong>
+      </div>
+
+      <div class="concept-grid">
+        <div class="concept-card">
+          <div class="cc-title">🛡️ Content-Security-Policy</div>
+          <div class="cc-body">ป้องกัน XSS Attack — กำหนดว่าเว็บโหลด script จากที่ไหนได้บ้าง ถ้าไม่มีเสี่ยงมาก</div>
+        </div>
+        <div class="concept-card">
+          <div class="cc-title">🔒 Strict-Transport-Security</div>
+          <div class="cc-body">บังคับให้ใช้ HTTPS เสมอ ป้องกัน Man-in-the-Middle Attack</div>
+        </div>
+        <div class="concept-card">
+          <div class="cc-title">🪟 X-Frame-Options</div>
+          <div class="cc-body">ป้องกัน Clickjacking — ไม่ให้คนฝังเว็บเราใน iframe ของเว็บอื่น</div>
+        </div>
+        <div class="concept-card">
+          <div class="cc-title">🔍 X-Content-Type-Options</div>
+          <div class="cc-body">ป้องกัน MIME Sniffing — บังคับเบราว์เซอร์อ่านไฟล์ตามประเภทที่กำหนด</div>
+        </div>
+      </div>
+
+      <div class="box box-info">
+        <span class="box-ico">💡</span>
+        <div class="box-txt">
+          <strong>โปรเจกต์เราจะทำอะไร?</strong>
+          ดึง Headers เหล่านี้จากเว็บไซต์เป้าหมาย แล้วส่งให้ AI วิเคราะห์ว่ามีหรือไม่มี ตั้งค่าถูกหรือผิด
+        </div>
+      </div>
+
+      <!-- Quiz -->
+      <div class="quiz">
+        <div class="quiz-q">ถ้าเว็บไซต์ไม่มี X-Frame-Options header จะเสี่ยงต่อการโจมตีแบบใด?</div>
+        <div class="quiz-opts">
+          <div class="quiz-opt" onclick="answerQuiz(this,'wrong')">SQL Injection</div>
+          <div class="quiz-opt" onclick="answerQuiz(this,'correct')">Clickjacking</div>
+          <div class="quiz-opt" onclick="answerQuiz(this,'wrong')">DDoS Attack</div>
+          <div class="quiz-opt" onclick="answerQuiz(this,'wrong')">Brute Force</div>
+        </div>
+        <div class="quiz-feedback qf-ok" id="qf1ok">✅ ถูกต้อง! Clickjacking คือการที่คนร้ายซ่อนเว็บไซต์ไว้ใน iframe แล้วหลอกให้ผู้ใช้กดโดยไม่รู้ตัว X-Frame-Options: DENY จะป้องกันได้</div>
+        <div class="quiz-feedback qf-no" id="qf1no">❌ ไม่ใช่ครับ X-Frame-Options ป้องกัน <strong>Clickjacking</strong> — การซ่อนเว็บไว้ใน iframe</div>
+      </div>
+
+      <div class="nav-btns">
+        <button class="btn btn-s" disabled>← ก่อนหน้า</button>
+        <button class="btn btn-p" onclick="doneLesson(1)">เข้าใจแล้ว ไปบทต่อไป →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- LESSON 2: scanner/headers.py        -->
+  <!-- ════════════════════════════════════ -->
+  <div class="lesson" id="lesson2">
+    <div class="lesson-head" onclick="toggleLesson(2)">
+      <span class="ln">02</span>
+      <div class="lesson-info">
+        <div class="lesson-title">เขียน headers.py — ดึง Security Headers</div>
+        <div class="lesson-meta">
+          <span class="lm-file lm-file">📄 src/scanner/headers.py</span>
+          <span class="lm-time">⏱ 10 นาที</span>
+        </div>
+      </div>
+      <div class="lesson-tags">
+        <span class="ltag ltag-new">ไฟล์ใหม่</span>
+        <span class="ltag ltag-code">code</span>
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="lesson-body">
+
+      <div class="explain">
+        ก่อนเขียนโค้ด สร้าง folder ก่อน:<br>
+        <span class="hl">mkdir src\scanner</span> และสร้างไฟล์ว่าง <span class="hl">src\scanner\__init__.py</span> (ไฟล์นี้บอก Python ว่า folder นี้คือ "package")
+      </div>
+
+      <div class="box box-warn">
+        <span class="box-ico">⚠️</span>
+        <div class="box-txt">
+          <strong>ทำใน Terminal ของ VS Code ก่อน (Ctrl+`) :</strong>
+          <code style="display:block;font-family:'Fira Code',monospace;font-size:12px;margin-top:6px;color:#fcd34d">
+            cd C:\Users\YourName\Desktop\ptc-ai-web-shield<br>
+            venv\Scripts\activate<br>
+            mkdir src\scanner<br>
+            type nul > src\scanner\__init__.py
+          </code>
+        </div>
+      </div>
+
+      <p style="font-size:14px;font-weight:600;color:var(--text);margin:20px 0 12px;">สร้างไฟล์ <code style="font-family:'Fira Code',monospace;color:var(--sky)">src/scanner/headers.py</code> :</p>
+
+      <div class="code-wrap">
+        <div class="code-top">
+          <span class="code-fname">src/scanner/headers.py</span>
+          <button class="copy-btn" onclick="copyCode('code2')">copy</button>
+        </div>
+        <div class="code-body" id="code2">
+<div class="code-line highlight-line"><span class="ln-num">1</span><span class="ln-code"><span class="cm"># ── src/scanner/headers.py ──────────────────────</span></span></div>
+<div class="code-line highlight-line"><span class="ln-num">2</span><span class="ln-code"><span class="cm"># หน้าที่: ดึง HTTP Security Headers จากเว็บไซต์</span></span></div>
+<div class="code-line"><span class="ln-num">3</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">4</span><span class="ln-code"><span class="kw">import</span> <span class="vr">httpx</span>  <span class="ann">httpx = library ส่ง HTTP request</span></span></div>
+<div class="code-line"><span class="ln-num">5</span><span class="ln-code"><span class="kw">from</span> <span class="vr">typing</span> <span class="kw">import</span> <span class="ty">Dict</span>, <span class="ty">Optional</span>  <span class="ann">บอก Python ว่า return type คืออะไร</span></span></div>
+<div class="code-line"><span class="ln-num">6</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">7</span><span class="ln-code"><span class="cm"># Security Headers ที่เราจะตรวจสอบ</span></span></div>
+<div class="code-line highlight-line"><span class="ln-num">8</span><span class="ln-code"><span class="cm"># เก็บเป็น list เพื่อให้เพิ่มได้ง่ายในอนาคต</span></span></div>
+<div class="code-line"><span class="ln-num">9</span><span class="ln-code"><span class="vr">SECURITY_HEADERS</span> <span class="op">=</span> [  <span class="ann-amber ann">รายการที่ต้องตรวจ</span></span></div>
+<div class="code-line"><span class="ln-num">10</span><span class="ln-code">    <span class="st">"Content-Security-Policy"</span>,</span></div>
+<div class="code-line"><span class="ln-num">11</span><span class="ln-code">    <span class="st">"Strict-Transport-Security"</span>,</span></div>
+<div class="code-line"><span class="ln-num">12</span><span class="ln-code">    <span class="st">"X-Frame-Options"</span>,</span></div>
+<div class="code-line"><span class="ln-num">13</span><span class="ln-code">    <span class="st">"X-Content-Type-Options"</span>,</span></div>
+<div class="code-line"><span class="ln-num">14</span><span class="ln-code">    <span class="st">"Referrer-Policy"</span>,</span></div>
+<div class="code-line"><span class="ln-num">15</span><span class="ln-code">    <span class="st">"Permissions-Policy"</span>,</span></div>
+<div class="code-line"><span class="ln-num">16</span><span class="ln-code">]</span></div>
+<div class="code-line"><span class="ln-num">17</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">18</span><span class="ln-code"><span class="kw">def</span> <span class="fn">check_headers</span>(<span class="vr">url</span>: <span class="ty">str</span>) <span class="op">-></span> <span class="ty">Dict</span>:  <span class="ann-lime ann">function หลัก</span></span></div>
+<div class="code-line"><span class="ln-num">19</span><span class="ln-code">    <span class="st">"""</span></span></div>
+<div class="code-line"><span class="ln-num">20</span><span class="ln-code">    <span class="st">ดึง Security Headers จาก URL ที่ระบุ</span></span></div>
+<div class="code-line"><span class="ln-num">21</span><span class="ln-code">    <span class="st">Return: dict ที่บอกว่า header แต่ละตัวมีหรือไม่</span></span></div>
+<div class="code-line"><span class="ln-num">22</span><span class="ln-code">    <span class="st">"""</span></span></div>
+<div class="code-line"><span class="ln-num">23</span><span class="ln-code">    <span class="vr">result</span> <span class="op">=</span> {  <span class="ann">เก็บผลลัพธ์</span></span></div>
+<div class="code-line"><span class="ln-num">24</span><span class="ln-code">        <span class="st">"url"</span>: <span class="vr">url</span>,</span></div>
+<div class="code-line"><span class="ln-num">25</span><span class="ln-code">        <span class="st">"headers_found"</span>: {},   <span class="cm"># headers ที่เจอ</span></span></div>
+<div class="code-line"><span class="ln-num">26</span><span class="ln-code">        <span class="st">"headers_missing"</span>: [], <span class="cm"># headers ที่หายไป</span></span></div>
+<div class="code-line"><span class="ln-num">27</span><span class="ln-code">        <span class="st">"score"</span>: <span class="nm">0</span>,            <span class="cm"># คะแนน 0-100</span></span></div>
+<div class="code-line"><span class="ln-num">28</span><span class="ln-code">        <span class="st">"error"</span>: <span class="nm">None</span>,         <span class="cm"># error message ถ้ามี</span></span></div>
+<div class="code-line"><span class="ln-num">29</span><span class="ln-code">    }</span></div>
+<div class="code-line"><span class="ln-num">30</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">31</span><span class="ln-code">    <span class="kw">try</span>:  <span class="ann-rose ann">จัดการ error</span></span></div>
+<div class="code-line"><span class="ln-num">32</span><span class="ln-code">        <span class="cm"># ส่ง HTTP request ไปยัง URL</span></span></div>
+<div class="code-line"><span class="ln-num">33</span><span class="ln-code">        <span class="cm"># timeout=10 รอไม่เกิน 10 วินาที</span></span></div>
+<div class="code-line"><span class="ln-num">34</span><span class="ln-code">        <span class="cm"># follow_redirects เพื่อตามไป https อัตโนมัติ</span></span></div>
+<div class="code-line"><span class="ln-num">35</span><span class="ln-code">        <span class="kw">with</span> <span class="vr">httpx</span>.<span class="fn">Client</span>(</span></div>
+<div class="code-line"><span class="ln-num">36</span><span class="ln-code">            <span class="vr">timeout</span><span class="op">=</span><span class="nm">10</span>,</span></div>
+<div class="code-line"><span class="ln-num">37</span><span class="ln-code">            <span class="vr">follow_redirects</span><span class="op">=</span><span class="nm">True</span>,</span></div>
+<div class="code-line"><span class="ln-num">38</span><span class="ln-code">            <span class="vr">verify</span><span class="op">=</span><span class="nm">False</span>  <span class="cm"># ยอมรับ SSL cert ที่หมดอายุด้วย</span></span></div>
+<div class="code-line"><span class="ln-num">39</span><span class="ln-code">        ) <span class="kw">as</span> <span class="vr">client</span>:</span></div>
+<div class="code-line"><span class="ln-num">40</span><span class="ln-code">            <span class="vr">response</span> <span class="op">=</span> <span class="vr">client</span>.<span class="fn">head</span>(<span class="vr">url</span>)  <span class="ann">HEAD = ขอแค่ headers ไม่ขอ body</span></span></div>
+<div class="code-line"><span class="ln-num">41</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">42</span><span class="ln-code">        <span class="cm"># ตรวจสอบทีละ header</span></span></div>
+<div class="code-line"><span class="ln-num">43</span><span class="ln-code">        <span class="kw">for</span> <span class="vr">header</span> <span class="kw">in</span> <span class="vr">SECURITY_HEADERS</span>:  <span class="ann">วนลูปตรวจทีละตัว</span></span></div>
+<div class="code-line"><span class="ln-num">44</span><span class="ln-code">            <span class="kw">if</span> <span class="vr">header</span>.<span class="fn">lower</span>() <span class="kw">in</span> <span class="vr">response</span>.<span class="vr">headers</span>:  <span class="ann">.lower() = ไม่สนตัวพิมพ์</span></span></div>
+<div class="code-line"><span class="ln-num">45</span><span class="ln-code">                <span class="vr">result</span>[<span class="st">"headers_found"</span>][<span class="vr">header</span>] <span class="op">=</span> <span class="vr">response</span>.<span class="vr">headers</span>[<span class="vr">header</span>.<span class="fn">lower</span>()]</span></div>
+<div class="code-line"><span class="ln-num">46</span><span class="ln-code">            <span class="kw">else</span>:</span></div>
+<div class="code-line"><span class="ln-num">47</span><span class="ln-code">                <span class="vr">result</span>[<span class="st">"headers_missing"</span>].<span class="fn">append</span>(<span class="vr">header</span>)  <span class="ann-rose ann">ไม่มี = ช่องโหว่</span></span></div>
+<div class="code-line"><span class="ln-num">48</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">49</span><span class="ln-code">        <span class="cm"># คำนวณคะแนน: กี่ % ของ headers ที่มี</span></span></div>
+<div class="code-line"><span class="ln-num">50</span><span class="ln-code">        <span class="vr">found</span> <span class="op">=</span> <span class="fn">len</span>(<span class="vr">result</span>[<span class="st">"headers_found"</span>])</span></div>
+<div class="code-line"><span class="ln-num">51</span><span class="ln-code">        <span class="vr">total</span> <span class="op">=</span> <span class="fn">len</span>(<span class="vr">SECURITY_HEADERS</span>)</span></div>
+<div class="code-line"><span class="ln-num">52</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"score"</span>] <span class="op">=</span> <span class="fn">round</span>(<span class="vr">found</span> <span class="op">/</span> <span class="vr">total</span> <span class="op">*</span> <span class="nm">100</span>)  <span class="ann-lime ann">คะแนน 0-100</span></span></div>
+<div class="code-line"><span class="ln-num">53</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">54</span><span class="ln-code">    <span class="kw">except</span> <span class="ty">Exception</span> <span class="kw">as</span> <span class="vr">e</span>:  <span class="ann-rose ann">ถ้าเกิด error</span></span></div>
+<div class="code-line"><span class="ln-num">55</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"error"</span>] <span class="op">=</span> <span class="fn">str</span>(<span class="vr">e</span>)</span></div>
+<div class="code-line"><span class="ln-num">56</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">57</span><span class="ln-code">    <span class="kw">return</span> <span class="vr">result</span>  <span class="ann">ส่งผลลัพธ์กลับ</span></span></div>
+        </div>
+      </div>
+
+      <div class="box box-tip">
+        <span class="box-ico">🧠</span>
+        <div class="box-txt">
+          <strong>สิ่งที่ต้องจำจากโค้ดนี้</strong>
+          <code style="display:block;font-family:'Fira Code',monospace;font-size:12px;margin-top:6px;color:#c4b5fd;line-height:2">
+            def = สร้าง function (กล่องใส่โค้ดที่ใช้ซ้ำได้)<br>
+            try/except = ถ้าเกิด error จะไม่ crash ทั้งโปรแกรม<br>
+            for...in = วนซ้ำทีละรายการ<br>
+            dict[key] = เก็บและดึงข้อมูลแบบ key-value
+          </code>
+        </div>
+      </div>
+
+      <div class="output-block">
+        <div class="output-label">ผลลัพธ์ที่ได้เมื่อทดสอบ</div>
+        <div class="output-txt">{
+  "url": "https://example.com",
+  "headers_found": {
+    "Strict-Transport-Security": "max-age=31536000",
+    "X-Content-Type-Options": "nosniff"
+  },
+  "headers_missing": [
+    "Content-Security-Policy",
+    "X-Frame-Options",
+    "Referrer-Policy",
+    "Permissions-Policy"
+  ],
+  "score": 33,
+  "error": null
+}</div>
+      </div>
+
+      <div class="nav-btns">
+        <button class="btn btn-s" onclick="doneLesson(1)">← บทก่อนหน้า</button>
+        <button class="btn btn-p" onclick="doneLesson(2)">บันทึกและไปต่อ →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- LESSON 3: scanner/ssl_check.py      -->
+  <!-- ════════════════════════════════════ -->
+  <div class="lesson" id="lesson3">
+    <div class="lesson-head" onclick="toggleLesson(3)">
+      <span class="ln">03</span>
+      <div class="lesson-info">
+        <div class="lesson-title">เขียน ssl_check.py — ตรวจ SSL Certificate</div>
+        <div class="lesson-meta">
+          <span class="lm-file">📄 src/scanner/ssl_check.py</span>
+          <span class="lm-time">⏱ 10 นาที</span>
+        </div>
+      </div>
+      <div class="lesson-tags">
+        <span class="ltag ltag-new">ไฟล์ใหม่</span>
+        <span class="ltag ltag-code">code</span>
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="lesson-body">
+
+      <div class="explain">
+        SSL Certificate คือ "ใบรับรองตัวตน" ของเว็บไซต์ — ที่เห็น 🔒 ในเบราว์เซอร์ เราจะตรวจว่า <strong>cert ยังไม่หมดอายุ</strong>, <strong>ชื่อโดเมนตรงกัน</strong>, และ <strong>ใช้ algorithm ที่ปลอดภัย</strong>
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-top">
+          <span class="code-fname">src/scanner/ssl_check.py</span>
+          <button class="copy-btn" onclick="copyCode('code3')">copy</button>
+        </div>
+        <div class="code-body" id="code3">
+<div class="code-line"><span class="ln-num">1</span><span class="ln-code"><span class="kw">import</span> <span class="vr">ssl</span>, <span class="vr">socket</span>  <span class="ann">มีใน Python ไม่ต้อง pip install</span></span></div>
+<div class="code-line"><span class="ln-num">2</span><span class="ln-code"><span class="kw">from</span> <span class="vr">datetime</span> <span class="kw">import</span> <span class="vr">datetime</span></span></div>
+<div class="code-line"><span class="ln-num">3</span><span class="ln-code"><span class="kw">from</span> <span class="vr">urllib.parse</span> <span class="kw">import</span> <span class="vr">urlparse</span>  <span class="ann">แยก URL ออกเป็นส่วน ๆ</span></span></div>
+<div class="code-line"><span class="ln-num">4</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">5</span><span class="ln-code"><span class="kw">def</span> <span class="fn">check_ssl</span>(<span class="vr">url</span>: <span class="ty">str</span>) <span class="op">-></span> <span class="ty">dict</span>:</span></div>
+<div class="code-line"><span class="ln-num">6</span><span class="ln-code">    <span class="st">"""ตรวจสอบ SSL Certificate ของ URL"""</span></span></div>
+<div class="code-line"><span class="ln-num">7</span><span class="ln-code">    <span class="vr">result</span> <span class="op">=</span> {</span></div>
+<div class="code-line"><span class="ln-num">8</span><span class="ln-code">        <span class="st">"has_ssl"</span>: <span class="nm">False</span>,      <span class="cm"># มี https ไหม</span></span></div>
+<div class="code-line"><span class="ln-num">9</span><span class="ln-code">        <span class="st">"valid"</span>: <span class="nm">False</span>,        <span class="cm"># cert ยังใช้งานได้ไหม</span></span></div>
+<div class="code-line"><span class="ln-num">10</span><span class="ln-code">        <span class="st">"days_left"</span>: <span class="nm">0</span>,       <span class="cm"># เหลืออีกกี่วัน</span></span></div>
+<div class="code-line"><span class="ln-num">11</span><span class="ln-code">        <span class="st">"issuer"</span>: <span class="st">""</span>,          <span class="cm"># ใครออก cert (Let's Encrypt, DigiCert ฯลฯ)</span></span></div>
+<div class="code-line"><span class="ln-num">12</span><span class="ln-code">        <span class="st">"expires"</span>: <span class="st">""</span>,         <span class="cm"># วันหมดอายุ</span></span></div>
+<div class="code-line"><span class="ln-num">13</span><span class="ln-code">        <span class="st">"warning"</span>: <span class="st">""</span>,         <span class="cm"># คำเตือนถ้ามี</span></span></div>
+<div class="code-line"><span class="ln-num">14</span><span class="ln-code">        <span class="st">"error"</span>: <span class="nm">None</span></span></div>
+<div class="code-line"><span class="ln-num">15</span><span class="ln-code">    }</span></div>
+<div class="code-line"><span class="ln-num">16</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">17</span><span class="ln-code">    <span class="cm"># ตรวจว่าใช้ HTTPS ไหม</span></span></div>
+<div class="code-line"><span class="ln-num">18</span><span class="ln-code">    <span class="kw">if</span> <span class="kw">not</span> <span class="vr">url</span>.<span class="fn">startswith</span>(<span class="st">"https://"</span>):</span></div>
+<div class="code-line"><span class="ln-num">19</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"warning"</span>] <span class="op">=</span> <span class="st">"เว็บไม่ได้ใช้ HTTPS — ข้อมูลไม่เข้ารหัส!"</span></span></div>
+<div class="code-line"><span class="ln-num">20</span><span class="ln-code">        <span class="kw">return</span> <span class="vr">result</span>  <span class="ann-rose ann">หยุดทันที ถ้าไม่มี https</span></span></div>
+<div class="code-line"><span class="ln-num">21</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">22</span><span class="ln-code">    <span class="vr">result</span>[<span class="st">"has_ssl"</span>] <span class="op">=</span> <span class="nm">True</span></span></div>
+<div class="code-line"><span class="ln-num">23</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">24</span><span class="ln-code">    <span class="kw">try</span>:</span></div>
+<div class="code-line"><span class="ln-num">25</span><span class="ln-code">        <span class="cm"># แยก hostname ออกจาก URL</span></span></div>
+<div class="code-line"><span class="ln-num">26</span><span class="ln-code">        <span class="cm"># เช่น "https://school.ac.th/page" → "school.ac.th"</span></span></div>
+<div class="code-line highlight-line"><span class="ln-num">27</span><span class="ln-code">        <span class="vr">hostname</span> <span class="op">=</span> <span class="fn">urlparse</span>(<span class="vr">url</span>).<span class="vr">hostname</span>  <span class="ann">ดึงเฉพาะ domain name</span></span></div>
+<div class="code-line"><span class="ln-num">28</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">29</span><span class="ln-code">        <span class="cm"># เชื่อมต่อ SSL และดึง certificate</span></span></div>
+<div class="code-line"><span class="ln-num">30</span><span class="ln-code">        <span class="vr">ctx</span> <span class="op">=</span> <span class="vr">ssl</span>.<span class="fn">create_default_context</span>()</span></div>
+<div class="code-line"><span class="ln-num">31</span><span class="ln-code">        <span class="kw">with</span> <span class="vr">socket</span>.<span class="fn">create_connection</span>((<span class="vr">hostname</span>, <span class="nm">443</span>), <span class="vr">timeout</span><span class="op">=</span><span class="nm">5</span>) <span class="kw">as</span> <span class="vr">sock</span>:</span></div>
+<div class="code-line"><span class="ln-num">32</span><span class="ln-code">            <span class="kw">with</span> <span class="vr">ctx</span>.<span class="fn">wrap_socket</span>(<span class="vr">sock</span>, <span class="vr">server_hostname</span><span class="op">=</span><span class="vr">hostname</span>) <span class="kw">as</span> <span class="vr">ssock</span>:</span></div>
+<div class="code-line highlight-line"><span class="ln-num">33</span><span class="ln-code">                <span class="vr">cert</span> <span class="op">=</span> <span class="vr">ssock</span>.<span class="fn">getpeercert</span>()  <span class="ann">ดึงข้อมูล certificate</span></span></div>
+<div class="code-line"><span class="ln-num">34</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">35</span><span class="ln-code">        <span class="cm"># ดึงวันหมดอายุ</span></span></div>
+<div class="code-line"><span class="ln-num">36</span><span class="ln-code">        <span class="vr">expire_str</span> <span class="op">=</span> <span class="vr">cert</span>[<span class="st">"notAfter"</span>]  <span class="cm"># เช่น "Dec 31 23:59:59 2025 GMT"</span></span></div>
+<div class="code-line"><span class="ln-num">37</span><span class="ln-code">        <span class="vr">expire_date</span> <span class="op">=</span> <span class="vr">datetime</span>.<span class="fn">strptime</span>(<span class="vr">expire_str</span>, <span class="st">"%b %d %H:%M:%S %Y %Z"</span>)</span></div>
+<div class="code-line"><span class="ln-num">38</span><span class="ln-code">        <span class="vr">days_left</span> <span class="op">=</span> (<span class="vr">expire_date</span> <span class="op">-</span> <span class="vr">datetime</span>.<span class="fn">utcnow</span>()).<span class="vr">days</span></span></div>
+<div class="code-line"><span class="ln-num">39</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">40</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"expires"</span>]   <span class="op">=</span> <span class="vr">expire_date</span>.<span class="fn">strftime</span>(<span class="st">"%d/%m/%Y"</span>)</span></div>
+<div class="code-line"><span class="ln-num">41</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"days_left"</span>] <span class="op">=</span> <span class="vr">days_left</span></span></div>
+<div class="code-line"><span class="ln-num">42</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"valid"</span>]    <span class="op">=</span> <span class="vr">days_left</span> <span class="op">></span> <span class="nm">0</span></span></div>
+<div class="code-line"><span class="ln-num">43</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">44</span><span class="ln-code">        <span class="cm"># เตือนถ้าจะหมดอายุใน 30 วัน</span></span></div>
+<div class="code-line"><span class="ln-num">45</span><span class="ln-code">        <span class="kw">if</span> <span class="nm">0</span> <span class="op">&lt;</span> <span class="vr">days_left</span> <span class="op">&lt;=</span> <span class="nm">30</span>:</span></div>
+<div class="code-line"><span class="ln-num">46</span><span class="ln-code">            <span class="vr">result</span>[<span class="st">"warning"</span>] <span class="op">=</span> <span class="st">f"⚠️ SSL จะหมดอายุใน {days_left} วัน!"</span>  <span class="ann-rose ann">f-string</span></span></div>
+<div class="code-line"><span class="ln-num">47</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">48</span><span class="ln-code">        <span class="cm"># ดึงชื่อผู้ออก cert</span></span></div>
+<div class="code-line"><span class="ln-num">49</span><span class="ln-code">        <span class="vr">issuer_dict</span> <span class="op">=</span> <span class="fn">dict</span>(<span class="vr">x</span>[<span class="nm">0</span>] <span class="kw">for</span> <span class="vr">x</span> <span class="kw">in</span> <span class="vr">cert</span>[<span class="st">"issuer"</span>])</span></div>
+<div class="code-line"><span class="ln-num">50</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"issuer"</span>] <span class="op">=</span> <span class="vr">issuer_dict</span>.<span class="fn">get</span>(<span class="st">"organizationName"</span>, <span class="st">"Unknown"</span>)</span></div>
+<div class="code-line"><span class="ln-num">51</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">52</span><span class="ln-code">    <span class="kw">except</span> <span class="ty">Exception</span> <span class="kw">as</span> <span class="vr">e</span>:</span></div>
+<div class="code-line"><span class="ln-num">53</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"error"</span>] <span class="op">=</span> <span class="fn">str</span>(<span class="vr">e</span>)</span></div>
+<div class="code-line"><span class="ln-num">54</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"valid"</span>] <span class="op">=</span> <span class="nm">False</span></span></div>
+<div class="code-line"><span class="ln-num">55</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">56</span><span class="ln-code">    <span class="kw">return</span> <span class="vr">result</span></span></div>
+        </div>
+      </div>
+
+      <div class="box box-info">
+        <span class="box-ico">💡</span>
+        <div class="box-txt"><strong>f-string คืออะไร?</strong> (บรรทัด 46)<br>
+        <code style="font-family:'Fira Code',monospace;font-size:12px">f"ข้อความ {variable}"</code> — ใส่ตัวแปรใน string โดยใช้ปีกกา เช่น <code style="font-family:'Fira Code',monospace;font-size:12px">f"เหลือ {30} วัน"</code> → <code style="font-family:'Fira Code',monospace;font-size:12px">"เหลือ 30 วัน"</code></div>
+      </div>
+
+      <div class="nav-btns">
+        <button class="btn btn-s" onclick="openLesson(2)">← ก่อนหน้า</button>
+        <button class="btn btn-p" onclick="doneLesson(3)">บันทึกและไปต่อ →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- LESSON 4: scanner/html_parser.py    -->
+  <!-- ════════════════════════════════════ -->
+  <div class="lesson" id="lesson4">
+    <div class="lesson-head" onclick="toggleLesson(4)">
+      <span class="ln">04</span>
+      <div class="lesson-info">
+        <div class="lesson-title">เขียน html_parser.py — ดึงข้อมูลจาก HTML</div>
+        <div class="lesson-meta">
+          <span class="lm-file">📄 src/scanner/html_parser.py</span>
+          <span class="lm-time">⏱ 10 นาที</span>
+        </div>
+      </div>
+      <div class="lesson-tags">
+        <span class="ltag ltag-new">ไฟล์ใหม่</span>
+        <span class="ltag ltag-code">code</span>
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="lesson-body">
+
+      <div class="explain">
+        ดึงข้อมูลสำคัญจาก HTML ของเว็บไซต์ — ดู <strong>meta tags</strong>, <strong>external scripts ที่โหลด</strong>, และ <strong>forms ที่ไม่ใช้ HTTPS</strong> (ซึ่งเป็นช่องโหว่)
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-top">
+          <span class="code-fname">src/scanner/html_parser.py</span>
+          <button class="copy-btn" onclick="copyCode('code4')">copy</button>
+        </div>
+        <div class="code-body" id="code4">
+<div class="code-line"><span class="ln-num">1</span><span class="ln-code"><span class="kw">import</span> <span class="vr">httpx</span></span></div>
+<div class="code-line"><span class="ln-num">2</span><span class="ln-code"><span class="kw">from</span> <span class="vr">bs4</span> <span class="kw">import</span> <span class="ty">BeautifulSoup</span>  <span class="ann">bs4 = BeautifulSoup4</span></span></div>
+<div class="code-line"><span class="ln-num">3</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">4</span><span class="ln-code"><span class="kw">def</span> <span class="fn">parse_html</span>(<span class="vr">url</span>: <span class="ty">str</span>) <span class="op">-></span> <span class="ty">dict</span>:</span></div>
+<div class="code-line"><span class="ln-num">5</span><span class="ln-code">    <span class="st">"""ดึงและวิเคราะห์ HTML จากเว็บไซต์"""</span></span></div>
+<div class="code-line"><span class="ln-num">6</span><span class="ln-code">    <span class="vr">result</span> <span class="op">=</span> {</span></div>
+<div class="code-line"><span class="ln-num">7</span><span class="ln-code">        <span class="st">"title"</span>: <span class="st">""</span>,              <span class="cm"># ชื่อเว็บ</span></span></div>
+<div class="code-line"><span class="ln-num">8</span><span class="ln-code">        <span class="st">"meta_description"</span>: <span class="st">""</span>,   <span class="cm"># คำอธิบายเว็บ</span></span></div>
+<div class="code-line"><span class="ln-num">9</span><span class="ln-code">        <span class="st">"external_scripts"</span>: [],   <span class="cm"># script จาก domain อื่น</span></span></div>
+<div class="code-line"><span class="ln-num">10</span><span class="ln-code">        <span class="st">"insecure_forms"</span>: [],     <span class="cm"># form ที่ส่งข้อมูลไป http</span></span></div>
+<div class="code-line"><span class="ln-num">11</span><span class="ln-code">        <span class="st">"total_links"</span>: <span class="nm">0</span>,        <span class="cm"># จำนวน link ทั้งหมด</span></span></div>
+<div class="code-line"><span class="ln-num">12</span><span class="ln-code">        <span class="st">"error"</span>: <span class="nm">None</span></span></div>
+<div class="code-line"><span class="ln-num">13</span><span class="ln-code">    }</span></div>
+<div class="code-line"><span class="ln-num">14</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">15</span><span class="ln-code">    <span class="kw">try</span>:</span></div>
+<div class="code-line"><span class="ln-num">16</span><span class="ln-code">        <span class="cm"># GET request ดึง HTML ทั้งหน้า</span></span></div>
+<div class="code-line highlight-line"><span class="ln-num">17</span><span class="ln-code">        <span class="vr">resp</span> <span class="op">=</span> <span class="vr">httpx</span>.<span class="fn">get</span>(<span class="vr">url</span>, <span class="vr">timeout</span><span class="op">=</span><span class="nm">15</span>, <span class="vr">follow_redirects</span><span class="op">=</span><span class="nm">True</span>, <span class="vr">verify</span><span class="op">=</span><span class="nm">False</span>)</span></div>
+<div class="code-line"><span class="ln-num">18</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">19</span><span class="ln-code">        <span class="cm"># ให้ BeautifulSoup "อ่าน" HTML</span></span></div>
+<div class="code-line"><span class="ln-num">20</span><span class="ln-code">        <span class="cm"># "lxml" คือ parser ที่เร็วที่สุด</span></span></div>
+<div class="code-line highlight-line"><span class="ln-num">21</span><span class="ln-code">        <span class="vr">soup</span> <span class="op">=</span> <span class="ty">BeautifulSoup</span>(<span class="vr">resp</span>.<span class="vr">text</span>, <span class="st">"lxml"</span>)  <span class="ann">soup = วัตถุที่ค้นหา HTML ได้</span></span></div>
+<div class="code-line"><span class="ln-num">22</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">23</span><span class="ln-code">        <span class="cm"># ── ดึง title ──</span></span></div>
+<div class="code-line"><span class="ln-num">24</span><span class="ln-code">        <span class="vr">title_tag</span> <span class="op">=</span> <span class="vr">soup</span>.<span class="fn">find</span>(<span class="st">"title"</span>)  <span class="ann">หา &lt;title&gt; tag</span></span></div>
+<div class="code-line"><span class="ln-num">25</span><span class="ln-code">        <span class="kw">if</span> <span class="vr">title_tag</span>:</span></div>
+<div class="code-line"><span class="ln-num">26</span><span class="ln-code">            <span class="vr">result</span>[<span class="st">"title"</span>] <span class="op">=</span> <span class="vr">title_tag</span>.<span class="vr">text</span>.<span class="fn">strip</span>()</span></div>
+<div class="code-line"><span class="ln-num">27</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">28</span><span class="ln-code">        <span class="cm"># ── ดึง meta description ──</span></span></div>
+<div class="code-line"><span class="ln-num">29</span><span class="ln-code">        <span class="vr">meta</span> <span class="op">=</span> <span class="vr">soup</span>.<span class="fn">find</span>(<span class="st">"meta"</span>, {<span class="st">"name"</span>: <span class="st">"description"</span>})  <span class="ann">หา meta ที่ name=description</span></span></div>
+<div class="code-line"><span class="ln-num">30</span><span class="ln-code">        <span class="kw">if</span> <span class="vr">meta</span>:</span></div>
+<div class="code-line"><span class="ln-num">31</span><span class="ln-code">            <span class="vr">result</span>[<span class="st">"meta_description"</span>] <span class="op">=</span> <span class="vr">meta</span>.<span class="fn">get</span>(<span class="st">"content"</span>, <span class="st">""</span>)</span></div>
+<div class="code-line"><span class="ln-num">32</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">33</span><span class="ln-code">        <span class="cm"># ── ตรวจ external scripts (อันตราย!) ──</span></span></div>
+<div class="code-line"><span class="ln-num">34</span><span class="ln-code">        <span class="kw">from</span> <span class="vr">urllib.parse</span> <span class="kw">import</span> <span class="vr">urlparse</span></span></div>
+<div class="code-line"><span class="ln-num">35</span><span class="ln-code">        <span class="vr">base_domain</span> <span class="op">=</span> <span class="fn">urlparse</span>(<span class="vr">url</span>).<span class="vr">netloc</span></span></div>
+<div class="code-line"><span class="ln-num">36</span><span class="ln-code">        <span class="kw">for</span> <span class="vr">script</span> <span class="kw">in</span> <span class="vr">soup</span>.<span class="fn">find_all</span>(<span class="st">"script"</span>, <span class="vr">src</span><span class="op">=</span><span class="nm">True</span>):  <span class="ann">หา script ที่มี src</span></span></div>
+<div class="code-line"><span class="ln-num">37</span><span class="ln-code">            <span class="vr">src</span> <span class="op">=</span> <span class="vr">script</span>[<span class="st">"src"</span>]</span></div>
+<div class="code-line"><span class="ln-num">38</span><span class="ln-code">            <span class="kw">if</span> <span class="vr">src</span>.<span class="fn">startswith</span>(<span class="st">"http"</span>) <span class="kw">and</span> <span class="vr">base_domain</span> <span class="kw">not in</span> <span class="vr">src</span>:</span></div>
+<div class="code-line"><span class="ln-num">39</span><span class="ln-code">                <span class="vr">result</span>[<span class="st">"external_scripts"</span>].<span class="fn">append</span>(<span class="vr">src</span>)  <span class="ann-rose ann">script จาก domain อื่น</span></span></div>
+<div class="code-line"><span class="ln-num">40</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">41</span><span class="ln-code">        <span class="cm"># ── ตรวจ forms ที่ action ไป http:// (ส่งข้อมูลไม่เข้ารหัส) ──</span></span></div>
+<div class="code-line"><span class="ln-num">42</span><span class="ln-code">        <span class="kw">for</span> <span class="vr">form</span> <span class="kw">in</span> <span class="vr">soup</span>.<span class="fn">find_all</span>(<span class="st">"form"</span>):</span></div>
+<div class="code-line"><span class="ln-num">43</span><span class="ln-code">            <span class="vr">action</span> <span class="op">=</span> <span class="vr">form</span>.<span class="fn">get</span>(<span class="st">"action"</span>, <span class="st">""</span>)</span></div>
+<div class="code-line"><span class="ln-num">44</span><span class="ln-code">            <span class="kw">if</span> <span class="vr">action</span>.<span class="fn">startswith</span>(<span class="st">"http://"</span>):  <span class="ann-rose ann">http ไม่ใช่ https = อันตราย</span></span></div>
+<div class="code-line"><span class="ln-num">45</span><span class="ln-code">                <span class="vr">result</span>[<span class="st">"insecure_forms"</span>].<span class="fn">append</span>(<span class="vr">action</span>)</span></div>
+<div class="code-line"><span class="ln-num">46</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">47</span><span class="ln-code">        <span class="cm"># นับ links ทั้งหมด</span></span></div>
+<div class="code-line"><span class="ln-num">48</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"total_links"</span>] <span class="op">=</span> <span class="fn">len</span>(<span class="vr">soup</span>.<span class="fn">find_all</span>(<span class="st">"a"</span>, <span class="vr">href</span><span class="op">=</span><span class="nm">True</span>))</span></div>
+<div class="code-line"><span class="ln-num">49</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">50</span><span class="ln-code">    <span class="kw">except</span> <span class="ty">Exception</span> <span class="kw">as</span> <span class="vr">e</span>:</span></div>
+<div class="code-line"><span class="ln-num">51</span><span class="ln-code">        <span class="vr">result</span>[<span class="st">"error"</span>] <span class="op">=</span> <span class="fn">str</span>(<span class="vr">e</span>)</span></div>
+<div class="code-line"><span class="ln-num">52</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">53</span><span class="ln-code">    <span class="kw">return</span> <span class="vr">result</span></span></div>
+        </div>
+      </div>
+
+      <div class="nav-btns">
+        <button class="btn btn-s" onclick="openLesson(3)">← ก่อนหน้า</button>
+        <button class="btn btn-p" onclick="doneLesson(4)">บันทึกและไปต่อ →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════ -->
+  <!-- LESSON 5: scanner.py รวมทุกอย่าง   -->
+  <!-- ════════════════════════════════════ -->
+  <div class="lesson" id="lesson5">
+    <div class="lesson-head" onclick="toggleLesson(5)">
+      <span class="ln">05</span>
+      <div class="lesson-info">
+        <div class="lesson-title">รวม Scanner — src/scanner.py และทดสอบ</div>
+        <div class="lesson-meta">
+          <span class="lm-file">📄 src/scanner.py + ทดสอบ</span>
+          <span class="lm-time">⏱ 10 นาที</span>
+        </div>
+      </div>
+      <div class="lesson-tags">
+        <span class="ltag ltag-new">ไฟล์ใหม่</span>
+        <span class="ltag ltag-code">รวมทุกอย่าง</span>
+      </div>
+      <span class="chevron">▶</span>
+    </div>
+    <div class="lesson-body">
+
+      <div class="explain">
+        ไฟล์นี้เป็น <strong>"ประตูหลัก"</strong> ของ scanner — รับ URL เข้ามา แล้วเรียกทั้ง 3 module และรวมผลลัพธ์ออกมาเป็น dict เดียว ให้ AI นำไปวิเคราะห์ต่อ
+      </div>
+
+      <div class="code-wrap">
+        <div class="code-top">
+          <span class="code-fname">src/scanner.py</span>
+          <button class="copy-btn" onclick="copyCode('code5')">copy</button>
+        </div>
+        <div class="code-body" id="code5">
+<div class="code-line"><span class="ln-num">1</span><span class="ln-code"><span class="cm"># src/scanner.py — ประตูหลักของ Scanner</span></span></div>
+<div class="code-line"><span class="ln-num">2</span><span class="ln-code"><span class="kw">from</span> <span class="vr">scanner.headers</span>    <span class="kw">import</span> <span class="fn">check_headers</span>   <span class="ann">import จาก module ที่สร้างไว้</span></span></div>
+<div class="code-line"><span class="ln-num">3</span><span class="ln-code"><span class="kw">from</span> <span class="vr">scanner.ssl_check</span>  <span class="kw">import</span> <span class="fn">check_ssl</span></span></div>
+<div class="code-line"><span class="ln-num">4</span><span class="ln-code"><span class="kw">from</span> <span class="vr">scanner.html_parser</span> <span class="kw">import</span> <span class="fn">parse_html</span></span></div>
+<div class="code-line"><span class="ln-num">5</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">6</span><span class="ln-code"><span class="kw">def</span> <span class="fn">run_scan</span>(<span class="vr">url</span>: <span class="ty">str</span>) <span class="op">-></span> <span class="ty">dict</span>:  <span class="ann-lime ann">function เดียวที่ app.py จะเรียก</span></span></div>
+<div class="code-line"><span class="ln-num">7</span><span class="ln-code">    <span class="st">"""รัน Scanner ทั้งหมด ส่งคืน dict รวม"""</span></span></div>
+<div class="code-line"><span class="ln-num">8</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">9</span><span class="ln-code">    <span class="cm"># normalize URL: เพิ่ม https:// ถ้าลืมใส่</span></span></div>
+<div class="code-line"><span class="ln-num">10</span><span class="ln-code">    <span class="kw">if</span> <span class="kw">not</span> <span class="vr">url</span>.<span class="fn">startswith</span>(<span class="st">"http"</span>):</span></div>
+<div class="code-line"><span class="ln-num">11</span><span class="ln-code">        <span class="vr">url</span> <span class="op">=</span> <span class="st">"https://"</span> <span class="op">+</span> <span class="vr">url</span>  <span class="ann">เพิ่ม https ให้อัตโนมัติ</span></span></div>
+<div class="code-line"><span class="ln-num">12</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">13</span><span class="ln-code">    <span class="cm"># รัน 3 module พร้อมกัน (ตอนนี้ทยอยรัน)</span></span></div>
+<div class="code-line"><span class="ln-num">14</span><span class="ln-code">    <span class="vr">headers_data</span> <span class="op">=</span> <span class="fn">check_headers</span>(<span class="vr">url</span>)  <span class="ann">module 1</span></span></div>
+<div class="code-line"><span class="ln-num">15</span><span class="ln-code">    <span class="vr">ssl_data</span>     <span class="op">=</span> <span class="fn">check_ssl</span>(<span class="vr">url</span>)      <span class="ann">module 2</span></span></div>
+<div class="code-line"><span class="ln-num">16</span><span class="ln-code">    <span class="vr">html_data</span>    <span class="op">=</span> <span class="fn">parse_html</span>(<span class="vr">url</span>)     <span class="ann">module 3</span></span></div>
+<div class="code-line"><span class="ln-num">17</span><span class="ln-code"></span></div>
+<div class="code-line"><span class="ln-num">18</span><span class="ln-code">    <span class="cm"># รวมผลทั้งหมดเป็น dict เดียว</span></span></div>
+<div class="code-line"><span class="ln-num">19</span><span class="ln-code">    <span class="kw">return</span> {</span></div>
+<div class="code-line"><span class="ln-num">20</span><span class="ln-code">        <span class="st">"url"</span>:     <span class="vr">url</span>,</span></div>
+<div class="code-line"><span class="ln-num">21</span><span class="ln-code">        <span class="st">"headers"</span>: <span class="vr">headers_data</span>,</span></div>
+<div class="code-line"><span class="ln-num">22</span><span class="ln-code">        <span class="st">"ssl"</span>:     <span class="vr">ssl_data</span>,</span></div>
+<div class="code-line"><span class="ln-num">23</span><span class="ln-code">        <span class="st">"html"</span>:    <span class="vr">html_data</span>,</span></div>
+<div class="code-line"><span class="ln-num">24</span><span class="ln-code">    }</span></div>
+<div class="code-line"><span class="ln-num">25</span><span class="ln-code"></span></div>
+<div class="code-line highlight-line"><span class="ln-num">26</span><span class="ln-code"><span class="cm"># ── ทดสอบ: รันไฟล์นี้ตรง ๆ ──────────────</span></span></div>
+<div class="code-line"><span class="ln-num">27</span><span class="ln-code"><span class="kw">if</span> <span class="vr">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:  <span class="ann">รันเมื่อเรียกตรง ๆ ไม่ใช่ import</span></span></div>
+<div class="code-line"><span class="ln-num">28</span><span class="ln-code">    <span class="kw">import</span> <span class="vr">json</span></span></div>
+<div class="code-line"><span class="ln-num">29</span><span class="ln-code">    <span class="vr">test_url</span> <span class="op">=</span> <span class="st">"https://www.psu.ac.th"</span>  <span class="ann-amber ann">เปลี่ยน URL ที่นี่</span></span></div>
+<div class="code-line"><span class="ln-num">30</span><span class="ln-code">    <span class="fn">print</span>(<span class="st">f"🔍 กำลังสแกน: {test_url}"</span>)</span></div>
+<div class="code-line"><span class="ln-num">31</span><span class="ln-code">    <span class="vr">result</span> <span class="op">=</span> <span class="fn">run_scan</span>(<span class="vr">test_url</span>)</span></div>
+<div class="code-line"><span class="ln-num">32</span><span class="ln-code">    <span class="fn">print</span>(<span class="vr">json</span>.<span class="fn">dumps</span>(<span class="vr">result</span>, <span class="vr">indent</span><span class="op">=</span><span class="nm">2</span>, <span class="vr">ensure_ascii</span><span class="op">=</span><span class="nm">False</span>))  <span class="ann">แสดงผลสวยงาม</span></span></div>
+        </div>
+      </div>
+
+      <div class="box box-warn">
+        <span class="box-ico">▶</span>
+        <div class="box-txt">
+          <strong>ทดสอบใน Terminal (ต้องอยู่ใน src folder):</strong>
+          <code style="display:block;font-family:'Fira Code',monospace;font-size:12px;margin-top:6px;color:#fcd34d">
+            cd C:\...\ptc-ai-web-shield\src<br>
+            python scanner.py
+          </code>
+        </div>
+      </div>
+
+      <div class="output-block">
+        <div class="output-label">ผลลัพธ์ที่ควรเห็น</div>
+        <div class="output-txt">🔍 กำลังสแกน: https://www.psu.ac.th
+{
+  "url": "https://www.psu.ac.th",
+  "headers": {
+    "headers_found": { "Strict-Transport-Security": "..." },
+    "headers_missing": ["Content-Security-Policy", ...],
+    "score": 33
+  },
+  "ssl": {
+    "has_ssl": true,
+    "valid": true,
+    "days_left": 142,
+    "issuer": "Let's Encrypt"
+  },
+  "html": {
+    "title": "มหาวิทยาลัยสงขลานครินทร์",
+    "external_scripts": [...],
+    "insecure_forms": [],
+    "total_links": 87
+  }
+}</div>
+      </div>
+
+      <div class="box box-ok">
+        <span class="box-ico">🎉</span>
+        <div class="box-txt">
+          <strong>Phase 2 สำเร็จ! Scanner Core พร้อมแล้ว</strong>
+          ขั้นต่อไปคือ Phase 3 — เชื่อม Gemini AI ให้วิเคราะห์ข้อมูลทั้งหมดนี้และให้คำแนะนำเป็นภาษาไทย
+        </div>
+      </div>
+
+      <div class="nav-btns">
+        <button class="btn btn-s" onclick="openLesson(4)">← ก่อนหน้า</button>
+        <button class="btn btn-p" style="background:var(--lime);color:#000" onclick="doneLesson(5)">🚀 Phase 2 เสร็จ! ไป Phase 3 →</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /lessons -->
+
+<script>
+function toggleLesson(n){
+  const l=document.getElementById('lesson'+n);
+  l.classList.toggle('open');
+}
+function openLesson(n){
+  document.querySelectorAll('.lesson').forEach(l=>l.classList.remove('open','active-lesson'));
+  const l=document.getElementById('lesson'+n);
+  l.classList.add('open','active-lesson');
+  l.scrollIntoView({behavior:'smooth',block:'start'});
+  updateProgress(n);
+}
+function doneLesson(n){
+  // mark done
+  const dot=document.getElementById('ld'+n);
+  if(dot){dot.classList.remove('current');dot.classList.add('done');dot.textContent='✓';}
+  const line=document.getElementById('ll'+n);
+  if(line)line.classList.add('done');
+  if(n<5){openLesson(n+1);}
+  else{
+    // all done
+    document.querySelectorAll('.lp-dot').forEach(d=>{d.classList.add('done');d.textContent='✓';});
+    document.querySelectorAll('.lp-line').forEach(l=>l.classList.add('done'));
+    document.getElementById('lpLabel').textContent='✅ Phase 2 สำเร็จ!';
+  }
+}
+function updateProgress(current){
+  document.querySelectorAll('.lp-dot').forEach((d,i)=>{
+    d.classList.remove('current');
+    if(i+1===current) d.classList.add('current');
+  });
+  document.getElementById('lpLabel').textContent=`บทที่ ${current}/5`;
+}
+function answerQuiz(el,type){
+  const opts=el.parentElement.querySelectorAll('.quiz-opt');
+  opts.forEach(o=>o.style.pointerEvents='none');
+  el.classList.add(type);
+  const fb1=document.getElementById('qf1ok');
+  const fb2=document.getElementById('qf1no');
+  if(type==='correct'){fb1.classList.add('show');}
+  else{fb2.classList.add('show');}
+}
+function copyCode(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  // extract text only from ln-code spans
+  const lines=el.querySelectorAll('.ln-code');
+  const text=[...lines].map(l=>{
+    // remove annotation spans
+    const clone=l.cloneNode(true);
+    clone.querySelectorAll('.ann,.ann-amber,.ann-lime,.ann-rose').forEach(a=>a.remove());
+    return clone.innerText;
+  }).join('\n');
+  navigator.clipboard.writeText(text).then(()=>{
+    event.target.textContent='copied!';
+    event.target.classList.add('ok');
+    setTimeout(()=>{event.target.textContent='copy';event.target.classList.remove('ok');},2000);
+  });
+}
+</script>
+</body>
+</html>

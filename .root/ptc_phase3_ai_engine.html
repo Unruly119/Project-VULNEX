@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 3 — Gemini AI Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Fira+Code:wght@400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #f9f6f1;
+  --paper:  #ffffff;
+  --ink:    #1a1612;
+  --ink2:   #3d342a;
+  --muted:  #8c7d6e;
+  --border: #e5ddd4;
+  --bd2:    #d4c8bc;
+  --violet: #6d28d9;
+  --vi-bg:  #f5f3ff;
+  --vi-bd:  #ddd6fe;
+  --amber:  #b45309;
+  --am-bg:  #fffbeb;
+  --am-bd:  #fde68a;
+  --green:  #166534;
+  --gn-bg:  #f0fdf4;
+  --gn-bd:  #bbf7d0;
+  --red:    #991b1b;
+  --rd-bg:  #fef2f2;
+  --rd-bd:  #fecaca;
+  --sky:    #0369a1;
+  --sk-bg:  #f0f9ff;
+  --sk-bd:  #bae6fd;
+  --code-bg:#1e1b16;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Noto Sans Thai', sans-serif;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+/* ── TOPBAR ── */
+.bar {
+  background: var(--ink);
+  height: 46px;
+  display: flex;
+  align-items: center;
+  padding: 0 32px;
+  gap: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.bar-dots { display:flex; gap:5px; }
+.bd { width:11px; height:11px; border-radius:50%; }
+.bdr{background:#ff5f57}.bdy{background:#febc2e}.bdg{background:#28c840}
+.bar-path {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  color: #6b5e50;
+  margin-left: 4px;
+}
+.bar-path span { color: #f0a855; }
+.bar-tag {
+  margin-left: auto;
+  background: rgba(240,168,85,.15);
+  border: 1px solid rgba(240,168,85,.3);
+  color: #f0a855;
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  padding: 3px 12px;
+  border-radius: 2px;
+  letter-spacing: .1em;
+}
+
+/* ── HERO ── */
+.hero {
+  padding: 56px 56px 48px;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 32px;
+  align-items: end;
+}
+@media(max-width:700px){.hero{grid-template-columns:1fr;padding:32px 20px}}
+
+.hero-sup {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.hero-h {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(36px, 5vw, 60px);
+  line-height: 1.05;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+.hero-h em { color: var(--violet); font-style: italic; }
+.hero-sub {
+  font-size: 15px;
+  color: var(--muted);
+  max-width: 500px;
+  line-height: 1.8;
+}
+
+.phase-track {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 170px;
+}
+.pt-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: var(--paper);
+  color: var(--muted);
+}
+.pt-item.done { background: var(--gn-bg); border-color: var(--gn-bd); color: var(--green); }
+.pt-item.now  { background: var(--vi-bg); border-color: var(--vi-bd); color: var(--violet); font-weight: 600; }
+.pt-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .6; flex-shrink:0; }
+
+/* ── MAIN ── */
+.main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 48px 56px 100px;
+}
+@media(max-width:700px){.main{padding:24px 20px 80px}}
+
+/* ── STEP HEADER ── */
+.step-hd {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: 44px 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.step-hd:first-child { margin-top: 0; }
+.step-n {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--bd2);
+  letter-spacing: .1em;
+}
+.step-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 22px;
+  color: var(--ink);
+}
+.step-title em { color: var(--violet); font-style: italic; }
+.step-badge {
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 3px;
+  margin-left: auto;
+}
+.sb-file { background: var(--sk-bg); color: var(--sky); border: 1px solid var(--sk-bd); }
+.sb-concept { background: var(--vi-bg); color: var(--violet); border: 1px solid var(--vi-bd); }
+.sb-test { background: var(--gn-bg); color: var(--green); border: 1px solid var(--gn-bd); }
+
+/* ── PROSE ── */
+.prose {
+  font-size: 14.5px;
+  color: var(--ink2);
+  line-height: 1.9;
+  margin-bottom: 18px;
+}
+.prose strong { color: var(--ink); }
+.prose code {
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  background: var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ── CALLOUT ── */
+.note {
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin: 16px 0;
+  display: flex;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.note-i { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.note-b strong { display:block; margin-bottom:3px; }
+.note-vi { background:var(--vi-bg); border:1px solid var(--vi-bd); color:#4c1d95; }
+.note-am { background:var(--am-bg); border:1px solid var(--am-bd); color:var(--amber); }
+.note-gn { background:var(--gn-bg); border:1px solid var(--gn-bd); color:var(--green); }
+.note-rd { background:var(--rd-bg); border:1px solid var(--rd-bd); color:var(--red); }
+.note-sk { background:var(--sk-bg); border:1px solid var(--sk-bd); color:var(--sky); }
+
+/* ── CODE BLOCK ── */
+.code-block {
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 18px 0;
+  box-shadow: 0 2px 16px rgba(0,0,0,.08);
+}
+.cb-top {
+  background: #2c2618;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cb-name {
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  color: #a08060;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cb-name::before {
+  content: '';
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #f0a855;
+}
+.copy-btn {
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  color: #6b5540;
+  background: none;
+  border: 1px solid #3d3020;
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.copy-btn:hover { background: #3d3020; color: #a08060; }
+.copy-btn.ok { color: #28c840; border-color: #28c840; }
+
+/* annotated lines */
+.cb-body {
+  background: var(--code-bg);
+  font-family: 'Fira Code', monospace;
+  font-size: 13px;
+  overflow-x: auto;
+}
+.cl { display:flex; min-height: 26px; }
+.cl:hover { background: rgba(255,255,255,.02); }
+.cl.hl { background: rgba(240,168,85,.06) !important; border-left: 2px solid #f0a855; }
+.cl.cm-line { opacity: .5; }
+.lno {
+  min-width: 40px;
+  padding: 4px 10px 4px 8px;
+  text-align: right;
+  color: #3d3020;
+  font-size: 11px;
+  user-select: none;
+  flex-shrink: 0;
+  border-right: 1px solid #2c2618;
+  line-height: 18px;
+  padding-top: 4px;
+}
+.lc {
+  padding: 4px 16px;
+  white-space: pre;
+  color: #c8bfb0;
+  flex: 1;
+  line-height: 18px;
+}
+/* syntax */
+.kw{color:#e06c75}
+.fn{color:#61afef}
+.st{color:#98c379}
+.cm{color:#4a4030;font-style:italic}
+.nm{color:#d19a66}
+.ty{color:#c678dd}
+.vr{color:#e2d8cc}
+.dc{color:#56b6c2}
+/* annotation */
+.an {
+  display: inline-block;
+  background: rgba(240,168,85,.12);
+  border: 1px solid rgba(240,168,85,.22);
+  color: #d4874a;
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 3px;
+  margin-left: 10px;
+  vertical-align: middle;
+  white-space: nowrap;
+  font-style: normal;
+}
+.an-v { background:rgba(109,40,217,.1); border-color:rgba(109,40,217,.2); color:#7c3aed; }
+.an-g { background:rgba(22,101,52,.08); border-color:rgba(22,101,52,.2); color:#166534; }
+.an-r { background:rgba(153,27,27,.08); border-color:rgba(153,27,27,.2); color:#991b1b; }
+
+/* ── PROMPT ANATOMY ── */
+.prompt-box {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 18px 0;
+}
+.pb-head {
+  background: var(--vi-bg);
+  border-bottom: 1px solid var(--vi-bd);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pb-title {
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  color: var(--violet);
+  font-weight: 600;
+}
+.pb-body { padding: 20px; }
+.pb-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.pb-section:last-child { margin-bottom:0; padding-bottom:0; border-bottom:none; }
+.pb-label {
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  color: var(--violet);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-bottom: 6px;
+}
+.pb-text {
+  font-family: 'Fira Code', monospace;
+  font-size: 12.5px;
+  color: var(--ink2);
+  background: #f5f2ed;
+  border-radius: 6px;
+  padding: 12px 16px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+.pb-why {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 8px;
+  padding-left: 4px;
+  border-left: 2px solid var(--vi-bd);
+  padding-left: 10px;
+}
+
+/* ── OUTPUT PREVIEW ── */
+.output-box {
+  background: var(--gn-bg);
+  border: 1px solid var(--gn-bd);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+.ob-label {
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ob-label::before { content: '▶'; font-size: 8px; }
+.ob-text {
+  font-size: 14px;
+  color: #1a4a2e;
+  line-height: 1.9;
+  white-space: pre-wrap;
+}
+
+/* ── FLOW DIAGRAM ── */
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 20px 0;
+  overflow-x: auto;
+  padding: 4px 0 8px;
+}
+.fb {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.fb-icon { font-size: 20px; margin-bottom: 4px; }
+.fb-name { font-size: 12px; font-weight: 600; color: var(--ink); }
+.fb-desc { font-family: 'Fira Code', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; }
+.fb.active { border-color: var(--violet); background: var(--vi-bg); }
+.fb.active .fb-name { color: var(--violet); }
+.fa { color: var(--bd2); font-size: 18px; padding: 0 8px; flex-shrink: 0; }
+
+/* ── FILE TREE ── */
+.ftree {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-family: 'Fira Code', monospace;
+  font-size: 12.5px;
+  line-height: 2.1;
+  margin: 14px 0;
+}
+.ft-dir { color: #f0a855; }
+.ft-new { color: #28c840; }
+.ft-file { color: #61afef; }
+.ft-cm { color: #4a4030; }
+
+/* ── NAV BUTTONS ── */
+.nav {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 24px;
+  margin-top: 32px;
+  border-top: 1px solid var(--border);
+}
+.btn {
+  padding: 11px 26px;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all .2s;
+  font-family: 'Noto Sans Thai', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-p {
+  background: var(--violet);
+  color: #fff;
+}
+.btn-p:hover { background: #5b21b6; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(109,40,217,.3); }
+.btn-p.green { background: #16a34a; }
+.btn-p.green:hover { background: #15803d; box-shadow: 0 4px 16px rgba(22,163,74,.3); }
+.btn-s {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--bd2);
+}
+.btn-s:hover { background: var(--border); color: var(--ink); }
+.btn:disabled { opacity: .35; cursor: not-allowed; transform: none !important; }
+
+/* ── STEP PROGRESS ── */
+.step-progress {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 40px;
+  overflow-x: auto;
+}
+.sp-item {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+.sp-dot {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--paper);
+}
+.sp-dot.done { background: var(--gn-bg); border-color: var(--gn-bd); color: var(--green); }
+.sp-dot.now  { background: var(--vi-bg); border-color: var(--violet); color: var(--violet); }
+.sp-line {
+  width: 32px; height: 2px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.sp-line.done { background: var(--gn-bd); }
+
+/* SECTION visibility */
+.section { display: none; }
+.section.show { display: block; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="bar">
+  <div class="bar-dots">
+    <div class="bd bdr"></div>
+    <div class="bd bdy"></div>
+    <div class="bd bdg"></div>
+  </div>
+  <span class="bar-path">ptc-ai-web-shield / <span>phase-3</span> / ai-engine</span>
+  <span class="bar-tag">PHASE 3 OF 4</span>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div>
+    <div class="hero-sup">coding lesson · ai integration</div>
+    <h1 class="hero-h">เชื่อม<br><em>Gemini AI</em><br>เข้าระบบ</h1>
+    <p class="hero-sub">สร้าง AI Engine ที่รับข้อมูลจาก Scanner แล้ววิเคราะห์ ให้คะแนนความปลอดภัย และแนะนำการแก้ไขเป็นภาษาไทย</p>
+  </div>
+  <div class="phase-track">
+    <div class="pt-item done"><span class="pt-dot"></span>Phase 1: Setup</div>
+    <div class="pt-item done"><span class="pt-dot"></span>Phase 2: Scanner</div>
+    <div class="pt-item now"><span class="pt-dot"></span>Phase 3: AI Engine ← ตอนนี้</div>
+    <div class="pt-item"><span class="pt-dot"></span>Phase 4: UI + Deploy</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- Step progress -->
+  <div class="step-progress">
+    <div class="sp-item"><div class="sp-dot now" id="sp1" onclick="goStep(1)">1</div></div>
+    <div class="sp-line" id="sl1"></div>
+    <div class="sp-item"><div class="sp-dot" id="sp2" onclick="goStep(2)">2</div></div>
+    <div class="sp-line" id="sl2"></div>
+    <div class="sp-item"><div class="sp-dot" id="sp3" onclick="goStep(3)">3</div></div>
+    <div class="sp-line" id="sl3"></div>
+    <div class="sp-item"><div class="sp-dot" id="sp4" onclick="goStep(4)">4</div></div>
+    <div class="sp-line" id="sl4"></div>
+    <div class="sp-item"><div class="sp-dot" id="sp5" onclick="goStep(5)">5</div></div>
+  </div>
+
+  <!-- ══════════════════════════════ -->
+  <!-- STEP 1: ภาพรวม + Flow        -->
+  <!-- ══════════════════════════════ -->
+  <div class="section show" id="s1">
+
+    <div class="step-hd">
+      <span class="step-n">STEP 01</span>
+      <h2 class="step-title">ภาพรวม — AI ทำงาน<em>ยังไง</em>ในระบบนี้</h2>
+      <span class="step-badge sb-concept">concept</span>
+    </div>
+
+    <p class="prose">
+      Phase 2 เราสร้าง Scanner ที่ดึงข้อมูลดิบออกมาเป็น JSON แต่ข้อมูลดิบนั้น <strong>คนทั่วไปอ่านไม่รู้เรื่อง</strong><br>
+      Phase 3 เราจะนำข้อมูลนั้นส่งให้ <strong>Gemini วิเคราะห์</strong> และตอบกลับมาเป็นภาษาไทยที่เข้าใจง่าย
+    </p>
+
+    <!-- flow diagram -->
+    <div class="flow">
+      <div class="fb">
+        <div class="fb-icon">🌐</div>
+        <div class="fb-name">URL Input</div>
+        <div class="fb-desc">จาก Streamlit</div>
+      </div>
+      <div class="fa">→</div>
+      <div class="fb">
+        <div class="fb-icon">🔍</div>
+        <div class="fb-name">Scanner</div>
+        <div class="fb-desc">Phase 2 (เสร็จแล้ว)</div>
+      </div>
+      <div class="fa">→</div>
+      <div class="fb active">
+        <div class="fb-icon">🤖</div>
+        <div class="fb-name">AI Engine</div>
+        <div class="fb-desc">Phase 3 ← ตอนนี้</div>
+      </div>
+      <div class="fa">→</div>
+      <div class="fb">
+        <div class="fb-icon">📊</div>
+        <div class="fb-name">Dashboard</div>
+        <div class="fb-desc">Phase 4</div>
+      </div>
+      <div class="fa">→</div>
+      <div class="fb">
+        <div class="fb-icon">📄</div>
+        <div class="fb-name">Report</div>
+        <div class="fb-desc">PDF / ข้อความ</div>
+      </div>
+    </div>
+
+    <p class="prose">
+      AI Engine จะทำ 2 อย่าง:<br>
+      <strong>1. สร้าง Prompt</strong> — แปลงข้อมูล JSON จาก Scanner เป็นคำถามที่ชัดเจนสำหรับ AI<br>
+      <strong>2. เรียก Gemini API</strong> — ส่ง prompt และรับคำตอบกลับมาเป็นภาษาไทย
+    </p>
+
+    <div class="note note-vi">
+      <span class="note-i">💡</span>
+      <div class="note-b">
+        <strong>Prompt Engineering คืออะไร?</strong>
+        การเขียนคำสั่งให้ AI ในแบบที่ได้ผลลัพธ์ตรงที่ต้องการ — เป็นทักษะที่สำคัญมากในงาน AI ปัจจุบัน
+        เราจะเรียนรู้วิธีเขียน prompt ที่ดีในขั้นตอนนี้
+      </div>
+    </div>
+
+    <p class="prose" style="margin-top:20px;">โครงสร้างไฟล์ที่จะสร้างใน Phase 3:</p>
+    <div class="ftree">
+<span class="ft-dir">ptc-ai-web-shield/</span>
+├── src/
+│   ├── scanner/              <span class="ft-cm"># Phase 2 (เสร็จแล้ว)</span>
+│   ├── scanner.py            <span class="ft-cm"># Phase 2 (เสร็จแล้ว)</span>
+│   ├── <span class="ft-new">ai_engine.py</span>          <span class="ft-cm"># ← สร้างใหม่ (ไฟล์หลัก Phase 3)</span>
+│   └── <span class="ft-new">prompt_builder.py</span>    <span class="ft-cm"># ← สร้างใหม่ (สร้าง prompt)</span>
+├── app.py
+├── .env                      <span class="ft-cm"># ใส่ GEMINI_API_KEY ที่นี่</span>
+└── requirements.txt
+    </div>
+
+    <div class="nav">
+      <button class="btn btn-s" disabled>← ก่อนหน้า</button>
+      <button class="btn btn-p" onclick="nextStep(1)">เข้าใจแล้ว ไปต่อ →</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════ -->
+  <!-- STEP 2: prompt_builder.py     -->
+  <!-- ══════════════════════════════ -->
+  <div class="section" id="s2">
+
+    <div class="step-hd">
+      <span class="step-n">STEP 02</span>
+      <h2 class="step-title">เขียน <em>prompt_builder.py</em></h2>
+      <span class="step-badge sb-file">📄 src/prompt_builder.py</span>
+    </div>
+
+    <p class="prose">
+      ไฟล์นี้คือ <strong>"ล่าม"</strong> ระหว่างข้อมูล JSON กับ AI — รับข้อมูลดิบจาก Scanner แปลงเป็นประโยคคำถามที่ Gemini เข้าใจได้ดีที่สุด
+    </p>
+
+    <div class="note note-am">
+      <span class="note-i">🎯</span>
+      <div class="note-b">
+        <strong>หลักการ Prompt ที่ดีในงาน Cybersecurity:</strong>
+        ต้องบอก AI ว่า <em>(1) บทบาทคืออะไร</em> → <em>(2) ข้อมูลที่มีคืออะไร</em> → <em>(3) ต้องการคำตอบแบบไหน</em>
+        ขาดส่วนใดส่วนหนึ่ง ผลลัพธ์จะกว้างเกินไปหรือไม่ตรงประเด็น
+      </div>
+    </div>
+
+    <!-- prompt anatomy -->
+    <div class="prompt-box">
+      <div class="pb-head">
+        <span style="font-size:16px">🧬</span>
+        <span class="pb-title">โครงสร้าง Prompt ที่เราจะสร้าง</span>
+      </div>
+      <div class="pb-body">
+        <div class="pb-section">
+          <div class="pb-label">ส่วนที่ 1 — Role (บทบาท)</div>
+          <div class="pb-text">คุณคือผู้เชี่ยวชาญด้าน Cybersecurity ที่ตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาไทย...</div>
+          <div class="pb-why">→ บอก AI ว่าตัวเองคือใคร ทำให้ตอบในมุมมองที่ถูกต้อง</div>
+        </div>
+        <div class="pb-section">
+          <div class="pb-label">ส่วนที่ 2 — Data (ข้อมูล)</div>
+          <div class="pb-text">ผลการสแกนเว็บไซต์ school.ac.th:
+- Security Score: 33/100
+- Headers ที่ขาด: CSP, X-Frame-Options
+- SSL: ใช้ได้ เหลือ 45 วัน
+- External Scripts: 3 ตัว</div>
+          <div class="pb-why">→ ข้อมูลจริงจาก Scanner ที่แปลงให้อ่านง่าย</div>
+        </div>
+        <div class="pb-section">
+          <div class="pb-label">ส่วนที่ 3 — Output Format (รูปแบบคำตอบ)</div>
+          <div class="pb-text">ให้ตอบเป็นภาษาไทยเข้าใจง่าย แบ่งเป็น:
+1. สรุปภาพรวม (2-3 ประโยค)
+2. ปัญหาเร่งด่วน (bullet)
+3. คำแนะนำแก้ไข (ทำได้เลยทันที)</div>
+          <div class="pb-why">→ กำหนดหน้าตาคำตอบ ทำให้แสดงผลใน UI ได้ง่าย</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="prose" style="margin-top:20px;">สร้างไฟล์ <code>src/prompt_builder.py</code> :</p>
+
+    <div class="code-block">
+      <div class="cb-top">
+        <span class="cb-name">src/prompt_builder.py</span>
+        <button class="copy-btn" onclick="doCopy(this,'c2')">copy</button>
+      </div>
+      <div class="cb-body" id="c2">
+<div class="cl hl"><span class="lno">1</span><span class="lc"><span class="cm"># src/prompt_builder.py — แปลง JSON → Prompt สำหรับ Gemini</span></span></div>
+<div class="cl"><span class="lno">2</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">3</span><span class="lc"><span class="kw">def</span> <span class="fn">build_prompt</span>(<span class="vr">scan_result</span>: <span class="ty">dict</span>) <span class="kw">-></span> <span class="ty">str</span>:  <span class="an an-v">function หลัก</span></span></div>
+<div class="cl"><span class="lno">4</span><span class="lc">    <span class="st">"""สร้าง prompt จากผล scan เพื่อส่งให้ Gemini"""</span></span></div>
+<div class="cl"><span class="lno">5</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">6</span><span class="lc">    <span class="cm"># ── ดึงข้อมูลจาก scan_result ──────────────────────</span></span></div>
+<div class="cl"><span class="lno">7</span><span class="lc">    <span class="vr">url</span>     <span class="kw">=</span> <span class="vr">scan_result</span>.<span class="fn">get</span>(<span class="st">"url"</span>, <span class="st">""</span>)</span></div>
+<div class="cl"><span class="lno">8</span><span class="lc">    <span class="vr">headers</span> <span class="kw">=</span> <span class="vr">scan_result</span>.<span class="fn">get</span>(<span class="st">"headers"</span>, {})</span></div>
+<div class="cl"><span class="lno">9</span><span class="lc">    <span class="vr">ssl</span>     <span class="kw">=</span> <span class="vr">scan_result</span>.<span class="fn">get</span>(<span class="st">"ssl"</span>, {})</span></div>
+<div class="cl"><span class="lno">10</span><span class="lc">    <span class="vr">html</span>    <span class="kw">=</span> <span class="vr">scan_result</span>.<span class="fn">get</span>(<span class="st">"html"</span>, {})</span></div>
+<div class="cl"><span class="lno">11</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">12</span><span class="lc">    <span class="cm"># ── ส่วนที่ 1: บทบาทของ AI ──────────────────────</span></span></div>
+<div class="cl"><span class="lno">13</span><span class="lc">    <span class="vr">role</span> <span class="kw">=</span> <span class="st">"""คุณคือผู้เชี่ยวชาญด้าน Cybersecurity สำหรับสถานศึกษาไทย \
+</span></span></div>
+<div class="cl"><span class="lno">14</span><span class="lc"><span class="st">ที่ช่วยวิเคราะห์ความปลอดภัยเว็บไซต์และให้คำแนะนำภาษาไทยเข้าใจง่าย \
+</span></span></div>
+<div class="cl"><span class="lno">15</span><span class="lc"><span class="st">สำหรับครูและบุคลากรฝ่ายไอทีที่ไม่มีความเชี่ยวชาญด้านความปลอดภัยเป็นพิเศษ"""</span></span></div>
+<div class="cl"><span class="lno">16</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">17</span><span class="lc">    <span class="cm"># ── ส่วนที่ 2: ข้อมูลจาก Scanner ────────────────</span></span></div>
+<div class="cl"><span class="lno">18</span><span class="lc">    <span class="vr">score</span>   <span class="kw">=</span> <span class="vr">headers</span>.<span class="fn">get</span>(<span class="st">"score"</span>, <span class="nm">0</span>)</span></div>
+<div class="cl"><span class="lno">19</span><span class="lc">    <span class="vr">missing</span> <span class="kw">=</span> <span class="vr">headers</span>.<span class="fn">get</span>(<span class="st">"headers_missing"</span>, [])</span></div>
+<div class="cl"><span class="lno">20</span><span class="lc">    <span class="vr">found</span>   <span class="kw">=</span> <span class="vr">headers</span>.<span class="fn">get</span>(<span class="st">"headers_found"</span>, {})</span></div>
+<div class="cl"><span class="lno">21</span><span class="lc">    <span class="vr">ext_sc</span>  <span class="kw">=</span> <span class="vr">html</span>.<span class="fn">get</span>(<span class="st">"external_scripts"</span>, [])</span></div>
+<div class="cl"><span class="lno">22</span><span class="lc">    <span class="vr">ins_fm</span>  <span class="kw">=</span> <span class="vr">html</span>.<span class="fn">get</span>(<span class="st">"insecure_forms"</span>, [])</span></div>
+<div class="cl"><span class="lno">23</span><span class="lc">    <span class="vr">ssl_ok</span>  <span class="kw">=</span> <span class="vr">ssl</span>.<span class="fn">get</span>(<span class="st">"valid"</span>, <span class="nm">False</span>)</span></div>
+<div class="cl"><span class="lno">24</span><span class="lc">    <span class="vr">days</span>    <span class="kw">=</span> <span class="vr">ssl</span>.<span class="fn">get</span>(<span class="st">"days_left"</span>, <span class="nm">0</span>)</span></div>
+<div class="cl"><span class="lno">25</span><span class="lc">    <span class="vr">ssl_warn</span><span class="kw">=</span> <span class="vr">ssl</span>.<span class="fn">get</span>(<span class="st">"warning"</span>, <span class="st">""</span>)</span></div>
+<div class="cl"><span class="lno">26</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">27</span><span class="lc">    <span class="cm"># แปลงรายการ list → ข้อความ bullet</span></span></div>
+<div class="cl"><span class="lno">28</span><span class="lc">    <span class="vr">missing_txt</span> <span class="kw">=</span> <span class="st">", "</span>.<span class="fn">join</span>(<span class="vr">missing</span>) <span class="kw">if</span> <span class="vr">missing</span> <span class="kw">else</span> <span class="st">"ครบทุกตัว"</span>  <span class="an">join = เชื่อม list เป็น string</span></span></div>
+<div class="cl"><span class="lno">29</span><span class="lc">    <span class="vr">found_txt</span>   <span class="kw">=</span> <span class="st">", "</span>.<span class="fn">join</span>(<span class="vr">found</span>.<span class="fn">keys</span>()) <span class="kw">if</span> <span class="vr">found</span> <span class="kw">else</span> <span class="st">"ไม่มีเลย"</span></span></div>
+<div class="cl"><span class="lno">30</span><span class="lc">    <span class="vr">ext_txt</span>     <span class="kw">=</span> <span class="fn">str</span>(<span class="fn">len</span>(<span class="vr">ext_sc</span>)) <span class="kw">+</span> <span class="st">" ตัว"</span></span></div>
+<div class="cl"><span class="lno">31</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">32</span><span class="lc">    <span class="cm"># ── รวมเป็น Prompt เดียว ─────────────────────────</span></span></div>
+<div class="cl"><span class="lno">33</span><span class="lc">    <span class="vr">data_section</span> <span class="kw">=</span> <span class="st">f"""</span></span></div>
+<div class="cl"><span class="lno">34</span><span class="lc"><span class="st">ผลการตรวจสอบเว็บไซต์: {url}</span></span></div>
+<div class="cl"><span class="lno">35</span><span class="lc"><span class="st">────────────────────────────────</span></span></div>
+<div class="cl"><span class="lno">36</span><span class="lc"><span class="st">คะแนนความปลอดภัย: {score}/100</span></span></div>
+<div class="cl"><span class="lno">37</span><span class="lc"><span class="st">Security Headers ที่มี: {found_txt}</span></span></div>
+<div class="cl"><span class="lno">38</span><span class="lc"><span class="st">Security Headers ที่ขาด: {missing_txt}</span></span></div>
+<div class="cl"><span class="lno">39</span><span class="lc"><span class="st">SSL Certificate: {"ปลอดภัย เหลือ " + str(days) + " วัน" if ssl_ok else "มีปัญหา!"}</span></span></div>
+<div class="cl"><span class="lno">40</span><span class="lc"><span class="st">คำเตือน SSL: {ssl_warn if ssl_warn else "ไม่มี"}</span></span></div>
+<div class="cl"><span class="lno">41</span><span class="lc"><span class="st">External Scripts: {ext_txt}</span></span></div>
+<div class="cl"><span class="lno">42</span><span class="lc"><span class="st">Insecure Forms: {len(ins_fm)} ตัว</span></span></div>
+<div class="cl"><span class="lno">43</span><span class="lc"><span class="st">"""</span></span></div>
+<div class="cl"><span class="lno">44</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">45</span><span class="lc">    <span class="cm"># ── ส่วนที่ 3: กำหนดรูปแบบคำตอบ ─────────────────</span></span></div>
+<div class="cl"><span class="lno">46</span><span class="lc">    <span class="vr">output_format</span> <span class="kw">=</span> <span class="st">"""</span></span></div>
+<div class="cl"><span class="lno">47</span><span class="lc"><span class="st">กรุณาวิเคราะห์และตอบกลับเป็นภาษาไทย แบ่งเป็น 4 ส่วนชัดเจน:</span></span></div>
+<div class="cl"><span class="lno">48</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">49</span><span class="lc"><span class="st">## 🔍 สรุปภาพรวม</span></span></div>
+<div class="cl"><span class="lno">50</span><span class="lc"><span class="st">[อธิบายสถานะโดยรวม 2-3 ประโยค เหมาะสำหรับผู้บริหาร]</span></span></div>
+<div class="cl"><span class="lno">51</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">52</span><span class="lc"><span class="st">## 🚨 ปัญหาเร่งด่วน (ต้องแก้ทันที)</span></span></div>
+<div class="cl"><span class="lno">53</span><span class="lc"><span class="st">[bullet list ปัญหาที่อันตรายที่สุด พร้อมอธิบายว่าอันตรายอย่างไร]</span></span></div>
+<div class="cl"><span class="lno">54</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">55</span><span class="lc"><span class="st">## 🛠️ คำแนะนำการแก้ไข</span></span></div>
+<div class="cl"><span class="lno">56</span><span class="lc"><span class="st">[ขั้นตอนที่ทำได้จริง เรียงจากง่ายไปยาก]</span></span></div>
+<div class="cl"><span class="lno">57</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">58</span><span class="lc"><span class="st">## ✅ จุดที่ดีแล้ว</span></span></div>
+<div class="cl"><span class="lno">59</span><span class="lc"><span class="st">[สิ่งที่เว็บไซต์ทำได้ถูกต้อง เพื่อกำลังใจ]</span></span></div>
+<div class="cl"><span class="lno">60</span><span class="lc"><span class="st">"""</span></span></div>
+<div class="cl"><span class="lno">61</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">62</span><span class="lc">    <span class="cm"># รวม 3 ส่วนเป็น prompt เดียว</span></span></div>
+<div class="cl"><span class="lno">63</span><span class="lc">    <span class="kw">return</span> <span class="st">f"{role}\n\n{data_section}\n{output_format}"</span>  <span class="an an-g">ส่งคืน string เดียว</span></span></div>
+      </div>
+    </div>
+
+    <div class="note note-vi">
+      <span class="note-i">🧠</span>
+      <div class="note-b">
+        <strong>ทำไมต้องแยก prompt_builder.py ออกมา?</strong>
+        เพราะ Prompt อาจต้องแก้บ่อย เช่น เพิ่มภาษา เปลี่ยนรูปแบบ หรือเพิ่มข้อมูลใหม่ การแยกไฟล์ทำให้แก้ได้ง่าย โดยไม่ต้องแตะ logic อื่น — นี่คือหลัก <strong>Separation of Concerns</strong> ใน Software Engineering
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="btn btn-s" onclick="goStep(1)">← ก่อนหน้า</button>
+      <button class="btn btn-p" onclick="nextStep(2)">บันทึกไฟล์แล้ว ไปต่อ →</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════ -->
+  <!-- STEP 3: ai_engine.py          -->
+  <!-- ══════════════════════════════ -->
+  <div class="section" id="s3">
+
+    <div class="step-hd">
+      <span class="step-n">STEP 03</span>
+      <h2 class="step-title">เขียน <em>ai_engine.py</em> — หัวใจของระบบ</h2>
+      <span class="step-badge sb-file">📄 src/ai_engine.py</span>
+    </div>
+
+    <p class="prose">
+      ไฟล์นี้คือ <strong>"สะพาน"</strong> ระหว่างโปรเจกต์กับ Gemini API — รับ scan_result เข้า สร้าง prompt แล้วส่งให้ AI วิเคราะห์ พร้อมระบบ Cache ป้องกัน API call ซ้ำ
+    </p>
+
+    <div class="code-block">
+      <div class="cb-top">
+        <span class="cb-name">src/ai_engine.py</span>
+        <button class="copy-btn" onclick="doCopy(this,'c3')">copy</button>
+      </div>
+      <div class="cb-body" id="c3">
+<div class="cl cm-line"><span class="lno">1</span><span class="lc"><span class="cm"># src/ai_engine.py — เชื่อมต่อ Gemini API</span></span></div>
+<div class="cl"><span class="lno">2</span><span class="lc"><span class="kw">import</span> <span class="vr">os</span></span></div>
+<div class="cl"><span class="lno">3</span><span class="lc"><span class="kw">from</span> <span class="vr">dotenv</span> <span class="kw">import</span> <span class="fn">load_dotenv</span>              <span class="an">โหลด .env file</span></span></div>
+<div class="cl"><span class="lno">4</span><span class="lc"><span class="kw">import</span> <span class="vr">google.generativeai</span> <span class="kw">as</span> <span class="vr">genai</span>        <span class="an">Gemini SDK</span></span></div>
+<div class="cl"><span class="lno">5</span><span class="lc"><span class="kw">from</span> <span class="vr">cachetools</span> <span class="kw">import</span> <span class="ty">TTLCache</span>              <span class="an">Cache หมดอายุอัตโนมัติ</span></span></div>
+<div class="cl"><span class="lno">6</span><span class="lc"><span class="kw">from</span> <span class="vr">prompt_builder</span> <span class="kw">import</span> <span class="fn">build_prompt</span>      <span class="an">import จากไฟล์ที่เพิ่งสร้าง</span></span></div>
+<div class="cl"><span class="lno">7</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">8</span><span class="lc"><span class="cm"># ── โหลด API Key จาก .env ────────────────────</span></span></div>
+<div class="cl"><span class="lno">9</span><span class="lc"><span class="fn">load_dotenv</span>()                                   <span class="an">อ่านไฟล์ .env</span></span></div>
+<div class="cl"><span class="lno">10</span><span class="lc"><span class="vr">genai</span>.<span class="fn">configure</span>(<span class="vr">api_key</span><span class="kw">=</span><span class="vr">os</span>.<span class="fn">getenv</span>(<span class="st">"GEMINI_API_KEY"</span>))</span></div>
+<div class="cl"><span class="lno">11</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">12</span><span class="lc"><span class="cm"># ── ตั้งค่า Model ─────────────────────────────</span></span></div>
+<div class="cl"><span class="lno">13</span><span class="lc"><span class="vr">MODEL_NAME</span> <span class="kw">=</span> <span class="st">"gemini-2.0-flash"</span>               <span class="an an-v">เปลี่ยน model ที่นี่ที่เดียว</span></span></div>
+<div class="cl"><span class="lno">14</span><span class="lc"><span class="vr">model</span> <span class="kw">=</span> <span class="vr">genai</span>.<span class="fn">GenerativeModel</span>(</span></div>
+<div class="cl"><span class="lno">15</span><span class="lc">    <span class="vr">MODEL_NAME</span>,</span></div>
+<div class="cl"><span class="lno">16</span><span class="lc">    <span class="vr">generation_config</span><span class="kw">=</span>{</span></div>
+<div class="cl"><span class="lno">17</span><span class="lc">        <span class="st">"temperature"</span>: <span class="nm">0.3</span>,      <span class="an">ต่ำ = คำตอบแม่นยำ ไม่สร้างสรรค์เกิน</span></span></div>
+<div class="cl"><span class="lno">18</span><span class="lc">        <span class="st">"max_output_tokens"</span>: <span class="nm">1500</span>, <span class="an">จำกัดความยาวคำตอบ</span></span></div>
+<div class="cl"><span class="lno">19</span><span class="lc">    }</span></div>
+<div class="cl"><span class="lno">20</span><span class="lc">)</span></div>
+<div class="cl"><span class="lno">21</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">22</span><span class="lc"><span class="cm"># ── Cache: ไม่เรียก AI ซ้ำถ้าสแกน URL เดิม ──</span></span></div>
+<div class="cl"><span class="lno">23</span><span class="lc"><span class="cm"># maxsize=50 เก็บได้ 50 URL, ttl=3600 หมดอายุใน 1 ชั่วโมง</span></span></div>
+<div class="cl"><span class="lno">24</span><span class="lc"><span class="vr">_cache</span> <span class="kw">=</span> <span class="ty">TTLCache</span>(<span class="vr">maxsize</span><span class="kw">=</span><span class="nm">50</span>, <span class="vr">ttl</span><span class="kw">=</span><span class="nm">3600</span>)      <span class="an an-g">ประหยัด API quota</span></span></div>
+<div class="cl"><span class="lno">25</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">26</span><span class="lc"><span class="kw">def</span> <span class="fn">analyze</span>(<span class="vr">scan_result</span>: <span class="ty">dict</span>) <span class="kw">-></span> <span class="ty">dict</span>:   <span class="an an-v">function ที่ app.py จะเรียก</span></span></div>
+<div class="cl"><span class="lno">27</span><span class="lc">    <span class="st">"""</span></span></div>
+<div class="cl"><span class="lno">28</span><span class="lc">    <span class="st">รับ scan_result จาก scanner.py</span></span></div>
+<div class="cl"><span class="lno">29</span><span class="lc">    <span class="st">ส่งคืน dict ที่มี analysis และ score สรุป</span></span></div>
+<div class="cl"><span class="lno">30</span><span class="lc">    <span class="st">"""</span></span></div>
+<div class="cl"><span class="lno">31</span><span class="lc">    <span class="vr">url</span> <span class="kw">=</span> <span class="vr">scan_result</span>.<span class="fn">get</span>(<span class="st">"url"</span>, <span class="st">""</span>)</span></div>
+<div class="cl"><span class="lno">32</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">33</span><span class="lc">    <span class="cm"># ตรวจ cache ก่อน — ถ้ามีผลแล้วไม่ต้องเรียก API ใหม่</span></span></div>
+<div class="cl"><span class="lno">34</span><span class="lc">    <span class="kw">if</span> <span class="vr">url</span> <span class="kw">in</span> <span class="vr">_cache</span>:                          <span class="an an-g">hit cache!</span></span></div>
+<div class="cl"><span class="lno">35</span><span class="lc">        <span class="kw">return</span> <span class="vr">_cache</span>[<span class="vr">url</span>]</span></div>
+<div class="cl"><span class="lno">36</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">37</span><span class="lc">    <span class="vr">result</span> <span class="kw">=</span> {</span></div>
+<div class="cl"><span class="lno">38</span><span class="lc">        <span class="st">"analysis"</span>: <span class="st">""</span>,     <span class="cm"># คำวิเคราะห์จาก AI</span></span></div>
+<div class="cl"><span class="lno">39</span><span class="lc">        <span class="st">"risk_level"</span>: <span class="st">""</span>,   <span class="cm"># HIGH / MEDIUM / LOW</span></span></div>
+<div class="cl"><span class="lno">40</span><span class="lc">        <span class="st">"score"</span>: <span class="nm">0</span>,          <span class="cm"># คะแนน headers 0-100</span></span></div>
+<div class="cl"><span class="lno">41</span><span class="lc">        <span class="st">"error"</span>: <span class="nm">None</span></span></div>
+<div class="cl"><span class="lno">42</span><span class="lc">    }</span></div>
+<div class="cl"><span class="lno">43</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">44</span><span class="lc">    <span class="kw">try</span>:</span></div>
+<div class="cl hl"><span class="lno">45</span><span class="lc">        <span class="cm"># 1. สร้าง prompt จากข้อมูล scan</span></span></div>
+<div class="cl"><span class="lno">46</span><span class="lc">        <span class="vr">prompt</span> <span class="kw">=</span> <span class="fn">build_prompt</span>(<span class="vr">scan_result</span>)     <span class="an">เรียก prompt_builder</span></span></div>
+<div class="cl"><span class="lno">47</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">48</span><span class="lc">        <span class="cm"># 2. ส่ง prompt ให้ Gemini</span></span></div>
+<div class="cl"><span class="lno">49</span><span class="lc">        <span class="vr">response</span> <span class="kw">=</span> <span class="vr">model</span>.<span class="fn">generate_content</span>(<span class="vr">prompt</span>)  <span class="an an-v">เรียก API !</span></span></div>
+<div class="cl"><span class="lno">50</span><span class="lc">        <span class="vr">result</span>[<span class="st">"analysis"</span>] <span class="kw">=</span> <span class="vr">response</span>.<span class="vr">text</span></span></div>
+<div class="cl"><span class="lno">51</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">52</span><span class="lc">        <span class="cm"># 3. คำนวณ risk level จากคะแนน</span></span></div>
+<div class="cl"><span class="lno">53</span><span class="lc">        <span class="vr">score</span> <span class="kw">=</span> <span class="vr">scan_result</span>.<span class="fn">get</span>(<span class="st">"headers"</span>, {}).<span class="fn">get</span>(<span class="st">"score"</span>, <span class="nm">0</span>)</span></div>
+<div class="cl"><span class="lno">54</span><span class="lc">        <span class="vr">result</span>[<span class="st">"score"</span>] <span class="kw">=</span> <span class="vr">score</span></span></div>
+<div class="cl"><span class="lno">55</span><span class="lc">        <span class="kw">if</span>   <span class="vr">score</span> <span class="kw">&gt;=</span> <span class="nm">70</span>: <span class="vr">result</span>[<span class="st">"risk_level"</span>] <span class="kw">=</span> <span class="st">"LOW"</span>     <span class="an an-g">ปลอดภัย</span></span></div>
+<div class="cl"><span class="lno">56</span><span class="lc">        <span class="kw">elif</span> <span class="vr">score</span> <span class="kw">&gt;=</span> <span class="nm">40</span>: <span class="vr">result</span>[<span class="st">"risk_level"</span>] <span class="kw">=</span> <span class="st">"MEDIUM"</span>  <span class="an">พอใช้</span></span></div>
+<div class="cl"><span class="lno">57</span><span class="lc">        <span class="kw">else</span>:            <span class="vr">result</span>[<span class="st">"risk_level"</span>] <span class="kw">=</span> <span class="st">"HIGH"</span>    <span class="an an-r">อันตราย</span></span></div>
+<div class="cl"><span class="lno">58</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">59</span><span class="lc">        <span class="cm"># 4. บันทึก cache เพื่อไม่ต้องเรียก API ซ้ำ</span></span></div>
+<div class="cl"><span class="lno">60</span><span class="lc">        <span class="vr">_cache</span>[<span class="vr">url</span>] <span class="kw">=</span> <span class="vr">result</span>                     <span class="an an-g">save to cache</span></span></div>
+<div class="cl"><span class="lno">61</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">62</span><span class="lc">    <span class="kw">except</span> <span class="ty">Exception</span> <span class="kw">as</span> <span class="vr">e</span>:</span></div>
+<div class="cl"><span class="lno">63</span><span class="lc">        <span class="vr">result</span>[<span class="st">"error"</span>] <span class="kw">=</span> <span class="fn">str</span>(<span class="vr">e</span>)</span></div>
+<div class="cl"><span class="lno">64</span><span class="lc">        <span class="vr">result</span>[<span class="st">"analysis"</span>] <span class="kw">=</span> <span class="st">f"❌ เรียก AI ไม่สำเร็จ: {e}"</span></span></div>
+<div class="cl"><span class="lno">65</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">66</span><span class="lc">    <span class="kw">return</span> <span class="vr">result</span></span></div>
+      </div>
+    </div>
+
+    <div class="note note-am">
+      <span class="note-i">⚙️</span>
+      <div class="note-b">
+        <strong>temperature คืออะไร? (บรรทัด 17)</strong>
+        ค่า 0.0 = ตอบแม่นตายตัวทุกครั้ง &nbsp;|&nbsp; ค่า 1.0 = สร้างสรรค์ ตอบต่างกันทุกครั้ง<br>
+        สำหรับงาน Cybersecurity ต้องการความแม่นยำ จึงใช้ <code style="font-family:'Fira Code',monospace;font-size:12px">0.3</code> — ตอบสม่ำเสมอ แต่ยังมีความหลากหลายบ้าง
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="btn btn-s" onclick="goStep(2)">← ก่อนหน้า</button>
+      <button class="btn btn-p" onclick="nextStep(3)">บันทึกไฟล์แล้ว ไปต่อ →</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════ -->
+  <!-- STEP 4: ทดสอบ AI             -->
+  <!-- ══════════════════════════════ -->
+  <div class="section" id="s4">
+
+    <div class="step-hd">
+      <span class="step-n">STEP 04</span>
+      <h2 class="step-title">ทดสอบ <em>AI Engine</em> ครั้งแรก</h2>
+      <span class="step-badge sb-test">🧪 test</span>
+    </div>
+
+    <p class="prose">
+      ก่อนเชื่อมกับ Streamlit ทดสอบ AI Engine โดยตรงก่อน เพื่อให้แน่ใจว่า Gemini ตอบกลับมาถูกต้อง
+    </p>
+
+    <div class="note note-rd">
+      <span class="note-i">🔑</span>
+      <div class="note-b">
+        <strong>ต้องมี API Key ก่อนถึงจะทดสอบได้!</strong>
+        ถ้ายังไม่มี: ไปที่ <code style="font-family:'Fira Code',monospace;font-size:12px">aistudio.google.com</code> → Get API Key → Create API Key → Copy → ใส่ใน <code style="font-family:'Fira Code',monospace;font-size:12px">.env</code> ว่า <code style="font-family:'Fira Code',monospace;font-size:12px">GEMINI_API_KEY=AIza...</code>
+      </div>
+    </div>
+
+    <p class="prose">สร้างไฟล์ทดสอบ <code>test_ai.py</code> ใน root folder:</p>
+
+    <div class="code-block">
+      <div class="cb-top">
+        <span class="cb-name">test_ai.py (ไว้ที่ root ไม่ใช่ใน src)</span>
+        <button class="copy-btn" onclick="doCopy(this,'c4')">copy</button>
+      </div>
+      <div class="cb-body" id="c4">
+<div class="cl"><span class="lno">1</span><span class="lc"><span class="cm"># test_ai.py — ทดสอบ AI Engine ทั้งระบบ</span></span></div>
+<div class="cl"><span class="lno">2</span><span class="lc"><span class="kw">import</span> <span class="vr">sys</span></span></div>
+<div class="cl"><span class="lno">3</span><span class="lc"><span class="vr">sys</span>.<span class="vr">path</span>.<span class="fn">insert</span>(<span class="nm">0</span>, <span class="st">"src"</span>)  <span class="an">บอก Python ให้หา module ใน src/</span></span></div>
+<div class="cl"><span class="lno">4</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">5</span><span class="lc"><span class="kw">from</span> <span class="vr">scanner</span> <span class="kw">import</span> <span class="fn">run_scan</span></span></div>
+<div class="cl"><span class="lno">6</span><span class="lc"><span class="kw">from</span> <span class="vr">ai_engine</span> <span class="kw">import</span> <span class="fn">analyze</span></span></div>
+<div class="cl"><span class="lno">7</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">8</span><span class="lc"><span class="cm"># ── เปลี่ยน URL ที่นี่ ──────────────────────────</span></span></div>
+<div class="cl"><span class="lno">9</span><span class="lc"><span class="vr">TEST_URL</span> <span class="kw">=</span> <span class="st">"https://www.ptc.ac.th"</span>           <span class="an an-v">ลองสแกนเว็บ ปวช.ปัตตานี</span></span></div>
+<div class="cl"><span class="lno">10</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">11</span><span class="lc"><span class="fn">print</span>(<span class="st">f"🔍 Step 1: กำลังสแกน {TEST_URL} ..."</span>)</span></div>
+<div class="cl"><span class="lno">12</span><span class="lc"><span class="vr">scan_data</span> <span class="kw">=</span> <span class="fn">run_scan</span>(<span class="vr">TEST_URL</span>)</span></div>
+<div class="cl"><span class="lno">13</span><span class="lc"><span class="fn">print</span>(<span class="st">f"✅ Scan เสร็จ — คะแนน: {scan_data['headers']['score']}/100"</span>)</span></div>
+<div class="cl"><span class="lno">14</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">15</span><span class="lc"><span class="fn">print</span>(<span class="st">"</span><span class="st">\n🤖 Step 2: กำลังส่งให้ Gemini วิเคราะห์ ..."</span>)</span></div>
+<div class="cl"><span class="lno">16</span><span class="lc"><span class="vr">ai_result</span> <span class="kw">=</span> <span class="fn">analyze</span>(<span class="vr">scan_data</span>)</span></div>
+<div class="cl"><span class="lno">17</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">18</span><span class="lc"><span class="fn">print</span>(<span class="st">f"\n{'='*50}"</span>)</span></div>
+<div class="cl"><span class="lno">19</span><span class="lc"><span class="fn">print</span>(<span class="st">f"🎯 ระดับความเสี่ยง : {ai_result['risk_level']}"</span>)</span></div>
+<div class="cl"><span class="lno">20</span><span class="lc"><span class="fn">print</span>(<span class="st">f"📊 คะแนน          : {ai_result['score']}/100"</span>)</span></div>
+<div class="cl"><span class="lno">21</span><span class="lc"><span class="fn">print</span>(<span class="st">f"{'='*50}\n"</span>)</span></div>
+<div class="cl"><span class="lno">22</span><span class="lc"><span class="fn">print</span>(<span class="st">"📝 ผลวิเคราะห์จาก AI:"</span>)</span></div>
+<div class="cl"><span class="lno">23</span><span class="lc"><span class="fn">print</span>(<span class="vr">ai_result</span>[<span class="st">"analysis"</span>])</span></div>
+<div class="cl"><span class="lno">24</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">25</span><span class="lc"><span class="kw">if</span> <span class="vr">ai_result</span>[<span class="st">"error"</span>]:</span></div>
+<div class="cl"><span class="lno">26</span><span class="lc">    <span class="fn">print</span>(<span class="st">f"\n❌ Error: {ai_result['error']}"</span>)</span></div>
+      </div>
+    </div>
+
+    <div class="note note-am">
+      <span class="note-i">▶</span>
+      <div class="note-b">
+        <strong>รันทดสอบ (จาก root folder ของโปรเจกต์):</strong>
+        <code style="display:block;font-family:'Fira Code',monospace;font-size:12.5px;margin-top:8px;color:#92610a">
+          cd C:\Users\...\ptc-ai-web-shield<br>
+          venv\Scripts\activate<br>
+          python test_ai.py
+        </code>
+      </div>
+    </div>
+
+    <div class="output-box">
+      <div class="ob-label">ผลลัพธ์ที่ควรเห็น</div>
+      <div class="ob-text">🔍 Step 1: กำลังสแกน https://www.ptc.ac.th ...
+✅ Scan เสร็จ — คะแนน: 17/100
+
+🤖 Step 2: กำลังส่งให้ Gemini วิเคราะห์ ...
+
+==================================================
+🎯 ระดับความเสี่ยง : HIGH
+📊 คะแนน          : 17/100
+==================================================
+
+📝 ผลวิเคราะห์จาก AI:
+## 🔍 สรุปภาพรวม
+เว็บไซต์ ptc.ac.th มีคะแนนความปลอดภัยอยู่ในระดับต่ำมากที่ 17/100
+พบช่องโหว่สำคัญหลายจุดที่อาจเป็นเป้าหมายของการโจมตีไซเบอร์...
+
+## 🚨 ปัญหาเร่งด่วน
+• ขาด Content-Security-Policy — เสี่ยงต่อ XSS Attack...
+• ขาด X-Frame-Options — เสี่ยงต่อ Clickjacking...
+
+## 🛠️ คำแนะนำการแก้ไข
+1. เพิ่ม HTTP Headers ในไฟล์ .htaccess...
+
+## ✅ จุดที่ดีแล้ว
+• มี HTTPS และ SSL Certificate ที่ยังใช้งานได้...</div>
+    </div>
+
+    <div class="note note-gn">
+      <span class="note-i">🎉</span>
+      <div class="note-b">
+        <strong>ถ้าเห็นผลวิเคราะห์ภาษาไทยออกมา = AI Engine ทำงานสำเร็จ!</strong>
+        Scanner + AI ทำงานร่วมกันได้แล้ว พร้อมเชื่อมกับ Streamlit UI ใน Step ต่อไป
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="btn btn-s" onclick="goStep(3)">← ก่อนหน้า</button>
+      <button class="btn btn-p" onclick="nextStep(4)">ทดสอบสำเร็จ ไปต่อ →</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════ -->
+  <!-- STEP 5: เชื่อม app.py         -->
+  <!-- ══════════════════════════════ -->
+  <div class="section" id="s5">
+
+    <div class="step-hd">
+      <span class="step-n">STEP 05</span>
+      <h2 class="step-title">อัปเดต <em>app.py</em> — เชื่อมทุกอย่างเข้า Streamlit</h2>
+      <span class="step-badge sb-file">📄 app.py (แก้ไข)</span>
+    </div>
+
+    <p class="prose">
+      ตอนนี้มีทุกอย่างพร้อมแล้ว — แก้ <code>app.py</code> ให้เรียก Scanner และ AI Engine แล้วแสดงผลบน Streamlit UI ครบถ้วน
+    </p>
+
+    <div class="code-block">
+      <div class="cb-top">
+        <span class="cb-name">app.py — แทนที่ทั้งหมด</span>
+        <button class="copy-btn" onclick="doCopy(this,'c5')">copy</button>
+      </div>
+      <div class="cb-body" id="c5">
+<div class="cl cm-line"><span class="lno">1</span><span class="lc"><span class="cm"># app.py — Streamlit UI หลัก (Phase 3 complete)</span></span></div>
+<div class="cl"><span class="lno">2</span><span class="lc"><span class="kw">import</span> <span class="vr">sys</span>, <span class="vr">streamlit</span> <span class="kw">as</span> <span class="vr">st</span></span></div>
+<div class="cl"><span class="lno">3</span><span class="lc"><span class="vr">sys</span>.<span class="vr">path</span>.<span class="fn">insert</span>(<span class="nm">0</span>, <span class="st">"src"</span>)</span></div>
+<div class="cl"><span class="lno">4</span><span class="lc"><span class="kw">from</span> <span class="vr">scanner</span>   <span class="kw">import</span> <span class="fn">run_scan</span></span></div>
+<div class="cl"><span class="lno">5</span><span class="lc"><span class="kw">from</span> <span class="vr">ai_engine</span> <span class="kw">import</span> <span class="fn">analyze</span></span></div>
+<div class="cl"><span class="lno">6</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">7</span><span class="lc"><span class="cm"># ── ตั้งค่าหน้า ───────────────────────────────</span></span></div>
+<div class="cl"><span class="lno">8</span><span class="lc"><span class="vr">st</span>.<span class="fn">set_page_config</span>(</span></div>
+<div class="cl"><span class="lno">9</span><span class="lc">    <span class="vr">page_title</span><span class="kw">=</span><span class="st">"PTC AI Web Shield"</span>,</span></div>
+<div class="cl"><span class="lno">10</span><span class="lc">    <span class="vr">page_icon</span><span class="kw">=</span><span class="st">"🛡️"</span>,</span></div>
+<div class="cl"><span class="lno">11</span><span class="lc">    <span class="vr">layout</span><span class="kw">=</span><span class="st">"wide"</span></span></div>
+<div class="cl"><span class="lno">12</span><span class="lc">)</span></div>
+<div class="cl"><span class="lno">13</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">14</span><span class="lc"><span class="vr">st</span>.<span class="fn">title</span>(<span class="st">"🛡️ PTC AI Web Shield"</span>)</span></div>
+<div class="cl"><span class="lno">15</span><span class="lc"><span class="vr">st</span>.<span class="fn">caption</span>(<span class="st">"ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษา — powered by Gemini AI"</span>)</span></div>
+<div class="cl"><span class="lno">16</span><span class="lc"><span class="vr">st</span>.<span class="fn">divider</span>()</span></div>
+<div class="cl"><span class="lno">17</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">18</span><span class="lc"><span class="cm"># ── Input URL ────────────────────────────────</span></span></div>
+<div class="cl"><span class="lno">19</span><span class="lc"><span class="vr">url</span> <span class="kw">=</span> <span class="vr">st</span>.<span class="fn">text_input</span>(</span></div>
+<div class="cl"><span class="lno">20</span><span class="lc">    <span class="st">"🌐 URL เว็บไซต์ที่ต้องการตรวจสอบ"</span>,</span></div>
+<div class="cl"><span class="lno">21</span><span class="lc">    <span class="vr">placeholder</span><span class="kw">=</span><span class="st">"เช่น https://www.school.ac.th"</span></span></div>
+<div class="cl"><span class="lno">22</span><span class="lc">)</span></div>
+<div class="cl"><span class="lno">23</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">24</span><span class="lc"><span class="vr">scan_btn</span> <span class="kw">=</span> <span class="vr">st</span>.<span class="fn">button</span>(<span class="st">"🔍 เริ่มตรวจสอบ"</span>, <span class="vr">type</span><span class="kw">=</span><span class="st">"primary"</span>, <span class="vr">use_container_width</span><span class="kw">=</span><span class="nm">True</span>)</span></div>
+<div class="cl"><span class="lno">25</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">26</span><span class="lc"><span class="cm"># ── Logic หลัก ───────────────────────────────</span></span></div>
+<div class="cl"><span class="lno">27</span><span class="lc"><span class="kw">if</span> <span class="vr">scan_btn</span> <span class="kw">and</span> <span class="vr">url</span>:</span></div>
+<div class="cl"><span class="lno">28</span><span class="lc">    <span class="kw">with</span> <span class="vr">st</span>.<span class="fn">spinner</span>(<span class="st">"⏳ กำลังสแกน..."</span>):     <span class="an">แสดง loading</span></span></div>
+<div class="cl"><span class="lno">29</span><span class="lc">        <span class="vr">scan_data</span> <span class="kw">=</span> <span class="fn">run_scan</span>(<span class="vr">url</span>)</span></div>
+<div class="cl"><span class="lno">30</span><span class="lc">    <span class="kw">with</span> <span class="vr">st</span>.<span class="fn">spinner</span>(<span class="st">"🤖 AI กำลังวิเคราะห์..."</span>):</span></div>
+<div class="cl"><span class="lno">31</span><span class="lc">        <span class="vr">ai_data</span> <span class="kw">=</span> <span class="fn">analyze</span>(<span class="vr">scan_data</span>)</span></div>
+<div class="cl"><span class="lno">32</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">33</span><span class="lc">    <span class="cm"># ── แสดง Metrics row ─────────────────────</span></span></div>
+<div class="cl"><span class="lno">34</span><span class="lc">    <span class="vr">c1</span>, <span class="vr">c2</span>, <span class="vr">c3</span>, <span class="vr">c4</span> <span class="kw">=</span> <span class="vr">st</span>.<span class="fn">columns</span>(<span class="nm">4</span>)  <span class="an">แบ่ง 4 คอลัมน์</span></span></div>
+<div class="cl"><span class="lno">35</span><span class="lc">    <span class="vr">c1</span>.<span class="fn">metric</span>(<span class="st">"📊 คะแนน"</span>,</span></div>
+<div class="cl"><span class="lno">36</span><span class="lc">              <span class="st">f"{ai_data['score']}/100"</span>)</span></div>
+<div class="cl"><span class="lno">37</span><span class="lc">    <span class="vr">c2</span>.<span class="fn">metric</span>(<span class="st">"⚠️ ระดับความเสี่ยง"</span>,</span></div>
+<div class="cl"><span class="lno">38</span><span class="lc">              <span class="vr">ai_data</span>[<span class="st">"risk_level"</span>])</span></div>
+<div class="cl"><span class="lno">39</span><span class="lc">    <span class="vr">c3</span>.<span class="fn">metric</span>(<span class="st">"🔒 SSL"</span>,</span></div>
+<div class="cl"><span class="lno">40</span><span class="lc">              <span class="st">"✅ ปลอดภัย"</span> <span class="kw">if</span> <span class="vr">scan_data</span>[<span class="st">"ssl"</span>][<span class="st">"valid"</span>] <span class="kw">else</span> <span class="st">"❌ มีปัญหา"</span>)</span></div>
+<div class="cl"><span class="lno">41</span><span class="lc">    <span class="vr">c4</span>.<span class="fn">metric</span>(<span class="st">"📋 Headers ที่ขาด"</span>,</span></div>
+<div class="cl"><span class="lno">42</span><span class="lc">              <span class="st">f"{len(scan_data['headers']['headers_missing'])} ตัว"</span>)</span></div>
+<div class="cl"><span class="lno">43</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">44</span><span class="lc">    <span class="vr">st</span>.<span class="fn">divider</span>()</span></div>
+<div class="cl"><span class="lno">45</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">46</span><span class="lc">    <span class="cm"># ── แสดงผล AI Analysis ───────────────────</span></span></div>
+<div class="cl"><span class="lno">47</span><span class="lc">    <span class="vr">st</span>.<span class="fn">subheader</span>(<span class="st">"🤖 ผลวิเคราะห์จาก AI"</span>)</span></div>
+<div class="cl"><span class="lno">48</span><span class="lc">    <span class="vr">st</span>.<span class="fn">markdown</span>(<span class="vr">ai_data</span>[<span class="st">"analysis"</span>])  <span class="an">markdown = แสดงสวยงาม</span></span></div>
+<div class="cl"><span class="lno">49</span><span class="lc"></span></div>
+<div class="cl hl"><span class="lno">50</span><span class="lc">    <span class="cm"># ── แสดง Raw Data (ซ่อนอยู่) ────────────</span></span></div>
+<div class="cl"><span class="lno">51</span><span class="lc">    <span class="kw">with</span> <span class="vr">st</span>.<span class="fn">expander</span>(<span class="st">"🔬 ดูข้อมูล Raw (สำหรับนักเทคนิค)"</span>):  <span class="an">expander = ซ่อน/แสดง</span></span></div>
+<div class="cl"><span class="lno">52</span><span class="lc">        <span class="vr">st</span>.<span class="fn">json</span>(<span class="vr">scan_data</span>)</span></div>
+<div class="cl"><span class="lno">53</span><span class="lc"></span></div>
+<div class="cl"><span class="lno">54</span><span class="lc"><span class="kw">elif</span> <span class="vr">scan_btn</span> <span class="kw">and not</span> <span class="vr">url</span>:</span></div>
+<div class="cl"><span class="lno">55</span><span class="lc">    <span class="vr">st</span>.<span class="fn">warning</span>(<span class="st">"⚠️ กรุณาใส่ URL ก่อน"</span>)</span></div>
+      </div>
+    </div>
+
+    <div class="note note-am">
+      <span class="note-i">▶</span>
+      <div class="note-b">
+        <strong>รัน Streamlit ทดสอบ:</strong>
+        <code style="display:block;font-family:'Fira Code',monospace;font-size:12.5px;margin-top:8px;color:#92610a">
+          streamlit run app.py
+        </code>
+      </div>
+    </div>
+
+    <div class="note note-gn">
+      <span class="note-i">🚀</span>
+      <div class="note-b">
+        <strong>Phase 3 สำเร็จ! ระบบทำงานครบแล้ว</strong><br>
+        URL → Scanner → AI Analysis → Streamlit UI<br><br>
+        <strong>Phase 4 ที่เหลือ:</strong> ทำ UI ให้สวยขึ้น + ปุ่ม Export PDF + Deploy บน Streamlit Cloud — พร้อมส่งประกวด!
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="btn btn-s" onclick="goStep(4)">← ก่อนหน้า</button>
+      <button class="btn btn-p green" onclick="alert('Phase 3 เสร็จแล้ว! แจ้งที่ปรึกษาเพื่อเริ่ม Phase 4 ได้เลยครับ 🎉')">
+        🎉 Phase 3 เสร็จสมบูรณ์ → Phase 4
+      </button>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+let cur = 1;
+
+function goStep(n) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('show'));
+  document.getElementById('s' + n).classList.add('show');
+
+  document.querySelectorAll('.sp-dot').forEach((d, i) => {
+    d.classList.remove('now', 'done');
+    if (i + 1 < n)  d.classList.add('done'), d.textContent = '✓';
+    else if (i + 1 === n) d.classList.add('now');
+  });
+  document.querySelectorAll('.sp-line').forEach((l, i) => {
+    l.classList.toggle('done', i + 1 < n);
+  });
+  cur = n;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function nextStep(current) {
+  goStep(current + 1);
+}
+
+function doCopy(btn, id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const lines = el.querySelectorAll('.lc');
+  const text = [...lines].map(l => {
+    const clone = l.cloneNode(true);
+    clone.querySelectorAll('.an,.an-v,.an-g,.an-r').forEach(a => a.remove());
+    return clone.innerText;
+  }).join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'copied!';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('ok'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>

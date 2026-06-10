@@ -1,5 +1,6 @@
 # src/ai_engine.py — เชื่อมต่อ Gemini API
 import os
+import time
 from dotenv import load_dotenv
 import google.generativeai as genai
 import google.api_core.exceptions
@@ -8,30 +9,49 @@ from prompt_builder import build_prompt
 
 load_dotenv()
 
-API_KEYS = [
-    os.getenv("GEMINI_API_KEY"),
+# ── API Key (ใช้ key แรกจาก .env) ────────────────────────────────
+API_KEY = os.getenv("GEMINI_API_KEY")
+if API_KEY:
+    genai.configure(api_key=API_KEY)
+
+# ── Model list — fallback จากเร็วไปช้า/ใหญ่ขึ้น ─────────────────
+# gemini-3.5-flash ไม่มีจริง — ใช้ gemini-1.5-flash (stable, generous quota)
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+
+_FALLBACK_MODELS = [
+    MODEL_NAME,
+    "gemini-1.5-flash-8b",   # เบากว่า quota ดีกว่า
+    "gemini-1.5-pro",        # ช้ากว่าแต่ quota แยก
 ]
 
-def generate_with_fallback(prompt: str):
-    for key in API_KEYS:
-        try:
-            genai.configure(api_key=key)
-            model = genai.GenerativeModel("gemini-pro")
-            return model.generate_content(prompt)
-        except google.api_core.exceptions.ResourceExhausted:
-            continue  # ติด limit → ลอง key ถัดไป
-    raise RuntimeError("All API keys exhausted")
+_GEN_CONFIG = {
+    "temperature":       0.15,   # ต่ำ = consistent เหมาะ security analysis
+    "max_output_tokens": 2048,
+}
 
-# ── Model — อ่านจาก .env ก่อน ให้เปลี่ยนได้โดยไม่แตะโค้ด ─────────
-# ตรวจสอบชื่อ model ที่ใช้ได้จริงจาก Google AI Studio ก่อน deploy
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
-model = genai.GenerativeModel(
-    MODEL_NAME,
-    generation_config={
-        "temperature":      0.15,   # ต่ำ = output consistent กว่า เหมาะกับ security analysis
-        "max_output_tokens": 2048,
-    },
-)
+
+def generate_with_fallback(prompt: str):
+    """
+    ลอง model ทีละตัว ถ้าเจอ 429 (quota) ให้ retry 1 ครั้ง แล้ว fallback ตัวถัดไป
+    """
+    last_exc = None
+    for model_name in _FALLBACK_MODELS:
+        for attempt in range(2):   # max 2 attempts per model (retry once)
+            try:
+                m = genai.GenerativeModel(model_name, generation_config=_GEN_CONFIG)
+                return m.generate_content(prompt)
+            except google.api_core.exceptions.ResourceExhausted as exc:
+                last_exc = exc
+                if attempt == 0:
+                    # รอ 5 วินาที แล้วลองใหม่ 1 ครั้ง
+                    time.sleep(5)
+                    continue
+                # attempt 1 ยังล้มเหลว → ลอง model ถัดไป
+                break
+            except Exception as exc:
+                last_exc = exc
+                break   # error อื่น (auth, network) ไม่ต้อง retry
+    raise RuntimeError(f"ทุก model ล้มเหลว: {last_exc}")
 
 # ── Cache AI text เท่านั้น (score คำนวณใหม่ทุกครั้ง) ──────────────
 _analysis_cache: TTLCache = TTLCache(maxsize=50, ttl=3600)
@@ -159,7 +179,7 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
 
     try:
         prompt             = build_prompt(scan_data)
-        response           = model.generate_content(prompt)
+        response           = generate_with_fallback(prompt)   # retry + fallback model
         result["analysis"] = response.text
         if url:
             _analysis_cache[url] = response.text   # cache text เท่านั้น ไม่รวม score

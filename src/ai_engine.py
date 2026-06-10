@@ -2,14 +2,26 @@
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
+import google.api_core.exceptions
 from cachetools import TTLCache
 from prompt_builder import build_prompt
 
 load_dotenv()
-# เลือกใช้ key ไหนก็ได้
-genai.configure(api_key=os.getenv("GEMINI_API_KEY_Tin"))
-# หรือ
-genai.configure(api_key=os.getenv("GEMINI_API_KEY_Nat"))
+
+API_KEYS = [
+    os.getenv("GEMINI_API_KEY_Tin"),
+    os.getenv("GEMINI_API_KEY_Nat"),
+]
+
+def generate_with_fallback(prompt: str):
+    for key in API_KEYS:
+        try:
+            genai.configure(api_key=key)
+            model = genai.GenerativeModel("gemini-pro")
+            return model.generate_content(prompt)
+        except google.api_core.exceptions.ResourceExhausted:
+            continue  # ติด limit → ลอง key ถัดไป
+    raise RuntimeError("All API keys exhausted")
 
 # ── Model — อ่านจาก .env ก่อน ให้เปลี่ยนได้โดยไม่แตะโค้ด ─────────
 # ตรวจสอบชื่อ model ที่ใช้ได้จริงจาก Google AI Studio ก่อน deploy

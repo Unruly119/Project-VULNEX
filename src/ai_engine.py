@@ -1,7 +1,10 @@
 # src/ai_engine.py — เชื่อมต่อ Gemini API
 import os
 import time
+import warnings
 from dotenv import load_dotenv
+# ปิด FutureWarning จาก google-generativeai (deprecated แต่ยังใช้งานได้)
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 import google.generativeai as genai
 import google.api_core.exceptions
 from cachetools import TTLCache
@@ -9,19 +12,20 @@ from prompt_builder import build_prompt
 
 load_dotenv()
 
-# ── API Key (ใช้ key แรกจาก .env) ────────────────────────────────
+# ── Configure API Key ─────────────────────────────────────────────
 API_KEY = os.getenv("GEMINI_API_KEY")
 if API_KEY:
     genai.configure(api_key=API_KEY)
 
-# ── Model list — fallback จากเร็วไปช้า/ใหญ่ขึ้น ─────────────────
-# gemini-3.5-flash ไม่มีจริง — ใช้ gemini-1.5-flash (stable, generous quota)
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+# ── Model list — fallback จากเบา/เร็วไปหนัก ──────────────────────
+# ตรวจสอบจาก genai.list_models() จริง ณ วันนี้ — models ที่ใช้ generateContent ได้:
+#   gemini-2.0-flash-lite, gemini-2.0-flash, gemini-2.5-flash
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
 
 _FALLBACK_MODELS = [
     MODEL_NAME,
-    "gemini-1.5-flash-8b",   # เบากว่า quota ดีกว่า
-    "gemini-1.5-pro",        # ช้ากว่าแต่ quota แยก
+    "gemini-2.0-flash",
+    "gemini-2.5-flash",
 ]
 
 _GEN_CONFIG = {
@@ -30,28 +34,33 @@ _GEN_CONFIG = {
 }
 
 
-def generate_with_fallback(prompt: str):
+def generate_with_fallback(prompt: str) -> str:
     """
-    ลอง model ทีละตัว ถ้าเจอ 429 (quota) ให้ retry 1 ครั้ง แล้ว fallback ตัวถัดไป
+    ลอง model ทีละตัว ถ้าเจอ 429 (quota) ให้ retry 1 ครั้ง
+    แล้ว fallback model ถัดไป — คืน text string โดยตรง
     """
     last_exc = None
     for model_name in _FALLBACK_MODELS:
-        for attempt in range(2):   # max 2 attempts per model (retry once)
+        for attempt in range(2):   # max 2 attempts per model
             try:
                 m = genai.GenerativeModel(model_name, generation_config=_GEN_CONFIG)
-                return m.generate_content(prompt)
+                response = m.generate_content(prompt)
+                return response.text
             except google.api_core.exceptions.ResourceExhausted as exc:
                 last_exc = exc
                 if attempt == 0:
-                    # รอ 5 วินาที แล้วลองใหม่ 1 ครั้ง
-                    time.sleep(5)
+                    time.sleep(5)   # รอ 5 วิ แล้วลองใหม่
                     continue
-                # attempt 1 ยังล้มเหลว → ลอง model ถัดไป
+                break   # retry แล้วยังเจอ → fallback model ถัดไป
+            except google.api_core.exceptions.NotFound as exc:
+                # 404 model ไม่มี → ลอง model ถัดไปทันที ไม่ต้อง retry
+                last_exc = exc
                 break
             except Exception as exc:
                 last_exc = exc
-                break   # error อื่น (auth, network) ไม่ต้อง retry
+                break   # error อื่น (auth, network) → ลอง model ถัดไป
     raise RuntimeError(f"ทุก model ล้มเหลว: {last_exc}")
+
 
 # ── Cache AI text เท่านั้น (score คำนวณใหม่ทุกครั้ง) ──────────────
 _analysis_cache: TTLCache = TTLCache(maxsize=50, ttl=3600)
@@ -92,7 +101,6 @@ def _compute_score(scan_data: dict, server_data: dict) -> tuple[int, str, dict]:
         if   days_left > 60: ssl_pts += 10  # สบาย
         elif days_left > 30: ssl_pts += 5   # ใกล้หมด
         # ≤ 30 วัน: +0 (warning zone)
-    # invalid/expired: 0 pts ไม่มี penalty เพิ่ม (score ต่ำอยู่แล้ว)
 
     # ── 3. CVE / DoS (0–25) ──────────────────────────────────────
     vulns    = server_data.get("vulnerabilities", []) or []
@@ -114,7 +122,7 @@ def _compute_score(scan_data: dict, server_data: dict) -> tuple[int, str, dict]:
     total = min(100, hdr_pts + ssl_pts + cve_pts + srv_pts)
 
     # ── Risk level ────────────────────────────────────────────────
-    sev_set = {str(v.get("severity", "")).upper() for v in vulns}
+    sev_set      = {str(v.get("severity", "")).upper() for v in vulns}
     has_critical = "CRITICAL" in sev_set
     has_high     = "HIGH"     in sev_set
 
@@ -149,7 +157,6 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
         scan_data:   ผลจาก run_scan() — มี headers, ssl
         server_data: ผลจาก check_server() — มี vulnerabilities, dos_risk, version_exposed
                      Optional เพื่อ backward compatibility แต่ควรส่งเสมอ
-                     ถ้าไม่ส่ง CVE/DoS signals จะถูกละเว้นจากคะแนน
 
     Returns dict:
         analysis   — AI analysis text
@@ -179,12 +186,12 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
 
     try:
         prompt             = build_prompt(scan_data)
-        response           = generate_with_fallback(prompt)   # retry + fallback model
-        result["analysis"] = response.text
+        text               = generate_with_fallback(prompt)
+        result["analysis"] = text
         if url:
-            _analysis_cache[url] = response.text   # cache text เท่านั้น ไม่รวม score
+            _analysis_cache[url] = text   # cache text เท่านั้น ไม่รวม score
     except Exception as exc:
         result["error"]    = str(exc)
         result["analysis"] = f"❌ เรียก AI ไม่สำเร็จ: {exc}"
 
-    return result 
+    return result

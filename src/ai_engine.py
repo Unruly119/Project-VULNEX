@@ -6,7 +6,10 @@ from cachetools import TTLCache
 from prompt_builder import build_prompt
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# เลือกใช้ key ไหนก็ได้
+genai.configure(api_key=os.getenv("GEMINI_API_KEY_Tin"))
+# หรือ
+genai.configure(api_key=os.getenv("GEMINI_API_KEY_Nat"))
 
 # ── Model — อ่านจาก .env ก่อน ให้เปลี่ยนได้โดยไม่แตะโค้ด ─────────
 # ตรวจสอบชื่อ model ที่ใช้ได้จริงจาก Google AI Studio ก่อน deploy

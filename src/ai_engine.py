@@ -168,4 +168,4 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
         result["error"]    = str(exc)
         result["analysis"] = f"❌ เรียก AI ไม่สำเร็จ: {exc}"
 
-    return result
+    return result 

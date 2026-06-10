@@ -9,8 +9,7 @@ from prompt_builder import build_prompt
 load_dotenv()
 
 API_KEYS = [
-    os.getenv("GEMINI_API_KEY_Tin"),
-    os.getenv("GEMINI_API_KEY_Nat"),
+    os.getenv("GEMINI_API_KEY"),
 ]
 
 def generate_with_fallback(prompt: str):

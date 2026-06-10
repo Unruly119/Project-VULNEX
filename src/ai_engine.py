@@ -10,7 +10,7 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ── Model — อ่านจาก .env ก่อน ให้เปลี่ยนได้โดยไม่แตะโค้ด ─────────
 # ตรวจสอบชื่อ model ที่ใช้ได้จริงจาก Google AI Studio ก่อน deploy
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 model = genai.GenerativeModel(
     MODEL_NAME,
     generation_config={

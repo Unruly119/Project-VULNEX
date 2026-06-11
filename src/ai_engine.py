@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="google.generat
 import google.generativeai as genai
 import google.api_core.exceptions
 from cachetools import TTLCache
-from prompt_builder import build_prompt
+from prompt_builder import build_prompt, build_chat_prompt
 
 load_dotenv()
 
@@ -186,6 +186,11 @@ def _make_cache_key(scan_data: dict, server_data: dict) -> str:
         "vulns":   sorted(v["cve"] for v in server_data.get("vulnerabilities", [])),
         "dos":     server_data.get("dos_risk", False),
         "sri":     scan_data.get("html", {}).get("scripts_missing_sri", 0),
+        "dns":     scan_data.get("dns", {}).get("score"),
+        "cookies": scan_data.get("cookies", {}).get("score"),
+        "cms":     scan_data.get("cms", {}).get("score"),
+        "js_sec":  len((scan_data.get("js_exposure", {}) or {}).get("secrets_found", []) or []),
+        "open_f":  len((scan_data.get("open_files", {}) or {}).get("sensitive_files", []) or []),
     }
     raw = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()[:20]
@@ -195,61 +200,92 @@ def _make_cache_key(scan_data: dict, server_data: dict) -> str:
 # Score engine
 # ─────────────────────────────────────────────────────────────────
 
+def _module_score(scan_data: dict, key: str, default: int = 50) -> int:
+    """Get 0-100 score from a scan module, or default if missing/errored."""
+    mod = scan_data.get(key, {}) or {}
+    if mod.get("error"):
+        return default
+    return int(mod.get("score", default) or default)
+
+
+def _ssl_subscore(ssl: dict) -> int:
+    """Convert SSL data to 0-100 sub-score."""
+    if ssl.get("error"):
+        return 50
+    if not ssl.get("has_ssl"):
+        return 0
+    if not ssl.get("valid"):
+        return 15
+    score = 70
+    days = int(ssl.get("days_left", 0) or 0)
+    if days > 60:
+        score += 20
+    elif days > 30:
+        score += 10
+    elif days > 0:
+        score += 5
+    score -= len(ssl.get("tls_warnings", []) or []) * 8
+    return max(0, min(100, score))
+
+
+def _server_subscore(server_data: dict) -> int:
+    """Convert server/CVE data to 0-100 sub-score."""
+    vulns = server_data.get("vulnerabilities", []) or []
+    dos_risk = bool(server_data.get("dos_risk", False))
+    _PENALTY = {"CRITICAL": 35, "HIGH": 25, "MEDIUM": 12, "LOW": 5}
+    penalty = sum(_PENALTY.get(str(v.get("severity", "")).upper(), 5) for v in vulns)
+    if dos_risk:
+        penalty += 30
+    if server_data.get("version_exposed"):
+        penalty += 8
+    return max(0, min(100, 100 - penalty))
+
+
+def _html_js_subscore(scan_data: dict) -> int:
+    """Combine HTML parser + JS exposure scores."""
+    html_s = _module_score(scan_data, "html", 80)
+    js_s = _module_score(scan_data, "js_exposure", 90)
+    open_s = _module_score(scan_data, "open_files", 90)
+    return round(html_s * 0.5 + js_s * 0.35 + open_s * 0.15)
+
+
 def _compute_score(scan_data: dict, server_data: dict) -> tuple[int, str, dict]:
     """
-    Composite security score (0–100) จากทุก signal ที่มี
+    Composite security score (0–100) จากทุก signal
 
-    Sub-scores:
-      Headers  40 pts  — weighted + quality-adjusted (จาก headers.py)
-      SSL      25 pts  — validity + days remaining
-      CVE/DoS  25 pts  — severity-weighted + DoS flag
-      Server   10 pts  — version disclosure
-
-    Risk level (ตรวจ harshest condition ก่อน):
-      CRITICAL — score < 30  OR  CRITICAL CVE  OR  (DoS AND score < 55)
-      HIGH     — score < 50  OR  HIGH CVE
-      MEDIUM   — score < 70  OR  SSL invalid
-      LOW      — score ≥ 70  AND SSL valid  AND  ไม่มี HIGH+ CVE
+    Weights:
+      Headers   25%
+      SSL/TLS   20%
+      HTML/JS   15%
+      Server/CVE 15%
+      DNS       10%
+      Cookies   10%
+      CMS       5%
     """
-    # ── 1. Headers (0–40) ────────────────────────────────────────
-    raw_hdr = int(scan_data.get("headers", {}).get("score", 0) or 0)
-    hdr_pts = round(raw_hdr * 0.40)   # scale 0-100 → 0-40
+    hdr_raw = _module_score(scan_data, "headers", 0)
+    ssl_raw = _ssl_subscore(scan_data.get("ssl", {}) or {})
+    html_js = _html_js_subscore(scan_data)
+    srv_raw = _server_subscore(server_data)
+    dns_raw = _module_score(scan_data, "dns", 70)
+    cookie_raw = _module_score(scan_data, "cookies", 100)
+    cms_raw = _module_score(scan_data, "cms", 90)
 
-    # ── 2. SSL (0–25) ────────────────────────────────────────────
-    ssl       = scan_data.get("ssl", {}) or {}
-    ssl_ok    = bool(ssl.get("valid", False))
-    days_left = int(ssl.get("days_left", 0) or 0)
+    hdr_pts = round(hdr_raw * 0.25)
+    ssl_pts = round(ssl_raw * 0.20)
+    html_pts = round(html_js * 0.15)
+    srv_pts = round(srv_raw * 0.15)
+    dns_pts = round(dns_raw * 0.10)
+    cookie_pts = round(cookie_raw * 0.10)
+    cms_pts = round(cms_raw * 0.05)
 
-    ssl_pts = 0
-    if ssl_ok:
-        ssl_pts += 15
-        if   days_left > 60: ssl_pts += 10  # สบาย
-        elif days_left > 30: ssl_pts += 5   # ใกล้หมด
-        # ≤ 30 วัน: +0 (warning zone)
+    total = min(100, hdr_pts + ssl_pts + html_pts + srv_pts + dns_pts + cookie_pts + cms_pts)
 
-    # ── 3. CVE / DoS (0–25) ──────────────────────────────────────
-    vulns    = server_data.get("vulnerabilities", []) or []
+    vulns = server_data.get("vulnerabilities", []) or []
     dos_risk = bool(server_data.get("dos_risk", False))
-
-    _PENALTY = {"CRITICAL": 15, "HIGH": 10, "MEDIUM": 5, "LOW": 2}
-    cve_penalty = sum(
-        _PENALTY.get(str(v.get("severity", "")).upper(), 2) for v in vulns
-    )
-    if dos_risk:
-        cve_penalty += 15   # CVE-2023-44487 HTTP/2 Rapid Reset
-
-    cve_pts = max(0, 25 - cve_penalty)
-
-    # ── 4. Server hygiene (0–10) ──────────────────────────────────
-    srv_pts = 5 if server_data.get("version_exposed") else 10
-
-    # ── Composite ─────────────────────────────────────────────────
-    total = min(100, hdr_pts + ssl_pts + cve_pts + srv_pts)
-
-    # ── Risk level ────────────────────────────────────────────────
-    sev_set      = {str(v.get("severity", "")).upper() for v in vulns}
+    sev_set = {str(v.get("severity", "")).upper() for v in vulns}
     has_critical = "CRITICAL" in sev_set
-    has_high     = "HIGH"     in sev_set
+    has_high = "HIGH" in sev_set
+    ssl_ok = bool((scan_data.get("ssl", {}) or {}).get("valid", False))
 
     if total < 30 or has_critical or (dos_risk and total < 55):
         risk = "CRITICAL"
@@ -262,9 +298,20 @@ def _compute_score(scan_data: dict, server_data: dict) -> tuple[int, str, dict]:
 
     breakdown = {
         "headers": hdr_pts,
-        "ssl":     ssl_pts,
-        "cve":     cve_pts,
-        "server":  srv_pts,
+        "ssl": ssl_pts,
+        "html_js": html_pts,
+        "server_cve": srv_pts,
+        "dns": dns_pts,
+        "cookies": cookie_pts,
+        "cms": cms_pts,
+        # raw sub-scores for UI
+        "headers_raw": hdr_raw,
+        "ssl_raw": ssl_raw,
+        "html_js_raw": html_js,
+        "server_raw": srv_raw,
+        "dns_raw": dns_raw,
+        "cookies_raw": cookie_raw,
+        "cms_raw": cms_raw,
     }
 
     return total, risk, breakdown
@@ -317,8 +364,10 @@ def _build_offline_analysis(
     overview = (
         f"เว็บไซต์ {url} ได้คะแนนความปลอดภัยรวม **{score}/100** "
         f"ระดับความเสี่ยง **{risk}** — {_risk_summary_th(risk, score)} "
-        f"(Headers {breakdown.get('headers', 0)}/40, SSL {breakdown.get('ssl', 0)}/25, "
-        f"CVE/DoS {breakdown.get('cve', 0)}/25, Server {breakdown.get('server', 0)}/10)"
+        f"(Headers {breakdown.get('headers', 0)}/25, SSL {breakdown.get('ssl', 0)}/20, "
+        f"HTML/JS {breakdown.get('html_js', 0)}/15, Server {breakdown.get('server_cve', 0)}/15, "
+        f"DNS {breakdown.get('dns', 0)}/10, Cookies {breakdown.get('cookies', 0)}/10, "
+        f"CMS {breakdown.get('cms', 0)}/5)"
     )
 
     # ── ปัญหาเร่งด่วน ────────────────────────────────────────────
@@ -369,6 +418,20 @@ def _build_offline_analysis(
             f"- **Version Disclosure**: เปิดเผย {stype} {sver} — "
             "ช่วยให้ผู้โจมตีเลือก exploit ได้ตรงเวอร์ชัน"
         )
+
+    # New modules
+    dns = scan_data.get("dns", {}) or {}
+    if not dns.get("error") and not dns.get("spf", {}).get("present"):
+        urgent.append("- **SPF ขาด** — เสี่ยง email spoofing หลอกผู้ปกครอง")
+    cookies = scan_data.get("cookies", {}) or {}
+    for cf in (cookies.get("findings") or [])[:3]:
+        urgent.append(f"- **Cookie**: {cf.get('title', '')} — {cf.get('detail', '')}")
+    js_exp = scan_data.get("js_exposure", {}) or {}
+    for sec in (js_exp.get("secrets_found") or [])[:2]:
+        urgent.append(f"- **JS Exposure**: {sec.get('type', 'secret')} ใน {sec.get('source', 'script')}")
+    open_f = scan_data.get("open_files", {}) or {}
+    for sf in (open_f.get("sensitive_files") or [])[:2]:
+        urgent.append(f"- **Sensitive File**: {sf.get('path')} accessible (HTTP {sf.get('status')})")
 
     urgent_txt = "\n".join(urgent) if urgent else "- ไม่พบปัญหาเร่งด่วนระดับสูงจากข้อมูลสแกน"
 
@@ -534,3 +597,120 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
         )
 
     return result
+
+
+# ─────────────────────────────────────────────────────────────────
+# AI Chat Assistant (Pillar 2.3)
+# ─────────────────────────────────────────────────────────────────
+
+_CHAT_CONFIG = {
+    "temperature": 0.4,
+    "max_output_tokens": 1024,
+}
+
+
+def _offline_chat_reply(user_message: str, scan_data: dict, ai_data: dict) -> str:
+    """Rule-based chat fallback when Gemini unavailable."""
+    msg = user_message.lower()
+    score = ai_data.get("score", 0)
+    risk = ai_data.get("risk_level", "HIGH")
+
+    if any(k in msg for k in ("cve", "ช่องโหว่")):
+        hdr = scan_data.get("headers", {}) or {}
+        missing = hdr.get("headers_missing", [])
+        if missing:
+            return (
+                f"จากผลสแกน คะแนนรวม {score}/100 (ระดับ {risk})\n\n"
+                f"Headers ที่ขาด: {', '.join(missing)}\n\n"
+                "แนะนำแก้ HSTS และ CSP ก่อน — ใช้เวลาประมาณ 30 นาทีบน nginx/Apache"
+            )
+        return f"คะแนนรวม {score}/100 — ดูรายละเอียด CVE ในแท็บ Server Info"
+
+    if any(k in msg for k in ("แก้", "fix", "priority", "ก่อน", "ควร")):
+        hdr = scan_data.get("headers", {}) or {}
+        missing = hdr.get("headers_missing", []) or []
+        if "Strict-Transport-Security" in missing:
+            return "**แก้ HSTS ก่อน** — ง่ายที่สุด เพิ่ม header บรรทัดเดียว ได้ผลทันที"
+        if "Content-Security-Policy" in missing:
+            return "**แก้ CSP ก่อน** — ป้องกัน XSS ได้มาก เริ่มจาก `default-src 'self'`"
+        ssl = scan_data.get("ssl", {}) or {}
+        if not ssl.get("valid"):
+            return "**แก้ SSL ก่อน** — ติดตั้ง/ต่ออายุใบรับรอง HTTPS เป็นสิ่งเร่งด่วนที่สุด"
+        return f"คะแนน {score}/100 — ดูรายการใน AI Analysis สำหรับลำดับความสำคัญ"
+
+    if any(k in msg for k in ("csp", "content-security", "อธิบาย")):
+        return (
+            "**Content-Security-Policy (CSP)** คือกฎที่บอก browser ว่าโหลด script/style จากไหนได้บ้าง "
+            "ช่วยป้องกัน XSS — ถ้า hacker แทรก script ปลอม CSP จะบล็อกไม่ให้รัน"
+        )
+
+    if any(k in msg for k in ("spf", "dmarc", "dkim", "อีเมล", "email")):
+        dns = scan_data.get("dns", {}) or {}
+        if dns.get("error"):
+            return f"ไม่สามารถตรวจ DNS ได้: {dns['error']}"
+        spf = dns.get("spf", {})
+        dmarc = dns.get("dmarc", {})
+        return (
+            f"**Email Security (DNS)** — คะแนน {dns.get('score', 'N/A')}/100\n\n"
+            f"- **SPF**: {'มี' if spf.get('present') else 'ไม่มี'} "
+            f"(policy: {spf.get('policy') or 'none'})\n"
+            f"- **DMARC**: {'มี' if dmarc.get('present') else 'ไม่มี'} "
+            f"(p={dmarc.get('policy', 'none')})\n"
+            f"- **DKIM selectors**: {dns.get('dkim', {}).get('selectors_found', []) or 'ไม่พบ'}\n\n"
+            "SPF/DMARC ช่วยป้องกันอีเมลปลอมแอบอ้างชื่อโรงเรียน — แนะนำ SPF `-all` และ DMARC `p=reject`"
+        )
+
+    return (
+        f"โหมด Offline — ไม่สามารถเรียก Gemini ได้\n\n"
+        f"คะแนนรวม: **{score}/100** | ความเสี่ยง: **{risk}**\n\n"
+        "ลองถาม: 'ควรแก้อะไรก่อน?', 'อธิบาย CSP', หรือ 'CVE อันตรายแค่ไหน'"
+    )
+
+
+def chat_stream(
+    user_message: str,
+    scan_data: dict,
+    server_data: dict,
+    ai_data: dict,
+    chat_history: list | None = None,
+):
+    """Generator yielding text chunks from Gemini streaming."""
+    if not API_KEY:
+        yield _offline_chat_reply(user_message, scan_data, ai_data)
+        return
+
+    prompt = build_chat_prompt(
+        scan_data, server_data, ai_data, user_message, chat_history
+    )
+    models = _build_fallback_models()
+    last_exc = None
+
+    for model_name in models:
+        try:
+            m = genai.GenerativeModel(model_name, generation_config=_CHAT_CONFIG)
+            response = m.generate_content(prompt, stream=True)
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+            return
+        except Exception as exc:
+            last_exc = exc
+            if _is_quota_error(exc):
+                continue
+            break
+
+    yield _offline_chat_reply(user_message, scan_data, ai_data)
+    if last_exc:
+        yield f"\n\n_(Gemini ไม่พร้อม: {_format_ai_error(last_exc)})_"
+
+
+def chat(
+    user_message: str,
+    scan_data: dict,
+    server_data: dict,
+    ai_data: dict,
+    chat_history: list | None = None,
+) -> dict:
+    """Non-streaming chat — collects full response."""
+    parts = list(chat_stream(user_message, scan_data, server_data, ai_data, chat_history))
+    return {"reply": "".join(parts), "offline": not API_KEY}

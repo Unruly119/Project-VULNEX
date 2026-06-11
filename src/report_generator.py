@@ -238,6 +238,7 @@ def _exec_summary(story, styles, scan_data, ai_data, server_data):
 
     score    = ai_data.get("score", 0)
     risk     = ai_data.get("risk_level", "HIGH")
+    breakdown = ai_data.get("breakdown", {}) or {}
     url      = scan_data.get("url","")
     n_miss   = len(scan_data.get("headers",{}).get("headers_missing",[]))
     ssl_ok   = scan_data.get("ssl",{}).get("valid", False)
@@ -247,6 +248,13 @@ def _exec_summary(story, styles, scan_data, ai_data, server_data):
     stype    = server_data.get("server_type","unknown").upper()
     sver     = server_data.get("server_version","N/A")
     dos      = server_data.get("dos_risk", False)
+    dns      = scan_data.get("dns", {}) or {}
+    cookies  = scan_data.get("cookies", {}) or {}
+    cms      = scan_data.get("cms", {}) or {}
+    dns_score = dns.get("score", breakdown.get("dns_raw", "N/A"))
+    cookie_score = cookies.get("score", breakdown.get("cookies_raw", "N/A"))
+    cms_score = cms.get("score", breakdown.get("cms_raw", "N/A"))
+    cms_name = cms.get("detected_cms") or "Unknown"
 
     summary_rows = [
         ["Metric", "Value", "Status"],
@@ -255,6 +263,9 @@ def _exec_summary(story, styles, scan_data, ai_data, server_data):
         ["Security Headers Missing",f"{n_miss} headers",        "FAIL" if n_miss>2 else ("WARN" if n_miss>0 else "PASS")],
         ["SSL/TLS Certificate",     "Valid" if ssl_ok else "INVALID", "PASS" if ssl_ok else "FAIL"],
         ["SSL Days Remaining",      f"{days} days",              "WARN" if 0<days<=30 else ("FAIL" if days<=0 else "PASS")],
+        ["DNS / Email Security",    f"{dns_score}/100",          "FAIL" if isinstance(dns_score,int) and dns_score<50 else ("WARN" if isinstance(dns_score,int) and dns_score<70 else "PASS")],
+        ["Cookie Security",         f"{cookie_score}/100",       "FAIL" if isinstance(cookie_score,int) and cookie_score<50 else ("WARN" if isinstance(cookie_score,int) and cookie_score<70 else "PASS")],
+        ["CMS / Framework",         f"{cms_name} ({cms_score}/100)", "WARN" if cms.get("detected_cms") else "INFO"],
         ["Web Server",              f"{stype} {sver}",           "WARN" if sver else "INFO"],
         ["Known CVEs Found",        str(n_cve),                  "FAIL" if n_cve>0 else "PASS"],
         ["HTTP/2 DoS Risk",         "YES — CVE-2023-44487" if dos else "No", "FAIL" if dos else "PASS"],
@@ -456,6 +467,56 @@ def _technical_findings(story, styles, scan_data, server_data):
     ht.setStyle(TableStyle(hdr_style))
     story.append(ht)
     story.append(Paragraph(f"Headers Score: {hdr_score}/100", styles["body_sm"]))
+    story.append(Spacer(1, 0.3*cm))
+
+    # 2.3 Extended passive scan modules (Phase 5)
+    story.append(Paragraph("2.3 Extended Scan Modules (DNS · Cookies · CORS · CMS)", styles["h2"]))
+    dns = scan_data.get("dns", {}) or {}
+    cookies = scan_data.get("cookies", {}) or {}
+    cors = scan_data.get("cors", {}) or {}
+    http_m = scan_data.get("http_methods", {}) or {}
+    js_exp = scan_data.get("js_exposure", {}) or {}
+    open_f = scan_data.get("open_files", {}) or {}
+    cms = scan_data.get("cms", {}) or {}
+    subs = scan_data.get("subdomains", {}) or {}
+
+    ext_rows = [
+        ["Module", "Score", "Key Finding"],
+        ["DNS / Email Security", f"{dns.get('score', 'N/A')}/100",
+         f"SPF={'Yes' if dns.get('spf', {}).get('present') else 'No'}, "
+         f"DMARC p={dns.get('dmarc', {}).get('policy', 'none')}"],
+        ["Cookie Security", f"{cookies.get('score', 'N/A')}/100",
+         f"{len(cookies.get('cookies') or [])} cookies, {len(cookies.get('findings') or [])} issues"],
+        ["CORS Policy", f"{cors.get('score', 'N/A')}/100",
+         f"{len(cors.get('findings') or [])} findings"],
+        ["HTTP Methods", f"{http_m.get('score', 'N/A')}/100",
+         ", ".join(http_m.get("dangerous_enabled") or []) or "None dangerous"],
+        ["JS Exposure", f"{js_exp.get('score', 'N/A')}/100",
+         f"{len(js_exp.get('secrets_found') or [])} secrets, "
+         f"{len(js_exp.get('source_maps_exposed') or [])} source maps"],
+        ["Open Files / Dirs", f"{open_f.get('score', 'N/A')}/100",
+         f"{len(open_f.get('sensitive_files') or [])} sensitive files"],
+        ["CMS Fingerprint", f"{cms.get('score', 'N/A')}/100",
+         f"{cms.get('detected_cms') or 'Unknown'} v{cms.get('version') or '?'}],
+        ["Subdomain Recon", "N/A (info)",
+         f"{subs.get('count', 0)} subdomains (passive)"],
+    ]
+    ext_style = [
+        ("BACKGROUND", (0,0), (-1,0), C_NAVY),
+        ("TEXTCOLOR", (0,0), (-1,0), C_WHITE),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTNAME", (0,1), (-1,-1), "Helvetica"),
+        ("FONTSIZE", (0,0), (-1,-1), 8),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1), [C_LGRAY, C_WHITE]),
+        ("GRID", (0,0), (-1,-1), 0.3, C_MGRAY),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ("LEFTPADDING", (0,0), (-1,-1), 6),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+    ]
+    et = Table(ext_rows, colWidths=[4.5*cm, 2.5*cm, 10*cm])
+    et.setStyle(TableStyle(ext_style))
+    story.append(et)
     story.append(PageBreak())
 
 # ── Section 3: SSL ───────────────────────────────────────────────
@@ -635,6 +696,36 @@ def _remediation(story, styles, scan_data, server_data):
                       "Medium-term (1 month)","A.8.9"))
         priority+=1
 
+    dns = scan_data.get("dns", {}) or {}
+    if not dns.get("error") and not dns.get("spf", {}).get("present"):
+        items.append((priority, "HIGH", "Missing SPF Record",
+                      "เพิ่ม TXT record v=spf1 ... -all ที่ DNS zone",
+                      "Short-term (1 week)", "A.8.23"))
+        priority += 1
+    if not dns.get("error") and dns.get("dmarc", {}).get("policy") == "none":
+        items.append((priority, "MEDIUM", "Weak DMARC Policy",
+                      "ตั้ง _dmarc TXT record เป็น p=quarantine หรือ p=reject",
+                      "Short-term (2 weeks)", "A.8.23"))
+        priority += 1
+
+    for cf in (scan_data.get("cookies", {}) or {}).get("findings", [])[:3]:
+        items.append((priority, cf.get("severity", "MEDIUM"), cf.get("title", "Cookie Issue"),
+                      cf.get("detail", "เพิ่ม Secure, HttpOnly, SameSite"),
+                      "Short-term (1 week)", "A.8.26"))
+        priority += 1
+
+    for sf in (scan_data.get("open_files", {}) or {}).get("sensitive_files", [])[:2]:
+        items.append((priority, "CRITICAL", f"Exposed File: {sf.get('path')}",
+                      "ลบหรือ block การเข้าถึงไฟล์จาก public web",
+                      "Immediate (24h)", "A.8.9"))
+        priority += 1
+
+    for sec in (scan_data.get("js_exposure", {}) or {}).get("secrets_found", [])[:2]:
+        items.append((priority, sec.get("severity", "HIGH"), f"JS Secret: {sec.get('type')}",
+                      "rotate credentials และลบ secrets ออกจาก client-side code",
+                      "Immediate (24h)", "A.8.26"))
+        priority += 1
+
     if not items:
         story.append(Paragraph("✅ ไม่พบรายการที่ต้องแก้ไขเร่งด่วน", styles["body"]))
         story.append(PageBreak())
@@ -703,7 +794,35 @@ def _appendix(story, styles, scan_data, server_data):
     story.append(ht)
 
     story.append(Spacer(1, 0.3*cm))
-    story.append(Paragraph("C. Tool & Methodology", styles["h2"]))
+    story.append(Paragraph("D. Extended Scan Module Summary", styles["h2"]))
+    mod_keys = (
+        ("dns", "DNS Security"), ("cookies", "Cookies"), ("cors", "CORS"),
+        ("http_methods", "HTTP Methods"), ("js_exposure", "JS Exposure"),
+        ("open_files", "Open Files"), ("cms", "CMS"), ("subdomains", "Subdomains"),
+    )
+    mod_rows = [["Module", "Score / Count", "Notes"]]
+    for key, label in mod_keys:
+        mod = scan_data.get(key, {}) or {}
+        if key == "subdomains":
+            mod_rows.append([label, str(mod.get("count", 0)), f"{len(mod.get('all_subdomains') or [])} listed"])
+        elif mod.get("error"):
+            mod_rows.append([label, "Error", str(mod.get("error", ""))[:80]])
+        else:
+            mod_rows.append([label, str(mod.get("score", "N/A")),
+                             str(len(mod.get("findings") or [])) + " findings"])
+    mt = Table(mod_rows, colWidths=[4*cm, 3*cm, 10*cm])
+    mt.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), C_STEEL), ("TEXTCOLOR", (0,0), (-1,0), C_WHITE),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"), ("FONTNAME", (0,1), (-1,-1), "Helvetica"),
+        ("FONTSIZE", (0,0), (-1,-1), 8.5), ("ROWBACKGROUNDS", (0,1), (-1,-1), [C_LGRAY, C_WHITE]),
+        ("GRID", (0,0), (-1,-1), 0.3, C_MGRAY),
+        ("TOPPADDING", (0,0), (-1,-1), 4), ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ("LEFTPADDING", (0,0), (-1,-1), 8),
+    ]))
+    story.append(mt)
+
+    story.append(Spacer(1, 0.3*cm))
+    story.append(Paragraph("E. Tool & Methodology", styles["h2"]))
     story.append(Paragraph(
         "Tool: PTC AI Web Shield v1.0<br/>"
         "Method: Passive HTTP scanning (HEAD + GET requests only)<br/>"

@@ -1,10 +1,95 @@
 # src/prompt_builder.py — แปลง JSON → Prompt สำหรับ Gemini
 import html as _html
+import json
 
 
 def _sanitize(value: str, maxlen: int = 200) -> str:
     """Sanitize external values before prompt injection."""
     return _html.escape(str(value).strip()[:maxlen])
+
+
+def _format_module_summary(scan_result: dict, server_data: dict) -> str:
+    """Build scan data section for prompts."""
+    url = _sanitize(scan_result.get("url", ""))
+    headers = scan_result.get("headers", {}) or {}
+    ssl = scan_result.get("ssl", {}) or {}
+    html = scan_result.get("html", {}) or {}
+    dns = scan_result.get("dns", {}) or {}
+    cookies = scan_result.get("cookies", {}) or {}
+    cors = scan_result.get("cors", {}) or {}
+    http_m = scan_result.get("http_methods", {}) or {}
+    js_exp = scan_result.get("js_exposure", {}) or {}
+    subs = scan_result.get("subdomains", {}) or {}
+    open_f = scan_result.get("open_files", {}) or {}
+    cms = scan_result.get("cms", {}) or {}
+
+    missing = headers.get("headers_missing", []) or []
+    found = headers.get("headers_found", {}) or {}
+    ext_sc = html.get("external_scripts", []) or []
+    ins_fm = html.get("insecure_forms", []) or []
+    ssl_ok = ssl.get("valid", False)
+    days = ssl.get("days_left", 0)
+    tls_version = ssl.get("tls_version", "Unknown")
+    tls_warnings = ssl.get("tls_warnings", []) or []
+    scripts_no_sri = html.get("scripts_missing_sri", 0)
+
+    stype = _sanitize(server_data.get("server_type", "unknown"))
+    sver = _sanitize(server_data.get("server_version", "N/A"))
+    ver_exposed = server_data.get("version_exposed", False)
+    http_ver = _sanitize(server_data.get("http_version", "unknown"))
+    dos_risk = server_data.get("dos_risk", False)
+    vulns = server_data.get("vulnerabilities", []) or []
+
+    cve_lines = []
+    for v in vulns:
+        cve_lines.append(
+            f"  - {_sanitize(v.get('cve', ''))} ({_sanitize(v.get('severity', ''))}): "
+            f"{_sanitize(v.get('desc', ''))}"
+        )
+
+    cookie_lines = []
+    for c in (cookies.get("cookies") or [])[:10]:
+        cookie_lines.append(
+            f"  - {c.get('name')}: Secure={c.get('secure')}, HttpOnly={c.get('httponly')}, "
+            f"SameSite={c.get('samesite') or 'none'}"
+        )
+
+    dns_txt = "N/A"
+    if not dns.get("error"):
+        dns_txt = (
+            f"SPF={'✓' if dns.get('spf', {}).get('present') else '✗'} "
+            f"policy={dns.get('spf', {}).get('policy', 'none')}, "
+            f"DMARC={'✓' if dns.get('dmarc', {}).get('present') else '✗'} "
+            f"p={dns.get('dmarc', {}).get('policy', 'none')}, "
+            f"DKIM={dns.get('dkim', {}).get('selectors_found', [])}, "
+            f"DNSSEC={'✓' if dns.get('dnssec', {}).get('signed') else '✗'}"
+        )
+
+    return f"""
+ผลการตรวจสอบเว็บไซต์: {url}
+────────────────────────────────
+Security Headers Score: {headers.get('score', 0)}/100
+Headers ที่มี: {', '.join(found.keys()) if found else 'ไม่มี'}
+Headers ที่ขาด: {', '.join(missing) if missing else 'ครบ'}
+SSL: {"ปลอดภัย เหลือ " + str(days) + " วัน" if ssl_ok else "มีปัญหา"} | TLS: {tls_version}
+TLS Warnings: {', '.join(tls_warnings) if tls_warnings else 'ไม่มี'}
+External Scripts: {len(ext_sc)} | ไม่มี SRI: {scripts_no_sri} | Insecure Forms: {len(ins_fm)}
+
+DNS Security ({dns.get('score', 'N/A')}/100): {dns_txt}
+Cookie Security ({cookies.get('score', 'N/A')}/100): {len(cookies.get('cookies') or [])} cookies
+{chr(10).join(cookie_lines) if cookie_lines else '  ไม่มี cookies'}
+CORS Score: {cors.get('score', 'N/A')}/100 | Findings: {len(cors.get('findings') or [])}
+HTTP Methods Score: {http_m.get('score', 'N/A')}/100 | Dangerous: {http_m.get('dangerous_enabled', [])}
+JS Exposure Score: {js_exp.get('score', 'N/A')}/100 | Secrets: {len(js_exp.get('secrets_found') or [])}
+Subdomains: {subs.get('count', 0)} found
+Open Files Score: {open_f.get('score', 'N/A')}/100 | Sensitive: {len(open_f.get('sensitive_files') or [])}
+CMS: {cms.get('detected_cms') or 'unknown'} v{cms.get('version') or '?'} ({cms.get('score', 'N/A')}/100)
+
+Web Server: {stype} {sver} | Version Exposed: {ver_exposed}
+HTTP Version: {http_ver} | DoS Risk: {dos_risk}
+CVE ที่พบ:
+{chr(10).join(cve_lines) if cve_lines else '  ไม่พบ'}
+"""
 
 
 def build_prompt(
@@ -13,89 +98,15 @@ def build_prompt(
     composite_score: int = 0,
 ) -> str:
     """สร้าง prompt จากผล scan + server data เพื่อส่งให้ Gemini"""
-
     server_data = server_data or {}
 
-    # ── ดึงข้อมูลจาก scan_result ──────────────────────
-    url     = _sanitize(scan_result.get("url", ""))
-    headers = scan_result.get("headers", {}) or {}
-    ssl     = scan_result.get("ssl", {}) or {}
-    html    = scan_result.get("html", {}) or {}
-
-    # ── ส่วนที่ 1: บทบาทของ AI ──────────────────────
     role = """คุณคือผู้เชี่ยวชาญด้าน Cybersecurity สำหรับสถานศึกษาไทย \
 ที่ช่วยวิเคราะห์ความปลอดภัยเว็บไซต์และให้คำแนะนำภาษาไทยเข้าใจง่าย \
 สำหรับครูและบุคลากรฝ่ายไอทีที่ไม่มีความเชี่ยวชาญด้านความปลอดภัยเป็นพิเศษ"""
 
-    # ── ส่วนที่ 2: ข้อมูลจาก Scanner ────────────────
-    header_sub_score = headers.get("score", 0)
-    missing = headers.get("headers_missing", []) or []
-    found   = headers.get("headers_found", {}) or {}
-    ext_sc  = html.get("external_scripts", []) or []
-    ins_fm  = html.get("insecure_forms", []) or []
-    ssl_ok  = ssl.get("valid", False)
-    days    = ssl.get("days_left", 0)
-    ssl_warn = ssl.get("warning", "")
+    data_section = _format_module_summary(scan_result, server_data)
+    data_section = f"คะแนนความปลอดภัย (Composite): {composite_score}/100\n" + data_section
 
-    tls_version  = ssl.get("tls_version", "Unknown")
-    cipher_suite = ssl.get("cipher_suite", "Unknown")
-    cipher_bits  = ssl.get("cipher_bits", 0)
-    tls_warnings = ssl.get("tls_warnings", []) or []
-    tls_warn_txt = "\n".join(f"  - {w}" for w in tls_warnings) if tls_warnings else "  ไม่มี"
-
-    scripts_no_sri = html.get("scripts_missing_sri", 0)
-    ext_no_sri = sum(
-        1 for s in ext_sc
-        if isinstance(s, dict) and not s.get("has_sri", False)
-    ) if ext_sc and isinstance(ext_sc[0], dict) else scripts_no_sri
-
-    missing_txt = ", ".join(missing) if missing else "ครบทุกตัว"
-    found_txt   = ", ".join(found.keys()) if found else "ไม่มีเลย"
-    ext_txt     = f"{len(ext_sc)} ตัว"
-
-    # ── ส่วนที่ 2b: ข้อมูลจาก Server/CVE Scanner ────
-    stype       = _sanitize(server_data.get("server_type", "unknown"))
-    sver        = _sanitize(server_data.get("server_version", "N/A"))
-    ver_exposed = server_data.get("version_exposed", False)
-    http_ver    = _sanitize(server_data.get("http_version", "unknown"))
-    dos_risk    = server_data.get("dos_risk", False)
-    vulns       = server_data.get("vulnerabilities", []) or []
-
-    cve_lines = []
-    for v in vulns:
-        cve_id   = _sanitize(v.get("cve", ""))
-        cve_sev  = _sanitize(v.get("severity", ""))
-        cve_desc = _sanitize(v.get("desc", ""))
-        cve_lines.append(f"  - {cve_id} ({cve_sev}): {cve_desc}")
-    cve_txt = "\n".join(cve_lines) if cve_lines else "  ไม่พบ CVE"
-
-    # ── รวมเป็น Prompt เดียว ─────────────────────────
-    data_section = f"""
-ผลการตรวจสอบเว็บไซต์: {url}
-────────────────────────────────
-คะแนนความปลอดภัย (Composite): {composite_score}/100
-คะแนน Security Headers: {header_sub_score}/100
-Security Headers ที่มี: {found_txt}
-Security Headers ที่ขาด: {missing_txt}
-SSL Certificate: {"ปลอดภัย เหลือ " + str(days) + " วัน" if ssl_ok else "มีปัญหา!"}
-คำเตือน SSL: {ssl_warn if ssl_warn else "ไม่มี"}
-SSL/TLS Version: {tls_version}
-Cipher Suite: {cipher_suite} ({cipher_bits} bits)
-TLS Warnings:
-{tls_warn_txt}
-External Scripts: {ext_txt}
-External Scripts ไม่มี SRI: {ext_no_sri} ตัว
-Insecure Forms: {len(ins_fm)} ตัว
-
-Web Server: {stype} {sver}
-Version Exposed: {"ใช่ — ควรซ่อน" if ver_exposed else "ไม่"}
-HTTP Version: {http_ver}
-HTTP/2 DoS Risk: {"มีความเสี่ยง!" if dos_risk else "ไม่มี"}
-CVE ที่พบ:
-{cve_txt}
-"""
-
-    # ── ส่วนที่ 3: กำหนดรูปแบบคำตอบ ─────────────────
     output_format = """
 กรุณาวิเคราะห์และตอบกลับเป็นภาษาไทย แบ่งเป็น 4 ส่วนชัดเจน:
 
@@ -103,13 +114,80 @@ CVE ที่พบ:
 [อธิบายสถานะโดยรวม 2-3 ประโยค เหมาะสำหรับผู้บริหาร]
 
 ## 🚨 ปัญหาเร่งด่วน (ต้องแก้ทันที)
-[bullet list ปัญหาที่อันตรายที่สุด พร้อมอธิบายว่าอันตรายอย่างไร — รวม CVE ที่พบด้วย]
+[bullet list ปัญหาที่อันตรายที่สุด — รวม CVE, DNS, Cookies, JS secrets]
 
 ## 🛠️ คำแนะนำการแก้ไข
 [ขั้นตอนที่ทำได้จริง เรียงจากง่ายไปยาก]
 
 ## ✅ จุดที่ดีแล้ว
-[สิ่งที่เว็บไซต์ทำได้ถูกต้อง เพื่อกำลังใจ]
+[สิ่งที่เว็บไซต์ทำได้ถูกต้อง]
 """
 
     return f"{role}\n\n{data_section}\n{output_format}"
+
+
+def build_chat_prompt(
+    scan_result: dict,
+    server_data: dict,
+    ai_data: dict,
+    user_message: str,
+    chat_history: list | None = None,
+) -> str:
+    """Build chat prompt with full scan context as system context."""
+    score = ai_data.get("score", 0)
+    risk = ai_data.get("risk_level", "HIGH")
+    breakdown = ai_data.get("breakdown", {})
+
+    context = _format_module_summary(scan_result, server_data)
+    context += f"\nComposite Score: {score}/100 | Risk: {risk}\n"
+    context += f"Breakdown: {json.dumps(breakdown, ensure_ascii=False)}\n"
+
+    # Compact JSON for deep context (truncated)
+    try:
+        compact = {
+            "url": scan_result.get("url"),
+            "headers": scan_result.get("headers"),
+            "ssl": scan_result.get("ssl"),
+            "dns": scan_result.get("dns"),
+            "cookies": scan_result.get("cookies"),
+            "cors": scan_result.get("cors"),
+            "http_methods": scan_result.get("http_methods"),
+            "js_exposure": scan_result.get("js_exposure"),
+            "subdomains": scan_result.get("subdomains"),
+            "open_files": scan_result.get("open_files"),
+            "cms": scan_result.get("cms"),
+            "server": server_data,
+        }
+        json_ctx = json.dumps(compact, ensure_ascii=False, default=str)[:12000]
+    except Exception:
+        json_ctx = ""
+
+    history_txt = ""
+    if chat_history:
+        for msg in chat_history[-6:]:
+            role = msg.get("role", "user")
+            content = _sanitize(msg.get("content", ""), 500)
+            history_txt += f"\n{role.upper()}: {content}"
+
+    system = f"""คุณคือ VULNEX AI Assistant — ผู้ช่วยด้านความปลอดภัยไซเบอร์สำหรับสถานศึกษาไทย
+ตอบเป็นภาษาไทย อธิบายเข้าใจง่าย ไม่ใช้ jargon เกินจำเป็น
+คุณมีข้อมูลผลการสแกนเว็บไซต์ทั้งหมดด้านล่าง — ใช้ข้อมูลนี้ตอบคำถามอย่างแม่นยำ
+ถ้าไม่แน่ใจ ให้บอกตรงๆ ว่าไม่พบในผลสแกน
+
+=== SCAN CONTEXT ===
+{context}
+
+=== RAW JSON (reference) ===
+{json_ctx}
+=== END CONTEXT ===
+"""
+
+    return f"""{system}
+
+=== CHAT HISTORY ==={history_txt}
+
+=== USER QUESTION ===
+{_sanitize(user_message, 1000)}
+
+ตอบคำถามโดยอ้างอิงผลสแกนข้างต้น ให้คำแนะนำที่ปฏิบัติได้จริงสำหรับ admin โรงเรียน/วิทยาลัย
+"""

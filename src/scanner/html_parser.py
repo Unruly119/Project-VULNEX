@@ -34,6 +34,7 @@ def parse_html(url: str) -> dict:
         "insecure_forms":     [],
         "scripts_missing_sri": 0,
         "total_links":        0,
+        "score":              100,
         "error":              None,
     }
 
@@ -105,6 +106,12 @@ def parse_html(url: str) -> dict:
 
         # ── Total links ──
         result["total_links"] = len(soup.find_all("a", href=True))
+
+        # ── HTML security score ──
+        score = 100
+        score -= min(result["scripts_missing_sri"] * 8, 40)
+        score -= min(len(result["insecure_forms"]) * 15, 45)
+        result["score"] = max(0, score)
 
     except Exception as e:
         result["error"] = str(e)

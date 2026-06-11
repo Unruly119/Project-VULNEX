@@ -31,7 +31,7 @@ Open http://localhost:8501 in your browser.
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `GEMINI_API_KEY` | Yes | — | Google Gemini API key |
-| `GEMINI_MODEL` | No | `gemini-2.0-flash-lite` | Model override |
+| `GEMINI_MODEL` | No | `gemini-2.5-flash-lite` | Model override |
 
 ## Project Structure
 

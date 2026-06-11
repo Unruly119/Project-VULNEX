@@ -1,4 +1,6 @@
 # src/ai_engine.py — เชื่อมต่อ Gemini API
+import hashlib
+import json
 import os
 import time
 import warnings
@@ -25,7 +27,6 @@ MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
 _FALLBACK_MODELS = [
     MODEL_NAME,
     "gemini-2.0-flash",
-    "gemini-2.5-flash",
 ]
 
 _GEN_CONFIG = {
@@ -64,6 +65,22 @@ def generate_with_fallback(prompt: str) -> str:
 
 # ── Cache AI text เท่านั้น (score คำนวณใหม่ทุกครั้ง) ──────────────
 _analysis_cache: TTLCache = TTLCache(maxsize=50, ttl=3600)
+
+
+def _make_cache_key(scan_data: dict, server_data: dict) -> str:
+    """Cache key based on scan content, not URL."""
+    headers_found = scan_data.get("headers", {}).get("headers_found", {}) or {}
+    payload = {
+        "url":     scan_data.get("url", ""),
+        "headers": sorted(headers_found.items()),
+        "ssl_ok":  scan_data.get("ssl", {}).get("valid"),
+        "tls_ver": scan_data.get("ssl", {}).get("tls_version"),
+        "vulns":   sorted(v["cve"] for v in server_data.get("vulnerabilities", [])),
+        "dos":     server_data.get("dos_risk", False),
+        "sri":     scan_data.get("html", {}).get("scripts_missing_sri", 0),
+    }
+    raw = json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(raw.encode()).hexdigest()[:20]
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -178,18 +195,17 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
         "error":      None,
     }
 
-    # AI text — cached per URL (หมดอายุ 1 ชั่วโมง)
-    url = scan_data.get("url", "")
-    if url and url in _analysis_cache:
-        result["analysis"] = _analysis_cache[url]
+    # AI text — cached by scan fingerprint (หมดอายุ 1 ชั่วโมง)
+    cache_key = _make_cache_key(scan_data, server_data)
+    if cache_key in _analysis_cache:
+        result["analysis"] = _analysis_cache[cache_key]
         return result
 
     try:
-        prompt             = build_prompt(scan_data, server_data)
+        prompt             = build_prompt(scan_data, server_data, composite_score=score)
         text               = generate_with_fallback(prompt)
         result["analysis"] = text
-        if url:
-            _analysis_cache[url] = text   # cache text เท่านั้น ไม่รวม score
+        _analysis_cache[cache_key] = text
     except Exception as exc:
         result["error"]    = str(exc)
         result["analysis"] = f"❌ เรียก AI ไม่สำเร็จ: {exc}"

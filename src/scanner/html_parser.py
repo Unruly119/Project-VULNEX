@@ -1,7 +1,13 @@
 # src/scanner/html_parser.py — HTML Security Analysis
+import warnings
+
 import httpx
+import urllib3
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
 # Max response body size (5 MB) — prevents OOM on huge pages
 _MAX_RESPONSE_BYTES = 5 * 1024 * 1024
@@ -22,12 +28,13 @@ def _extract_domain(url: str) -> str:
 def parse_html(url: str) -> dict:
     """ดึงและวิเคราะห์ HTML จากเว็บไซต์ — with size cap and correct domain comparison"""
     result = {
-        "title":            "",
-        "meta_description": "",
-        "external_scripts": [],
-        "insecure_forms":   [],
-        "total_links":      0,
-        "error":            None,
+        "title":              "",
+        "meta_description":   "",
+        "external_scripts":   [],
+        "insecure_forms":     [],
+        "scripts_missing_sri": 0,
+        "total_links":        0,
+        "error":              None,
     }
 
     try:
@@ -57,7 +64,7 @@ def parse_html(url: str) -> dict:
         if meta:
             result["meta_description"] = meta.get("content", "")
 
-        # ── External scripts (correct domain comparison) ──
+        # ── External scripts (domain comparison + SRI check) ──
         base_domain = _extract_domain(url)
         for script in soup.find_all("script", src=True):
             src = script["src"]
@@ -72,13 +79,29 @@ def parse_html(url: str) -> dict:
 
             script_domain = _extract_domain(src)
             if script_domain and script_domain != base_domain:
-                result["external_scripts"].append(src)
+                has_sri = bool(script.get("integrity"))
+                result["external_scripts"].append({
+                    "src":     src,
+                    "has_sri": has_sri,
+                })
+                if not has_sri:
+                    result["scripts_missing_sri"] += 1
 
         # ── Insecure forms ──
+        is_https_page = url.startswith("https://")
         for form in soup.find_all("form"):
-            action = form.get("action", "")
-            if action.startswith("http://"):
-                result["insecure_forms"].append(action)
+            action   = form.get("action", "")
+            has_pass = bool(form.find("input", {"type": "password"}))
+            is_insecure = (
+                action.startswith("http://") or
+                (not is_https_page and not action.startswith("https://"))
+            )
+            if is_insecure or (has_pass and not is_https_page):
+                result["insecure_forms"].append({
+                    "action":       action or "(self)",
+                    "has_password": has_pass,
+                    "reason":       "HTTP form" if is_insecure else "Password on HTTP page",
+                })
 
         # ── Total links ──
         result["total_links"] = len(soup.find_all("a", href=True))

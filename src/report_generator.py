@@ -497,7 +497,7 @@ def _technical_findings(story, styles, scan_data, server_data):
         ["Open Files / Dirs", f"{open_f.get('score', 'N/A')}/100",
          f"{len(open_f.get('sensitive_files') or [])} sensitive files"],
         ["CMS Fingerprint", f"{cms.get('score', 'N/A')}/100",
-         f"{cms.get('detected_cms') or 'Unknown'} v{cms.get('version') or '?'}],
+         f"{cms.get('detected_cms') or 'Unknown'} v{cms.get('version') or '?'}"],
         ["Subdomain Recon", "N/A (info)",
          f"{subs.get('count', 0)} subdomains (passive)"],
     ]
@@ -894,6 +894,10 @@ if __name__ == "__main__":
         "dos_risk":True,"dos_detail":"nginx 1.18.0 + HTTP/2 → CVE-2023-44487","risk_level":"HIGH",
     }
     pdf = build_report(mock_scan, mock_ai, mock_srv)
-    with open("/tmp/test_report.pdf","wb") as f:
+    import tempfile
+    import os
+    out_path = os.path.join(tempfile.gettempdir(), "test_report.pdf")
+    with open(out_path, "wb") as f:
         f.write(pdf)
-    print(f"✅ PDF written: {len(pdf):,} bytes → /tmp/test_report.pdf")
+    print(f"PDF written: {len(pdf):,} bytes -> {out_path}")
+

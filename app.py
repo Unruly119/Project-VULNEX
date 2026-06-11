@@ -723,6 +723,12 @@ if st.session_state.get("scanned"):
             + "\n\n".join(scan_errors)
         )
 
+    if ai_data.get("offline_fallback"):
+        st.info(
+            "ใช้โหมดวิเคราะห์อัตโนมัติ (Offline) — Gemini AI ไม่พร้อมใช้งาน "
+            "(โควต้าหมด / ไม่มี API key / model ล้มเหลว) รายงานด้านล่างสร้างจากข้อมูลสแกนโดยตรง"
+        )
+
     # ── Defensive field extraction ──────────────────────────────
     score     = int(ai_data.get("score", 0))
     risk      = _risk_safe(str(ai_data.get("risk_level", "HIGH")))

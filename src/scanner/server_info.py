@@ -147,6 +147,19 @@ def check_server(url: str) -> dict:
                         "fix":      "อัปเกรด nginx เป็น 1.25.3+ หรือเพิ่ม limit_conn/limit_req",
                     })
 
+        # ── DoS risk — check all server types via CVE list ─────
+        _DOS_CVE_IDS = {
+            "CVE-2023-44487",  # nginx HTTP/2 Rapid Reset
+            "CVE-2024-27316",  # Apache HTTP/2 CONTINUATION flood
+            "CVE-2019-0190",   # Apache DoS via SSL bug
+        }
+        for vuln in result["vulnerabilities"]:
+            if vuln["cve"] in _DOS_CVE_IDS:
+                result["dos_risk"] = True
+                if not result["dos_detail"]:
+                    result["dos_detail"] = f"{vuln['cve']}: {vuln['desc']}"
+                break
+
         # ── คำนวณ risk level รวม ────────────────────────────
         sevs = [v["severity"] for v in result["vulnerabilities"]]
         if "CRITICAL" in sevs:   result["risk_level"] = "CRITICAL"

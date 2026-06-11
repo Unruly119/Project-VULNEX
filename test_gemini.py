@@ -9,7 +9,7 @@ api_key = os.getenv("GEMINI_API_KEY")
 
 # ตั้งค่า Gemini
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel("gemini-3.5-flash")
+model = genai.GenerativeModel("gemini-2.0-flash")
 
 # ส่งข้อความทดสอบ
 response = model.generate_content(

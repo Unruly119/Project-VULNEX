@@ -1,20 +1,11 @@
 # src/scanner/scanner.py — ประตูหลักของ Scanner
-import ipaddress
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 
-from scanner.headers    import check_headers
-from scanner.ssl_check  import check_ssl
+from scanner.headers     import check_headers
+from scanner.ssl_check   import check_ssl
 from scanner.html_parser import parse_html
-
-
-def _is_safe_host(hostname: str) -> bool:
-    """Reject private/loopback/link-local IPs (SSRF mitigation)."""
-    try:
-        addr = ipaddress.ip_address(hostname)
-        return not (addr.is_loopback or addr.is_private or addr.is_link_local)
-    except ValueError:
-        return True  # domain name — allow
+from utils.network       import is_safe_host
 
 
 def run_scan(url: str) -> dict:
@@ -26,7 +17,7 @@ def run_scan(url: str) -> dict:
 
     # SSRF guard — reject private/loopback targets
     parsed = urlparse(url)
-    if parsed.hostname and not _is_safe_host(parsed.hostname):
+    if parsed.hostname and not is_safe_host(parsed.hostname):
         return {
             "url":     url,
             "headers": {"error": "SSRF blocked: private/loopback address"},

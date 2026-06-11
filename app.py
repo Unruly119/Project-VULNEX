@@ -16,8 +16,8 @@ import sys
 import os
 sys.path.insert(0, "src")          # must precede src/* module imports
 
+import math
 import time
-import ipaddress
 import html as _html
 from datetime import datetime
 from urllib.parse import urlparse
@@ -491,6 +491,7 @@ try:
     from ai_engine           import analyze
     from scanner.server_info import check_server
     from report_generator    import build_report
+    from utils.network       import is_safe_host
     MODULES_OK = True
     MODULE_ERR = ""
 except ImportError as exc:
@@ -500,18 +501,6 @@ except ImportError as exc:
 # ────────────────────────────────────────────────────────────────
 # Utility functions
 # ────────────────────────────────────────────────────────────────
-
-def _is_safe_host(hostname: str) -> bool:
-    """
-    Reject private / loopback / link-local IP addresses (SSRF mitigation).
-    Domain names always pass — only numeric IP literals are checked.
-    """
-    try:
-        addr = ipaddress.ip_address(hostname)
-        return not (addr.is_loopback or addr.is_private or addr.is_link_local)
-    except ValueError:
-        return True                     # hostname is a domain name — allow
-
 
 def normalise_url(raw: str) -> tuple:
     """
@@ -529,7 +518,7 @@ def normalise_url(raw: str) -> tuple:
             return "", "รองรับเฉพาะ http:// และ https:// เท่านั้น"
         if not parsed.hostname:
             return "", "URL ไม่ถูกต้อง — ไม่พบ hostname"
-        if not _is_safe_host(parsed.hostname):
+        if not is_safe_host(parsed.hostname):
             return "", "ไม่สามารถสแกน private / loopback address ได้"
         return raw, None
     except Exception as exc:
@@ -554,10 +543,28 @@ def _risk_safe(raw: str) -> str:
 
 
 def score_color_class(score: int) -> str:
-    """Map a 0–60 score to a CSS colour utility class."""
+    """Map a 0–100 score to a CSS colour utility class."""
     if score >= 70: return "col-good"
     if score >= 40: return "col-warn"
-    return "col-bad"
+    if score >= 20: return "col-bad"
+    return "col-crit"
+
+
+def _scan_module_errors(scan_data: dict) -> list[str]:
+    """Collect per-module scan errors for user-friendly display."""
+    errors = []
+    labels = {"headers": "Security Headers", "ssl": "SSL/TLS", "html": "HTML Analysis"}
+    for key, label in labels.items():
+        module = scan_data.get(key, {}) or {}
+        if isinstance(module, dict) and module.get("error"):
+            errors.append(f"**{label}:** {module['error']}")
+    return errors
+
+
+def _module_ok(scan_data: dict, key: str) -> bool:
+    """Return True if a scan module completed without error."""
+    module = scan_data.get(key, {}) or {}
+    return isinstance(module, dict) and not module.get("error")
 
 
 # ── SVG icon helpers ───────────────────────────────────────────────
@@ -583,11 +590,15 @@ _P_SHIELD_WARN = '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d
 
 def score_ring_html(score: int, color_class: str) -> str:
     """Animated SVG progress ring for the score metric (SMIL, no JS required)."""
-    import math
     R, CX, CY = 28, 35, 35
     CIRC   = 2 * math.pi * R
     offset = CIRC * (1 - score / 100)
-    c = {"col-good": "#4ade80", "col-warn": "#fbbf24", "col-bad": "#fb923c"}.get(color_class, "#fb923c")
+    c = {
+        "col-good": "#4ade80",
+        "col-warn": "#fbbf24",
+        "col-bad":  "#fb923c",
+        "col-crit": "#fca5a5",
+    }.get(color_class, "#fb923c")
     return (
         '<div class="metric-card">'
         f'<svg width="70" height="70" viewBox="0 0 70 70" style="display:block;margin:0 auto 4px">'
@@ -704,13 +715,25 @@ if st.session_state.get("scanned"):
     server_data = st.session_state["server_data"]
     org         = st.session_state["org"]
 
+    # ── Scan module error recovery ──────────────────────────────
+    scan_errors = _scan_module_errors(scan_data)
+    if scan_errors:
+        st.warning(
+            "บางส่วนของการสแกนล้มเหลว — คะแนนด้านล่างอาจไม่ครบถ้วน:\n\n"
+            + "\n\n".join(scan_errors)
+        )
+
     # ── Defensive field extraction ──────────────────────────────
     score     = int(ai_data.get("score", 0))
     risk      = _risk_safe(str(ai_data.get("risk_level", "HIGH")))
     ssl_info  = scan_data.get("ssl", {}) or {}
-    ssl_ok    = bool(ssl_info.get("valid", False))
-    days_left = int(ssl_info.get("days_left", 0) or 0)
-    n_missing = len(scan_data.get("headers", {}).get("headers_missing", []) or [])
+    hdr_info  = scan_data.get("headers", {}) or {}
+    ssl_ok    = bool(ssl_info.get("valid", False)) if _module_ok(scan_data, "ssl") else None
+    days_left = int(ssl_info.get("days_left", 0) or 0) if _module_ok(scan_data, "ssl") else 0
+    n_missing = (
+        len(hdr_info.get("headers_missing", []) or [])
+        if _module_ok(scan_data, "headers") else None
+    )
     vulns     = server_data.get("vulnerabilities", []) or []
     dos_risk  = bool(server_data.get("dos_risk", False))
     stype     = str(server_data.get("server_type",    "?") or "?").upper()
@@ -730,16 +753,25 @@ if st.session_state.get("scanned"):
         <span class="metric-lbl">ระดับความเสี่ยง</span>
     </div>""", unsafe_allow_html=True)
 
-    ssl_cls = "col-good" if ssl_ok else "col-bad"
-    _ssl_ico = _i(_P_CHECK, 22) if ssl_ok else _i(_P_XCIRC, 22)
+    if ssl_ok is None:
+        ssl_cls, ssl_lbl = "col-warn", "SSL (error)"
+        _ssl_ico = _i(_P_ALERT, 22)
+    else:
+        ssl_cls = "col-good" if ssl_ok else "col-bad"
+        ssl_lbl = f"SSL ({days_left} วัน)"
+        _ssl_ico = _i(_P_CHECK, 22) if ssl_ok else _i(_P_XCIRC, 22)
     m3.markdown(f'<div class="metric-card">'
                f'<span class="metric-val metric-val-lh {ssl_cls}">{_ssl_ico}</span>'
-               f'<span class="metric-lbl">SSL ({days_left} วัน)</span>'
+               f'<span class="metric-lbl">{ssl_lbl}</span>'
                '</div>', unsafe_allow_html=True)
 
-    hdr_cls = "col-bad" if n_missing > 2 else ("col-warn" if n_missing > 0 else "col-good")
+    if n_missing is None:
+        hdr_cls, hdr_val = "col-warn", "—"
+    else:
+        hdr_cls = "col-bad" if n_missing > 2 else ("col-warn" if n_missing > 0 else "col-good")
+        hdr_val = str(n_missing)
     m4.markdown(f"""<div class="metric-card">
-        <span class="metric-val {hdr_cls}">{n_missing}</span>
+        <span class="metric-val {hdr_cls}">{hdr_val}</span>
         <span class="metric-lbl">Headers ที่ขาด</span>
     </div>""", unsafe_allow_html=True)
 
@@ -797,7 +829,8 @@ if st.session_state.get("scanned"):
                      if sver_safe else f'<span class="col-good">ซ่อนอยู่ {_i(_P_CHECK, 13)}</span>')
         _ico_alert = _i(_P_ALERT, 13, 'margin-right:4px')
         _ico_ok    = _i(_P_CHECK, 13, 'margin-right:4px')
-        dos_cell  = (f'<span class="col-bad">{_ico_alert} YES — CVE-2023-44487</span>'
+        dos_detail_safe = _esc(server_data.get("dos_detail", "HTTP/2 DoS vulnerability")[:80])
+        dos_cell  = (f'<span class="col-bad">{_ico_alert} YES — {dos_detail_safe}</span>'
                      if dos_risk else f'<span class="col-good">{_ico_ok} ไม่มีความเสี่ยง</span>')
 
         st.markdown(f"""<div class="sec-card">
@@ -853,8 +886,10 @@ if st.session_state.get("scanned"):
                 )
 
     with tab3:
-        found         = scan_data.get("headers", {}).get("headers_found",  {}) or {}
-        headers_score = scan_data.get("headers", {}).get("score", 0)
+        if not _module_ok(scan_data, "headers"):
+            st.error(f"ไม่สามารถตรวจ Security Headers ได้: {hdr_info.get('error', 'unknown error')}")
+        found         = hdr_info.get("headers_found",  {}) or {}
+        headers_score = hdr_info.get("score", 0) if _module_ok(scan_data, "headers") else "N/A"
         hdr_defs = {
             "Content-Security-Policy":   ("HIGH",   "ป้องกัน XSS Attack"),
             "Strict-Transport-Security": ("HIGH",   "บังคับใช้ HTTPS เสมอ"),
@@ -885,8 +920,10 @@ if st.session_state.get("scanned"):
             )
 
     with tab4:
-        ssl = scan_data.get("ssl", {}) or {}
-        if ssl.get("warning"):
+        ssl = ssl_info
+        if not _module_ok(scan_data, "ssl"):
+            st.error(f"ไม่สามารถตรวจ SSL ได้: {ssl.get('error', 'unknown error')}")
+        elif ssl.get("warning"):
             st.warning(ssl["warning"])
         col_a, col_b = st.columns(2)
         with col_a:

@@ -1,7 +1,13 @@
 # src/scanner/headers.py
 import re
+import warnings
+
 import httpx
+import urllib3
 from typing import Dict
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
 # ── Weighted headers — sum = 100 ─────────────────────────────────
 # CSP และ HSTS คือ critical สุด, Referrer/Permissions เป็น nice-to-have
@@ -53,7 +59,23 @@ def _quality(header: str, value: str) -> float:
     if header == "X-Content-Type-Options":
         return 1.0 if "nosniff" in v else 0.3
 
-    # Referrer-Policy, Permissions-Policy: แค่มีก็พอ
+    if header == "Referrer-Policy":
+        _SAFE_RP = frozenset({
+            "no-referrer",
+            "strict-origin",
+            "strict-origin-when-cross-origin",
+            "same-origin",
+            "no-referrer-when-downgrade",
+        })
+        if v in _SAFE_RP:
+            return 1.0
+        if v == "unsafe-url":
+            return 0.0
+        if v == "origin":
+            return 0.7
+        return 0.4
+
+    # Permissions-Policy: แค่มีก็พอ
     return 1.0
 
 

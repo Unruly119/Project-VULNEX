@@ -45,8 +45,6 @@ def _setup_fonts():
         "/usr/share/fonts/truetype/thai-scalable/Sarabun.ttf",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-        "C:/Windows/Fonts/tahoma.ttf",
-        "C:/Windows/Fonts/arial.ttf",
     ]
     for path in candidates:
         if os.path.exists(path):

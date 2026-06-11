@@ -185,7 +185,7 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
         return result
 
     try:
-        prompt             = build_prompt(scan_data)
+        prompt             = build_prompt(scan_data, server_data)
         text               = generate_with_fallback(prompt)
         result["analysis"] = text
         if url:

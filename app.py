@@ -23,13 +23,14 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 import streamlit as st
+import pandas as pd
 
 # ── Page config ──────────────────────────────────────────────────
 st.set_page_config(
     page_title="Project-VULNEX",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # ── Custom CSS ───────────────────────────────────────────────────
@@ -488,10 +489,15 @@ hr { border-color: var(--border) !important; opacity: 0.5 !important; }
 # ── Import scanning / AI modules ─────────────────────────────────
 try:
     from scanner             import run_scan
-    from ai_engine           import analyze
+    from ai_engine           import analyze, chat_stream
     from scanner.server_info import check_server
     from report_generator    import build_report
     from utils.network       import is_safe_host
+    from executive_dashboard import (
+        traffic_light, build_trend_history, top_urgent_risks_plain,
+        cost_of_inaction, benchmark_comparison, record_scan_history,
+        build_executive_summary_text, SECTOR_BENCHMARKS,
+    )
     MODULES_OK = True
     MODULE_ERR = ""
 except ImportError as exc:
@@ -553,7 +559,12 @@ def score_color_class(score: int) -> str:
 def _scan_module_errors(scan_data: dict) -> list[str]:
     """Collect per-module scan errors for user-friendly display."""
     errors = []
-    labels = {"headers": "Security Headers", "ssl": "SSL/TLS", "html": "HTML Analysis"}
+    labels = {
+        "headers": "Security Headers", "ssl": "SSL/TLS", "html": "HTML Analysis",
+        "dns": "DNS Security", "cookies": "Cookie Security", "cors": "CORS Policy",
+        "http_methods": "HTTP Methods", "js_exposure": "JS Exposure",
+        "subdomains": "Subdomain Recon", "open_files": "Open Files", "cms": "CMS Fingerprint",
+    }
     for key, label in labels.items():
         module = scan_data.get(key, {}) or {}
         if isinstance(module, dict) and module.get("error"):
@@ -637,6 +648,7 @@ def _init_session_state() -> None:
         "scan_data": None,  "ai_data": None,   "server_data": None,
         "org": "",          "url": "",          "scanned": False,
         "pdf_ready": False, "pdf_bytes": None,
+        "chat_history": [], "scan_history": [],
     }.items():
         st.session_state.setdefault(key, default)
 
@@ -703,7 +715,9 @@ if scan_btn and url:
             "scanned":     True,
             "pdf_ready":   False,
             "pdf_bytes":   None,
+            "chat_history": [],  # clear chat on new scan
         })
+        record_scan_history(st.session_state, clean_url, ai_data.get("score", 0), org)
 
 elif scan_btn and not url:
     st.warning("กรุณาใส่ URL ก่อนกด ตรวจสอบ")
@@ -799,26 +813,129 @@ if st.session_state.get("scanned"):
     # ── Score breakdown ────────────────────────────────────────
     breakdown = ai_data.get("breakdown", {})
     if breakdown:
-        bd_h = breakdown.get("headers", 0)
-        bd_s = breakdown.get("ssl", 0)
-        bd_c = breakdown.get("cve", 0)
-        bd_v = breakdown.get("server", 0)
         st.markdown(f"""
         <div class="sec-card" style="padding:14px 18px">
-            <div class="sec-card-title" style="margin-bottom:10px;padding-bottom:8px">Score Breakdown</div>
-            <div style="display:flex;gap:24px;flex-wrap:wrap">
-                <span class="metric-lbl">Headers: <b class="col-info">{bd_h}</b>/40</span>
-                <span class="metric-lbl">SSL: <b class="col-info">{bd_s}</b>/25</span>
-                <span class="metric-lbl">CVE/DoS: <b class="col-info">{bd_c}</b>/25</span>
-                <span class="metric-lbl">Server: <b class="col-info">{bd_v}</b>/10</span>
+            <div class="sec-card-title" style="margin-bottom:10px;padding-bottom:8px">Score Breakdown (Composite Weights)</div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+                <span class="metric-lbl">Headers: <b class="col-info">{breakdown.get('headers', 0)}</b>/25</span>
+                <span class="metric-lbl">SSL: <b class="col-info">{breakdown.get('ssl', 0)}</b>/20</span>
+                <span class="metric-lbl">HTML/JS: <b class="col-info">{breakdown.get('html_js', 0)}</b>/15</span>
+                <span class="metric-lbl">Server/CVE: <b class="col-info">{breakdown.get('server_cve', 0)}</b>/15</span>
+                <span class="metric-lbl">DNS: <b class="col-info">{breakdown.get('dns', 0)}</b>/10</span>
+                <span class="metric-lbl">Cookies: <b class="col-info">{breakdown.get('cookies', 0)}</b>/10</span>
+                <span class="metric-lbl">CMS: <b class="col-info">{breakdown.get('cms', 0)}</b>/5</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
+    # ── AI Chat hint + Sidebar (Pillar 2.3) ────────────────────
+    st.info("💬 **AI Scan Assistant** — เปิด **Sidebar** ทางซ้ายเพื่อถามคำถามเกี่ยวกับผลสแกน (ภาษาไทย)")
+    with st.sidebar:
+        st.markdown("### 💬 AI Scan Assistant")
+        st.caption("ถามเกี่ยวกับผลสแกนเป็นภาษาไทย")
+        for msg in st.session_state.get("chat_history", []):
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+        if prompt := st.chat_input("ถามเกี่ยวกับผลสแกน..."):
+            st.session_state.chat_history.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            with st.chat_message("assistant"):
+                reply_placeholder = st.empty()
+                full_reply = ""
+                try:
+                    for chunk in chat_stream(
+                        prompt, scan_data, server_data, ai_data,
+                        st.session_state.chat_history[:-1],
+                    ):
+                        full_reply += chunk
+                        reply_placeholder.markdown(full_reply + "▌")
+                    reply_placeholder.markdown(full_reply)
+                except Exception as exc:
+                    full_reply = f"ไม่สามารถตอบได้: {exc}"
+                    reply_placeholder.markdown(full_reply)
+            st.session_state.chat_history.append({"role": "assistant", "content": full_reply})
+
+        with st.expander("ตัวอย่างคำถาม"):
+            st.markdown(
+                "- CVE อันตรายแค่ไหน?\n"
+                "- ควรแก้ปัญหาไหนก่อน?\n"
+                "- อธิบาย CSP แบบง่ายๆ\n"
+                "- SPF/DMARC คืออะไร?"
+            )
+
     # ── Tabs ────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "AI Analysis", "Server Info", "HTTP Headers", "SSL Certificate", "Raw Data"
+    tab_exec, tab1, tab2, tab3, tab4, tab_mod, tab5 = st.tabs([
+        "Executive Dashboard", "AI Analysis", "Server Info",
+        "HTTP Headers", "SSL Certificate", "Scan Modules", "Raw Data"
     ])
+
+    with tab_exec:
+        tl_emoji, tl_label, tl_cls = traffic_light(score)
+        st.markdown(f"""
+        <div class="sec-card">
+            <div class="sec-card-title">Executive Summary — {_esc(org)}</div>
+            <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+                <span style="font-size:48px">{tl_emoji}</span>
+                <div>
+                    <div class="metric-val {tl_cls}" style="font-size:36px">{score}/100</div>
+                    <div class="metric-lbl">สถานะ: {tl_label} | ความเสี่ยง: {risk}</div>
+                    <div class="metric-lbl">URL: {_esc(st.session_state.get('url', ''))}</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        ec1, ec2 = st.columns([2, 1])
+        with ec1:
+            trend = build_trend_history(score, st.session_state.get("scan_history"))
+            df = pd.DataFrame(trend)
+            df = df.set_index("month")
+            st.markdown("**📈 แนวโน้มคะแนน 12 เดือน**")
+            st.line_chart(df["score"], height=220)
+            if len(st.session_state.get("scan_history", [])) < 2:
+                st.caption("แสดงข้อมูล demo + สแกนใน session นี้ — จะแม่นยำขึ้นเมื่อสแกนซ้ำ")
+
+        with ec2:
+            sector = st.selectbox(
+                "เปรียบเทียบ sector",
+                options=list(SECTOR_BENCHMARKS.keys()),
+                format_func=lambda k: SECTOR_BENCHMARKS[k]["label"],
+                index=0,
+            )
+            bench = benchmark_comparison(score, sector)
+            st.metric("คะแนนของคุณ", f"{score}/100")
+            st.metric("ค่าเฉลี่ย sector", f"{bench['sector_avg']}/100",
+                      delta=f"{bench['diff']:+d} vs sector")
+            st.info(bench["verdict"])
+
+        st.markdown("**🚨 Top 3 ความเสี่ยงเร่งด่วน**")
+        for i, risk_txt in enumerate(top_urgent_risks_plain(scan_data, server_data, ai_data), 1):
+            st.markdown(f"{i}. {risk_txt}")
+
+        st.markdown("**⏳ Cost of Inaction**")
+        st.warning(cost_of_inaction(score, risk))
+
+        st.markdown("---")
+        st.markdown("**🖨️ Executive Summary (พิมพ์ได้)**")
+        exec_summary = build_executive_summary_text(
+            org,
+            st.session_state.get("url", ""),
+            score,
+            risk,
+            scan_data,
+            server_data,
+            ai_data,
+            sector,
+        )
+        st.text_area("Executive Summary", exec_summary, height=280)
+        st.download_button(
+            label="ดาวน์โหลด Executive Summary (.txt)",
+            data=exec_summary.encode("utf-8"),
+            file_name=f"VULNEX_Executive_{datetime.now().strftime('%Y%m%d')}.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
 
     with tab1:
         st.markdown(ai_data.get("analysis", "ไม่มีข้อมูล"))
@@ -940,6 +1057,94 @@ if st.session_state.get("scanned"):
             st.metric("Days Left", f"{days_left} วัน",
                       delta=None,
                       delta_color="inverse" if days_left <= 30 else "normal")
+
+    with tab_mod:
+        dns = scan_data.get("dns", {}) or {}
+        cookies = scan_data.get("cookies", {}) or {}
+        cors = scan_data.get("cors", {}) or {}
+        http_m = scan_data.get("http_methods", {}) or {}
+        js_exp = scan_data.get("js_exposure", {}) or {}
+        subs = scan_data.get("subdomains", {}) or {}
+        open_f = scan_data.get("open_files", {}) or {}
+        cms = scan_data.get("cms", {}) or {}
+        html_info = scan_data.get("html", {}) or {}
+
+        st.markdown(f"**HTML Analysis Score: {html_info.get('score', 'N/A')}/100**")
+
+        with st.expander("🌐 DNS & Email Security", expanded=True):
+            if dns.get("error"):
+                st.error(dns["error"])
+            else:
+                dc1, dc2, dc3 = st.columns(3)
+                dc1.metric("DNS Score", f"{dns.get('score', 0)}/100")
+                spf = dns.get("spf", {})
+                dc2.metric("SPF", "✅" if spf.get("present") else "❌",
+                           help=spf.get("policy", ""))
+                dmarc = dns.get("dmarc", {})
+                dc3.metric("DMARC", dmarc.get("policy", "none").upper())
+                st.write(f"DKIM selectors: {dns.get('dkim', {}).get('selectors_found', [])}")
+                st.write(f"DNSSEC: {'Signed' if dns.get('dnssec', {}).get('signed') else 'Not signed'}")
+                st.write(f"CAA: {'Present' if dns.get('caa', {}).get('present') else 'Missing'}")
+                for f in dns.get("findings", []):
+                    st.warning(f"**{f.get('title')}**: {f.get('detail')}")
+
+        with st.expander("🍪 Cookie Security"):
+            if cookies.get("error"):
+                st.error(cookies["error"])
+            else:
+                st.metric("Cookie Score", f"{cookies.get('score', 100)}/100")
+                for c in cookies.get("cookies", []):
+                    flags = f"Secure={c.get('secure')} HttpOnly={c.get('httponly')} SameSite={c.get('samesite') or '-'}"
+                    issues = c.get("issues", [])
+                    st.write(f"**{c.get('name')}** — {flags}")
+                    if issues:
+                        st.caption("⚠️ " + "; ".join(issues))
+
+        with st.expander("🔗 CORS Policy"):
+            st.metric("CORS Score", f"{cors.get('score', 'N/A')}/100")
+            for t in cors.get("tests", []):
+                if t.get("tested"):
+                    st.write(f"`{t.get('path')}` → Allow-Origin: `{t.get('allow_origin') or 'none'}`")
+            for f in cors.get("findings", []):
+                st.error(f"**{f.get('title')}**: {f.get('detail')}")
+
+        with st.expander("⚙️ HTTP Methods"):
+            st.metric("Methods Score", f"{http_m.get('score', 'N/A')}/100")
+            st.write(f"Allowed: {http_m.get('allowed_methods', [])}")
+            if http_m.get("dangerous_enabled"):
+                st.error(f"Dangerous methods: {http_m['dangerous_enabled']}")
+
+        with st.expander("📜 JavaScript Exposure"):
+            st.metric("JS Score", f"{js_exp.get('score', 'N/A')}/100")
+            st.write(f"Scripts analyzed: {js_exp.get('scripts_analyzed', 0)}")
+            if js_exp.get("source_maps_exposed"):
+                st.warning("Source maps exposed: " + ", ".join(js_exp["source_maps_exposed"][:3]))
+            for s in js_exp.get("secrets_found", []):
+                st.error(f"**{s.get('type')}** in {s.get('source')}")
+
+        with st.expander("📁 Open Files & Directories"):
+            st.metric("Open Files Score", f"{open_f.get('score', 'N/A')}/100")
+            if open_f.get("directory_listings"):
+                st.warning("Directory listing: " + ", ".join(open_f["directory_listings"]))
+            for sf in open_f.get("sensitive_files", []):
+                st.error(f"Accessible: `{sf.get('path')}` (HTTP {sf.get('status')})")
+            if open_f.get("robots_disallow"):
+                st.write("robots.txt Disallow paths:", open_f["robots_disallow"][:10])
+
+        with st.expander("🏷️ CMS Fingerprint"):
+            st.metric("CMS Score", f"{cms.get('score', 'N/A')}/100")
+            st.write(f"Detected: **{cms.get('detected_cms') or 'Unknown'}** v{cms.get('version') or '?'}")
+            if cms.get("xmlrpc_enabled"):
+                st.warning("WordPress XML-RPC enabled")
+            for p in cms.get("default_paths_accessible", []):
+                st.write(f"`{p.get('path')}` → HTTP {p.get('status')}")
+
+        with st.expander("🔍 Subdomain Recon"):
+            st.write(f"**{subs.get('count', 0)} subdomains** discovered (passive)")
+            if subs.get("all_subdomains"):
+                st.code("\n".join(subs["all_subdomains"][:30]))
+            for w in subs.get("warnings", []):
+                st.caption(w)
 
     with tab5:
         col_r1, col_r2 = st.columns(2)

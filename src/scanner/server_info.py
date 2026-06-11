@@ -18,6 +18,12 @@ VULN_DB = {
         {"range": (1,0,0,  1,23,4),  "cve": "CVE-2023-44487", "severity": "HIGH",
          "desc": "HTTP/2 Rapid Reset Attack (DoS) — Zero-day 2023",
          "fix": "อัปเกรดเป็น nginx 1.25.3+ หรือ patch limit_conn/limit_req"},
+        {"range": (1,1,0,  1,25,3),  "cve": "CVE-2024-24989", "severity": "HIGH",
+         "desc": "HTTP/3 NULL pointer dereference (ngx_http_v3)",
+         "fix": "อัปเกรดเป็น nginx 1.25.4+"},
+        {"range": (1,1,0,  1,25,3),  "cve": "CVE-2024-24990", "severity": "HIGH",
+         "desc": "HTTP/3 use-after-free in QUIC connection",
+         "fix": "อัปเกรดเป็น nginx 1.25.4+"},
     ],
     "apache": [
         {"range": (2,4,0,  2,4,49),  "cve": "CVE-2021-41773", "severity": "CRITICAL",
@@ -29,6 +35,12 @@ VULN_DB = {
         {"range": (2,4,0,  2,4,55),  "cve": "CVE-2023-25690", "severity": "HIGH",
          "desc": "HTTP request smuggling via mod_proxy",
          "fix": "อัปเกรดเป็น Apache 2.4.56+"},
+        {"range": (2,4,0,  2,4,59),  "cve": "CVE-2024-27316", "severity": "HIGH",
+         "desc": "HTTP/2 CONTINUATION flood — memory exhaustion DoS",
+         "fix": "อัปเกรดเป็น Apache 2.4.59+"},
+        {"range": (2,4,0,  2,4,59),  "cve": "CVE-2024-38476", "severity": "HIGH",
+         "desc": "SSRF via mod_rewrite with backend UDS",
+         "fix": "อัปเกรดเป็น Apache 2.4.60+"},
     ],
     "iis": [
         {"range": (7,0,0, 10,0,17763), "cve": "CVE-2022-21907", "severity": "CRITICAL",
@@ -73,7 +85,8 @@ def check_server(url: str) -> dict:
     try:
         with httpx.Client(timeout=10, follow_redirects=True, verify=False,
                           http2=True) as client:
-            resp = client.head(url)
+            # SECURITY: GET instead of HEAD — some WAF/CDN don't inject headers on HEAD
+            resp = client.get(url, headers={"Accept": "text/html"})
 
         # ── HTTP version ─────────────────────────────────────
         proto = str(resp.http_version)   # "HTTP/1.1" or "HTTP/2"

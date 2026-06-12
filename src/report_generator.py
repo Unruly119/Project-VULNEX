@@ -75,8 +75,15 @@ def _setup_fonts():
     REG  = "ThaiFont"
     BOLD = "ThaiFont-Bold"
 
+    # Resolve assets/fonts/ relative to this source file (works on any platform)
+    _here = os.path.dirname(os.path.abspath(__file__))
+    _assets = os.path.join(_here, "..", "assets", "fonts")
+
     # (regular_path, bold_path, is_ttc)
     candidates = [
+        # ── Bundled in repo (assets/fonts/) — highest priority, works everywhere ──
+        (os.path.join(_assets, "NotoSansThai-Regular.ttf"),
+         os.path.join(_assets, "NotoSansThai-Bold.ttf"),   False),
         # Windows — dedicated Thai fonts
         ("C:/Windows/Fonts/THSarabunNew.ttf",  "C:/Windows/Fonts/THSarabunNewBold.ttf",  False),
         ("C:/Windows/Fonts/cordia.ttc",          "C:/Windows/Fonts/cordiab.ttc",            True),

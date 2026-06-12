@@ -673,7 +673,7 @@ with col_url:
         placeholder="https://www.school.ac.th",
     )
 with col_org:
-    org = st.text_input("ชื่อองค์กร (สำหรับ Report)", value="วิทยาลัยเทคนิคปัตตานี")
+    org = st.text_input("Company Name (For Report)", value="Your Company")
 
 scan_btn = st.button("เริ่มตรวจสอบ", use_container_width=True)
 
@@ -1057,19 +1057,19 @@ if st.session_state.get("scanned"):
         ' stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
         '<polyline points="14 2 14 8 20 8"/>'
         '<line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
-        '<span class="report-title">สร้างรายงาน ISO/IEC 27001</span>'
+        '<span class="report-title">สร้างรายงานความปลอดภัย</span>'
         '</div>',
         unsafe_allow_html=True
     )
     col_pdf1, col_pdf2 = st.columns([2, 1])
     with col_pdf1:
         st.info(
-            "รายงาน PDF มาตรฐาน **ISO/IEC 27001:2022** ครอบคลุม: "
-            "Executive Summary · Technical Findings · CVE Report · "
-            "SSL Analysis · AI Analysis · Remediation Plan · Appendix"
+            "รายงาน PDF **1 หน้า** อ่านง่าย ครอบคลุม: "
+            "บทสรุปผู้บริหาร · ผลการตรวจสอบทุกหัวข้อ · "
+            "สถานะผ่าน/ไม่ผ่าน · คำแนะนำแก้ไขพร้อม Config จริง"
         )
     with col_pdf2:
-        if st.button("สร้าง PDF Report", use_container_width=True):
+        if st.button("สร้างรายงาน PDF", use_container_width=True):
             with st.spinner("กำลังสร้าง PDF..."):
                 try:
                     pdf_bytes = build_report(scan_data, ai_data, server_data, org)

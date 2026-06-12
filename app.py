@@ -489,15 +489,11 @@ hr { border-color: var(--border) !important; opacity: 0.5 !important; }
 # ── Import scanning / AI modules ─────────────────────────────────
 try:
     from scanner             import run_scan
-    from ai_engine           import analyze, chat_stream
+    from ai_engine           import analyze
     from scanner.server_info import check_server
     from report_generator    import build_report
     from utils.network       import is_safe_host
-    from executive_dashboard import (
-        traffic_light, build_trend_history, top_urgent_risks_plain,
-        cost_of_inaction, benchmark_comparison, record_scan_history,
-        build_executive_summary_text, SECTOR_BENCHMARKS,
-    )
+
     MODULES_OK = True
     MODULE_ERR = ""
 except ImportError as exc:
@@ -648,7 +644,7 @@ def _init_session_state() -> None:
         "scan_data": None,  "ai_data": None,   "server_data": None,
         "org": "",          "url": "",          "scanned": False,
         "pdf_ready": False, "pdf_bytes": None,
-        "chat_history": [], "scan_history": [],
+        "chat_history": [],
     }.items():
         st.session_state.setdefault(key, default)
 
@@ -717,7 +713,6 @@ if scan_btn and url:
             "pdf_bytes":   None,
             "chat_history": [],  # clear chat on new scan
         })
-        record_scan_history(st.session_state, clean_url, ai_data.get("score", 0), org)
 
 elif scan_btn and not url:
     st.warning("กรุณาใส่ URL ก่อนกด ตรวจสอบ")
@@ -828,114 +823,11 @@ if st.session_state.get("scanned"):
         </div>
         """, unsafe_allow_html=True)
 
-    # ── AI Chat hint + Sidebar (Pillar 2.3) ────────────────────
-    st.info("💬 **AI Scan Assistant** — เปิด **Sidebar** ทางซ้ายเพื่อถามคำถามเกี่ยวกับผลสแกน (ภาษาไทย)")
-    with st.sidebar:
-        st.markdown("### 💬 AI Scan Assistant")
-        st.caption("ถามเกี่ยวกับผลสแกนเป็นภาษาไทย")
-        for msg in st.session_state.get("chat_history", []):
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-        if prompt := st.chat_input("ถามเกี่ยวกับผลสแกน..."):
-            st.session_state.chat_history.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-            with st.chat_message("assistant"):
-                reply_placeholder = st.empty()
-                full_reply = ""
-                try:
-                    for chunk in chat_stream(
-                        prompt, scan_data, server_data, ai_data,
-                        st.session_state.chat_history[:-1],
-                    ):
-                        full_reply += chunk
-                        reply_placeholder.markdown(full_reply + "▌")
-                    reply_placeholder.markdown(full_reply)
-                except Exception as exc:
-                    full_reply = f"ไม่สามารถตอบได้: {exc}"
-                    reply_placeholder.markdown(full_reply)
-            st.session_state.chat_history.append({"role": "assistant", "content": full_reply})
-
-        with st.expander("ตัวอย่างคำถาม"):
-            st.markdown(
-                "- CVE อันตรายแค่ไหน?\n"
-                "- ควรแก้ปัญหาไหนก่อน?\n"
-                "- อธิบาย CSP แบบง่ายๆ\n"
-                "- SPF/DMARC คืออะไร?"
-            )
-
     # ── Tabs ────────────────────────────────────────────────────
-    tab_exec, tab1, tab2, tab3, tab4, tab_mod, tab5 = st.tabs([
-        "Executive Dashboard", "AI Analysis", "Server Info",
+    tab1, tab2, tab3, tab4, tab_mod, tab5 = st.tabs([
+        "AI Analysis", "Server Info",
         "HTTP Headers", "SSL Certificate", "Scan Modules", "Raw Data"
     ])
-
-    with tab_exec:
-        tl_emoji, tl_label, tl_cls = traffic_light(score)
-        st.markdown(f"""
-        <div class="sec-card">
-            <div class="sec-card-title">Executive Summary — {_esc(org)}</div>
-            <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
-                <span style="font-size:48px">{tl_emoji}</span>
-                <div>
-                    <div class="metric-val {tl_cls}" style="font-size:36px">{score}/100</div>
-                    <div class="metric-lbl">สถานะ: {tl_label} | ความเสี่ยง: {risk}</div>
-                    <div class="metric-lbl">URL: {_esc(st.session_state.get('url', ''))}</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        ec1, ec2 = st.columns([2, 1])
-        with ec1:
-            trend = build_trend_history(score, st.session_state.get("scan_history"))
-            df = pd.DataFrame(trend)
-            df = df.set_index("month")
-            st.markdown("**📈 แนวโน้มคะแนน 12 เดือน**")
-            st.line_chart(df["score"], height=220)
-            if len(st.session_state.get("scan_history", [])) < 2:
-                st.caption("แสดงข้อมูล demo + สแกนใน session นี้ — จะแม่นยำขึ้นเมื่อสแกนซ้ำ")
-
-        with ec2:
-            sector = st.selectbox(
-                "เปรียบเทียบ sector",
-                options=list(SECTOR_BENCHMARKS.keys()),
-                format_func=lambda k: SECTOR_BENCHMARKS[k]["label"],
-                index=0,
-            )
-            bench = benchmark_comparison(score, sector)
-            st.metric("คะแนนของคุณ", f"{score}/100")
-            st.metric("ค่าเฉลี่ย sector", f"{bench['sector_avg']}/100",
-                      delta=f"{bench['diff']:+d} vs sector")
-            st.info(bench["verdict"])
-
-        st.markdown("**🚨 Top 3 ความเสี่ยงเร่งด่วน**")
-        for i, risk_txt in enumerate(top_urgent_risks_plain(scan_data, server_data, ai_data), 1):
-            st.markdown(f"{i}. {risk_txt}")
-
-        st.markdown("**⏳ Cost of Inaction**")
-        st.warning(cost_of_inaction(score, risk))
-
-        st.markdown("---")
-        st.markdown("**🖨️ Executive Summary (พิมพ์ได้)**")
-        exec_summary = build_executive_summary_text(
-            org,
-            st.session_state.get("url", ""),
-            score,
-            risk,
-            scan_data,
-            server_data,
-            ai_data,
-            sector,
-        )
-        st.text_area("Executive Summary", exec_summary, height=280)
-        st.download_button(
-            label="ดาวน์โหลด Executive Summary (.txt)",
-            data=exec_summary.encode("utf-8"),
-            file_name=f"VULNEX_Executive_{datetime.now().strftime('%Y%m%d')}.txt",
-            mime="text/plain",
-            use_container_width=True,
-        )
 
     with tab1:
         st.markdown(ai_data.get("analysis", "ไม่มีข้อมูล"))

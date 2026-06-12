@@ -80,10 +80,13 @@ def _setup_fonts():
     _assets = os.path.join(_here, "..", "assets", "fonts")
 
     # (regular_path, bold_path, is_ttc)
+    # NOTE: NotoSansThai (variable font) has no Latin glyphs in ReportLab — excluded.
+    #       Tahoma (Windows) and Sarabun (Linux/Vercel) cover Thai + Latin + Bold correctly.
     candidates = [
         # ── Bundled in repo (assets/fonts/) — highest priority, works everywhere ──
-        (os.path.join(_assets, "NotoSansThai-Regular.ttf"),
-         os.path.join(_assets, "NotoSansThai-Bold.ttf"),   False),
+        # Tahoma: Thai + Latin + Bold — static font, full glyph coverage
+        (os.path.join(_assets, "Tahoma.ttf"),
+         os.path.join(_assets, "Tahoma-Bold.ttf"), False),
         # Windows — dedicated Thai fonts
         ("C:/Windows/Fonts/THSarabunNew.ttf",  "C:/Windows/Fonts/THSarabunNewBold.ttf",  False),
         ("C:/Windows/Fonts/cordia.ttc",          "C:/Windows/Fonts/cordiab.ttc",            True),

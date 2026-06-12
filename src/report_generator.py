@@ -40,20 +40,33 @@ SEV_COLOR = {
 
 # ── Font setup ──────────────────────────────────────────────────
 def _setup_fonts():
+    """
+    ลองโหลด font ไทย ตามลำดับ:
+    1. .ttf ตรง (THSarabunNew, Tahoma)
+    2. .ttc ต้องระบุ subfontIndex=0 ถึงจะ register ได้
+    """
+    # (path, is_ttc)
     candidates = [
-        "C:/Windows/Fonts/THSarabunNew.ttf",
-        "C:/Windows/Fonts/Tahoma.ttf",
-        "/usr/share/fonts/truetype/tlwg/Sarabun.ttf",
-        "/usr/share/fonts/truetype/thai-scalable/Sarabun.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ("C:/Windows/Fonts/THSarabunNew.ttf",  False),
+        ("C:/Windows/Fonts/cordia.ttc",         True),
+        ("C:/Windows/Fonts/browalia.ttc",        True),
+        ("C:/Windows/Fonts/angsana.ttc",         True),
+        ("C:/Windows/Fonts/Tahoma.ttf",         False),
+        ("/usr/share/fonts/truetype/tlwg/Sarabun.ttf",        False),
+        ("/usr/share/fonts/truetype/thai-scalable/Sarabun.ttf", False),
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",   False),
     ]
-    for path in candidates:
-        if os.path.exists(path):
-            try:
+    for path, is_ttc in candidates:
+        if not os.path.exists(path):
+            continue
+        try:
+            if is_ttc:
+                pdfmetrics.registerFont(TTFont("ThaiFont", path, subfontIndex=0))
+            else:
                 pdfmetrics.registerFont(TTFont("ThaiFont", path))
-                return "ThaiFont"
-            except Exception:
-                continue
+            return "ThaiFont"
+        except Exception:
+            continue
     return "Helvetica"
 
 # ── Styles ──────────────────────────────────────────────────────
@@ -342,13 +355,11 @@ def build_report(scan_data: dict, ai_data: dict, server_data: dict,
     stype  = str(srv.get("server_type", "Web Server")).upper()
     sver   = str(srv.get("server_version", "") or "")
     http_v = str(srv.get("http_version", "HTTP/1.1") or "HTTP/1.1")
-    now    = datetime.now().strftime("%-d %B %Y").replace(
-        "January","มกราคม").replace("February","กุมภาพันธ์").replace(
-        "March","มีนาคม").replace("April","เมษายน").replace(
-        "May","พฤษภาคม").replace("June","มิถุนายน").replace(
-        "July","กรกฎาคม").replace("August","สิงหาคม").replace(
-        "September","กันยายน").replace("October","ตุลาคม").replace(
-        "November","พฤศจิกายน").replace("December","ธันวาคม")
+    now_dt = datetime.now()
+    month_th = ["", "มกราคม","กุมภาพันธ์","มีนาคม","เมษายน",
+                "พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม",
+                "กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"]
+    now = f"{now_dt.day} {month_th[now_dt.month]} {now_dt.year}"
 
     checklist = _build_checklist(scan_data, server_data, ai_data)
     passed = sum(1 for c in checklist if c["result"] == "PASSED")
@@ -538,9 +549,9 @@ if __name__ == "__main__":
         "version_exposed": True, "http_version": "HTTP/1.1", "h2_enabled": False,
         "vulnerabilities": [], "dos_risk": False, "dos_detail": "",
     }
-    pdf = build_report(mock_scan, mock_ai, mock_srv, "วิทยาลัยเทคนิคปัตตานี")
+    pdf = build_report(mock_scan, mock_ai, mock_srv, "Test Org")
     import tempfile
     out = os.path.join(tempfile.gettempdir(), "vulnex_comprehensive_test.pdf")
     with open(out, "wb") as fh:
         fh.write(pdf)
-    print(f"PDF: {len(pdf):,} bytes → {out}")
+    print(f"PDF: {len(pdf):,} bytes -> {out}")

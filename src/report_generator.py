@@ -41,32 +41,102 @@ SEV_COLOR = {
 # ── Font setup ──────────────────────────────────────────────────
 def _setup_fonts():
     """
-    ลองโหลด font ไทย ตามลำดับ:
-    1. .ttf ตรง (THSarabunNew, Tahoma)
-    2. .ttc ต้องระบุ subfontIndex=0 ถึงจะ register ได้
+    Register a Thai-capable font family (regular + bold) for ReportLab.
+
+    Root-cause fix for Thai text rendering as solid black squares:
+
+      BUG 1 — Missing registerFontFamily():
+        Registering only the regular variant without calling
+        registerFontFamily() causes Paragraph <b> tags to look up
+        "ThaiFont-Bold" and, failing to find it, fall through to
+        Helvetica-Bold.  Helvetica-Bold has zero Thai Unicode glyph
+        coverage, so every Thai character in a bold context renders
+        as a solid black square (U+25A0).
+
+      BUG 2 — DejaVuSans in fallback chain:
+        DejaVuSans.ttf was the last Linux fallback.  It registers
+        without errors but contains no Thai glyphs, so it silently
+        "succeeds" while still producing boxes for all Thai text.
+        Removed from the candidate list.
+
+    Fix:
+      1. Register both regular AND bold variants (reuses the same
+         font file as bold when no dedicated bold file is present —
+         no synthesised bold but Thai glyphs are always available).
+      2. Call registerFontFamily() to link the pair so <b> tags
+         resolve to the Thai-capable bold font.
+      3. Guard against redundant re-registration across requests
+         (ReportLab stores fonts in a process-wide global registry).
     """
-    # (path, is_ttc)
+    # Guard: avoid re-registering on every PDF request.
+    if "ThaiFont" in pdfmetrics.getRegisteredFontNames():
+        return "ThaiFont"
+
+    REG  = "ThaiFont"
+    BOLD = "ThaiFont-Bold"
+
+    # (regular_path, bold_path, is_ttc)
     candidates = [
-        ("C:/Windows/Fonts/THSarabunNew.ttf",  False),
-        ("C:/Windows/Fonts/cordia.ttc",         True),
-        ("C:/Windows/Fonts/browalia.ttc",        True),
-        ("C:/Windows/Fonts/angsana.ttc",         True),
-        ("C:/Windows/Fonts/Tahoma.ttf",         False),
-        ("/usr/share/fonts/truetype/tlwg/Sarabun.ttf",        False),
-        ("/usr/share/fonts/truetype/thai-scalable/Sarabun.ttf", False),
-        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",   False),
+        # Windows — dedicated Thai fonts
+        ("C:/Windows/Fonts/THSarabunNew.ttf",  "C:/Windows/Fonts/THSarabunNewBold.ttf",  False),
+        ("C:/Windows/Fonts/cordia.ttc",          "C:/Windows/Fonts/cordiab.ttc",            True),
+        ("C:/Windows/Fonts/browalia.ttc",         "C:/Windows/Fonts/browaliab.ttc",          True),
+        ("C:/Windows/Fonts/angsana.ttc",          "C:/Windows/Fonts/angsanab.ttc",           True),
+        ("C:/Windows/Fonts/Tahoma.ttf",           "C:/Windows/Fonts/tahomabd.ttf",           False),
+        # Linux / Vercel — Thai-capable fonts (Noto first, then TLWG Sarabun)
+        ("/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf",
+         "/usr/share/fonts/truetype/noto/NotoSansThai-Bold.ttf",                             False),
+        ("/usr/share/fonts/opentype/noto/NotoSansThai-Regular.otf",
+         "/usr/share/fonts/opentype/noto/NotoSansThai-Bold.otf",                             False),
+        ("/usr/share/fonts/truetype/tlwg/Sarabun.ttf",
+         "/usr/share/fonts/truetype/tlwg/Sarabun-Bold.ttf",                                  False),
+        ("/usr/share/fonts/truetype/thai-scalable/Sarabun.ttf",
+         "/usr/share/fonts/truetype/thai-scalable/Sarabun-Bold.ttf",                         False),
     ]
-    for path, is_ttc in candidates:
-        if not os.path.exists(path):
+
+    for reg_path, bold_path, is_ttc in candidates:
+        if not os.path.exists(reg_path):
             continue
         try:
+            # Register regular variant
             if is_ttc:
-                pdfmetrics.registerFont(TTFont("ThaiFont", path, subfontIndex=0))
+                pdfmetrics.registerFont(TTFont(REG, reg_path, subfontIndex=0))
             else:
-                pdfmetrics.registerFont(TTFont("ThaiFont", path))
-            return "ThaiFont"
+                pdfmetrics.registerFont(TTFont(REG, reg_path))
+
+            # Register bold variant.
+            # When no dedicated bold file exists, reuse the regular file so that
+            # <b>-tagged Thai text still uses a Thai-capable font instead of
+            # falling back to Helvetica-Bold (no Thai glyphs).
+            try:
+                if bold_path and os.path.exists(bold_path):
+                    if is_ttc:
+                        pdfmetrics.registerFont(TTFont(BOLD, bold_path, subfontIndex=0))
+                    else:
+                        pdfmetrics.registerFont(TTFont(BOLD, bold_path))
+                else:
+                    raise FileNotFoundError("no dedicated bold file")
+            except Exception:
+                # Fallback: register the same regular font as the bold slot.
+                if is_ttc:
+                    pdfmetrics.registerFont(TTFont(BOLD, reg_path, subfontIndex=0))
+                else:
+                    pdfmetrics.registerFont(TTFont(BOLD, reg_path))
+
+            # CRITICAL: link regular ↔ bold so that Paragraph <b> tags
+            # resolve to BOLD (Thai-capable) instead of Helvetica-Bold.
+            pdfmetrics.registerFontFamily(
+                REG,
+                normal=REG,
+                bold=BOLD,
+                italic=REG,
+                boldItalic=BOLD,
+            )
+            return REG
+
         except Exception:
             continue
+
     return "Helvetica"
 
 # ── Styles ──────────────────────────────────────────────────────
@@ -88,7 +158,7 @@ def _styles(f):
             textColor=C_BLACK),
         "badge": ParagraphStyle("badge", fontName=f, fontSize=8, leading=10,
             textColor=C_WHITE, alignment=TA_CENTER),
-        "code": ParagraphStyle("code", fontName="Courier", fontSize=7.5, leading=10,
+        "code": ParagraphStyle("code", fontName=f, fontSize=7.5, leading=10,
             textColor=C_NAVY, backColor=C_LGRAY, leftIndent=6),
         "footer": ParagraphStyle("footer", fontName=f, fontSize=7, leading=9,
             textColor=C_DGRAY, alignment=TA_CENTER),

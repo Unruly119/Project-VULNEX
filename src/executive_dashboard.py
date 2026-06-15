@@ -14,19 +14,19 @@ SECTOR_BENCHMARKS = {
 }
 
 TRAFFIC_LIGHT = {
-    "green":  {"emoji": "🟢", "label": "ดี", "min_score": 70},
-    "yellow": {"emoji": "🟡", "label": "ควรปรับปรุง", "min_score": 40},
-    "red":    {"emoji": "🔴", "label": "เสี่ยงสูง", "min_score": 0},
+    "green":  {"label": "ดี", "min_score": 70},
+    "yellow": {"label": "ควรปรับปรุง", "min_score": 40},
+    "red":    {"label": "เสี่ยงสูง", "min_score": 0},
 }
 
 
 def traffic_light(score: int) -> Tuple[str, str, str]:
-    """Return (emoji, label, css_class) for composite score."""
+    """Return (level, label, css_class) for composite score."""
     if score >= 70:
-        return TRAFFIC_LIGHT["green"]["emoji"], TRAFFIC_LIGHT["green"]["label"], "col-good"
+        return "green", TRAFFIC_LIGHT["green"]["label"], "col-good"
     if score >= 40:
-        return TRAFFIC_LIGHT["yellow"]["emoji"], TRAFFIC_LIGHT["yellow"]["label"], "col-warn"
-    return TRAFFIC_LIGHT["red"]["emoji"], TRAFFIC_LIGHT["red"]["label"], "col-crit"
+        return "yellow", TRAFFIC_LIGHT["yellow"]["label"], "col-warn"
+    return "red", TRAFFIC_LIGHT["red"]["label"], "col-crit"
 
 
 def build_trend_history(
@@ -199,14 +199,14 @@ def build_executive_summary_text(
     sector: str = "vocational",
 ) -> str:
     """One-page executive summary for printing or download."""
-    tl_emoji, tl_label, _ = traffic_light(score)
+    _, tl_label, _ = traffic_light(score)
     risks = top_urgent_risks_plain(scan_data, server_data, ai_data)
     bench = benchmark_comparison(score, sector)
     return f"""# VULNEX Executive Summary
 องค์กร: {org}
 URL: {url}
 วันที่: {datetime.now().strftime('%d/%m/%Y %H:%M')}
-คะแนน: {score}/100 {tl_emoji} ({tl_label})
+คะแนน: {score}/100 ({tl_label})
 ความเสี่ยง: {risk}
 
 Top Risks:

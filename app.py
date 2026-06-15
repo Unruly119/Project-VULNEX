@@ -17,6 +17,7 @@ import os
 sys.path.insert(0, "src")          # must precede src/* module imports
 
 import math
+import re
 import time
 import html as _html
 from datetime import datetime
@@ -149,6 +150,67 @@ _P_SERVER = '<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" 
 _P_WRENCH = '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>'
 _P_SHIELD = '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'
 _P_SHIELD_WARN = '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/>'
+_P_SEARCH = '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'
+
+
+# ── AI analysis rendering ───────────────────────────────────────────
+# Map known "## <heading>" section titles (Thai, emoji-free per prompt
+# templates) to an SVG icon. Falls back to no icon for unknown headings.
+_ANALYSIS_SECTION_ICONS = {
+    "สรุปภาพรวม":              _P_SEARCH,
+    "ปัญหาเร่งด่วน (ต้องแก้ทันที)": _P_ALERT,
+    "คำแนะนำการแก้ไข":          _P_WRENCH,
+    "จุดที่ดีแล้ว":              _P_CHECK,
+}
+
+# Strip any stray emoji the AI model might still emit despite prompt
+# instructions (covers common pictographic / symbol / flag ranges).
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F300-\U0001FAFF"  # symbols & pictographs, supplemental, emoticons
+    "\U00002600-\U000027BF"  # misc symbols, dingbats
+    "\U0001F1E6-\U0001F1FF"  # regional indicators (flags)
+    "\U00002190-\U000021FF"  # arrows (e.g. ➡️)
+    "\U0000FE0F"             # variation selector (emoji presentation)
+    "]+"
+)
+
+
+def _strip_emoji(text: str) -> str:
+    return _EMOJI_RE.sub("", text)
+
+
+def render_ai_analysis(analysis: str) -> None:
+    """Render the AI/offline analysis markdown, splitting on '## ' section
+    headers so each section gets an SVG icon instead of an emoji."""
+    analysis = _strip_emoji(analysis or "ไม่มีข้อมูล")
+
+    # Split on lines starting with "## " while keeping the heading text
+    parts = re.split(r"^##\s+(.+)$", analysis, flags=re.MULTILINE)
+
+    if len(parts) == 1:
+        # No "## " headers found — render as-is
+        st.markdown(analysis)
+        return
+
+    # parts[0] = any preamble before the first heading (e.g. blockquote)
+    if parts[0].strip():
+        st.markdown(parts[0].strip())
+
+    # Remaining items alternate: heading, body, heading, body, ...
+    for heading, body in zip(parts[1::2], parts[2::2]):
+        heading = heading.strip()
+        icon = _ANALYSIS_SECTION_ICONS.get(heading)
+        if icon:
+            st.markdown(
+                f'<h2 style="display:flex;align-items:center;gap:0.5rem">'
+                f'{_i(icon, 22)}{_esc(heading, 120)}</h2>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(f"## {heading}")
+        if body.strip():
+            st.markdown(body.strip())
 
 
 def score_ring_html(score: int, color_class: str) -> str:
@@ -212,7 +274,7 @@ st.markdown("""
 <div class="hero">
   <div class="hero-eyebrow">Project-VULNEX · Cybersecurity Track · PSU Future Tech 2026</div>
   <h1 class="hero-title"><svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:10px;margin-bottom:4px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>Project-<span class="accent">VULNEX</span></h1>
-  <p class="hero-sub">ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาด้วย AI &nbsp;·&nbsp; Passive Scan Only &nbsp;·&nbsp; ISO/IEC 27001</p>
+  <p class="hero-sub">ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาด้วย AI &nbsp;·&nbsp; Passive Scan Only &nbsp;·&nbsp; PDF Report</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -386,7 +448,7 @@ if st.session_state.get("scanned"):
     ])
 
     with tab1:
-        st.markdown(ai_data.get("analysis", "ไม่มีข้อมูล"))
+        render_ai_analysis(ai_data.get("analysis", "ไม่มีข้อมูล"))
 
     with tab2:
         # Escape all server-originated strings before HTML injection

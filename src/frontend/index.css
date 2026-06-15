@@ -189,11 +189,18 @@ code, .mono {
 /* ── Markdown body hardening ──────────────────────────────────────
    Streamlit's built-in theme can leak near-white text colors into
    raw st.markdown() output (AI-generated reports, recommendations).
-   Force the Fable palette on every text-bearing element so nothing
-   goes invisible or low-contrast against the warm background. */
-.stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown span,
-.stMarkdown div, .stMarkdown strong, .stMarkdown em, .stMarkdown a,
-[data-testid="stMarkdownContainer"], [data-testid="stMarkdownContainer"] * {
+   Force the Fable palette on text-bearing elements so nothing goes
+   invisible or low-contrast — but NEVER override elements that carry
+   their own semantic/severity color classes (col-*, metric-val, etc.),
+   since those rely on cascading from a parent class. */
+.stMarkdown, .stMarkdown p, .stMarkdown li,
+.stMarkdown div, .stMarkdown em,
+[data-testid="stMarkdownContainer"] {
+  color: var(--ink-2) !important;
+}
+.stMarkdown span:not([class]), .stMarkdown a:not([class]),
+[data-testid="stMarkdownContainer"] span:not([class]),
+[data-testid="stMarkdownContainer"] a:not([class]) {
   color: var(--ink-2) !important;
 }
 .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4,
@@ -213,9 +220,9 @@ code, .mono {
 }
 /* Inline code / badges inside markdown (e.g. `Secure=True`, `strict`) */
 .stMarkdown code, [data-testid="stMarkdownContainer"] code {
-  background: var(--bg-warm) !important;
-  border: 1px solid var(--border) !important;
-  color: var(--accent) !important;
+  background: var(--c-low-bg) !important;
+  border: 1px solid var(--c-low-bdr) !important;
+  color: var(--c-low) !important;
   font-family: var(--font-mono) !important;
   font-weight: 600 !important;
   padding: 2px 6px !important;

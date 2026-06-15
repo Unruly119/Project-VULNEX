@@ -155,12 +155,13 @@ _P_SEARCH = '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'
 
 # ── AI analysis rendering ───────────────────────────────────────────
 # Map known "## <heading>" section titles (Thai, emoji-free per prompt
-# templates) to an SVG icon. Falls back to no icon for unknown headings.
-_ANALYSIS_SECTION_ICONS = {
-    "สรุปภาพรวม":              _P_SEARCH,
-    "ปัญหาเร่งด่วน (ต้องแก้ทันที)": _P_ALERT,
-    "คำแนะนำการแก้ไข":          _P_WRENCH,
-    "จุดที่ดีแล้ว":              _P_CHECK,
+# templates) to an SVG icon + accent color. Falls back to no icon/color
+# for unknown headings.
+_ANALYSIS_SECTION_STYLE = {
+    "สรุปภาพรวม":              (_P_SEARCH, "var(--c-info)"),
+    "ปัญหาเร่งด่วน (ต้องแก้ทันที)": (_P_ALERT,  "var(--c-crit)"),
+    "คำแนะนำการแก้ไข":          (_P_WRENCH, "var(--accent)"),
+    "จุดที่ดีแล้ว":              (_P_CHECK,  "var(--c-low)"),
 }
 
 # Strip any stray emoji the AI model might still emit despite prompt
@@ -200,11 +201,15 @@ def render_ai_analysis(analysis: str) -> None:
     # Remaining items alternate: heading, body, heading, body, ...
     for heading, body in zip(parts[1::2], parts[2::2]):
         heading = heading.strip()
-        icon = _ANALYSIS_SECTION_ICONS.get(heading)
-        if icon:
+        style = _ANALYSIS_SECTION_STYLE.get(heading)
+        if style:
+            icon, color = style
             st.markdown(
-                f'<h2 style="display:flex;align-items:center;gap:0.5rem">'
-                f'{_i(icon, 22)}{_esc(heading, 120)}</h2>',
+                f'<h2 style="display:flex;align-items:center;gap:0.75rem;'
+                f'color:{color} !important">'
+                f'{_i(icon, 22)}'
+                f'<span style="color:{color} !important">{_esc(heading, 120)}</span>'
+                f'</h2>',
                 unsafe_allow_html=True,
             )
         else:

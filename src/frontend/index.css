@@ -186,6 +186,48 @@ code, .mono {
   color: var(--accent);
 }
 
+/* ── Markdown body hardening ──────────────────────────────────────
+   Streamlit's built-in theme can leak near-white text colors into
+   raw st.markdown() output (AI-generated reports, recommendations).
+   Force the Fable palette on every text-bearing element so nothing
+   goes invisible or low-contrast against the warm background. */
+.stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown span,
+.stMarkdown div, .stMarkdown strong, .stMarkdown em, .stMarkdown a,
+[data-testid="stMarkdownContainer"], [data-testid="stMarkdownContainer"] * {
+  color: var(--ink-2) !important;
+}
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4,
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stMarkdownContainer"] h4 {
+  color: var(--ink) !important;
+  font-family: var(--font-serif) !important;
+}
+.stMarkdown strong, [data-testid="stMarkdownContainer"] strong {
+  color: var(--ink) !important;
+  font-weight: 600 !important;
+}
+.stMarkdown a, [data-testid="stMarkdownContainer"] a {
+  color: var(--accent) !important;
+}
+/* Inline code / badges inside markdown (e.g. `Secure=True`, `strict`) */
+.stMarkdown code, [data-testid="stMarkdownContainer"] code {
+  background: var(--bg-warm) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--accent) !important;
+  font-family: var(--font-mono) !important;
+  font-weight: 600 !important;
+  padding: 2px 6px !important;
+  border-radius: var(--r-sm) !important;
+}
+.stMarkdown pre, [data-testid="stMarkdownContainer"] pre {
+  background: var(--surface-hi) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--r-md) !important;
+  color: var(--ink-2) !important;
+}
+
 /* ── Hero ─────────────────────────────────────────────────────── */
 .hero {
   padding: 4rem 0 3rem;
@@ -290,6 +332,12 @@ div.stButton > button:hover {
 div.stButton > button:focus-visible {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px !important;
+}
+/* BaseWeb nests the button label in its own element, which can carry a
+   theme-driven text color that overrides the button's own `color`. */
+div.stButton > button *,
+div[data-testid="stDownloadButton"] > button * {
+  color: inherit !important;
 }
 
 /* Download button */

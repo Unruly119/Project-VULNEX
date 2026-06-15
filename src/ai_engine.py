@@ -514,16 +514,16 @@ def _build_offline_analysis(
 
     good_txt = "\n".join(good) if good else "- ยังไม่มีจุดเด่นที่ชัดเจนจากข้อมูลสแกน"
 
-    return f"""## 🔍 สรุปภาพรวม
+    return f"""## สรุปภาพรวม
 {overview}
 
-## 🚨 ปัญหาเร่งด่วน (ต้องแก้ทันที)
+## ปัญหาเร่งด่วน (ต้องแก้ทันที)
 {urgent_txt}
 
-## 🛠️ คำแนะนำการแก้ไข
+## คำแนะนำการแก้ไข
 {fixes_txt}
 
-## ✅ จุดที่ดีแล้ว
+## จุดที่ดีแล้ว
 {good_txt}"""
 
 
@@ -573,7 +573,7 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
         result["error"] = err_msg
         result["offline_fallback"] = True
         result["analysis"] = (
-            f"> ⚠️ **โหมดวิเคราะห์อัตโนมัติ (Offline)** — {err_msg}\n\n"
+            f"> **โหมดวิเคราะห์อัตโนมัติ (Offline)** — {err_msg}\n\n"
             + _build_offline_analysis(scan_data, server_data, score, risk, breakdown)
         )
         return result
@@ -591,7 +591,7 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
             scan_data, server_data, score, risk, breakdown
         )
         result["analysis"] = (
-            f"> ⚠️ **โหมดวิเคราะห์อัตโนมัติ (Offline)** — ไม่สามารถเรียก Gemini AI ได้\n"
+            f"> **โหมดวิเคราะห์อัตโนมัติ (Offline)** — ไม่สามารถเรียก Gemini AI ได้\n"
             f"> {err_msg}\n\n"
             + offline_body
         )

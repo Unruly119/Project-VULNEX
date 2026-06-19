@@ -52,6 +52,43 @@ def _img_data_uri(path: str) -> str:
     return f"data:image/{mime};base64,{b64}"
 
 
+# Exact unicode-range Google Fonts uses for the Prompt "thai" subset:
+# core Thai block + the combining marks / dotted-circle it ships with.
+_THAI_UNICODE_RANGE = "U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC"
+
+
+def _thai_font_css() -> str:
+    """Build @font-face blocks for the Prompt Thai webfont with each woff2
+    file base64-embedded as a data: URI.
+
+    Embedding is required because this stylesheet is injected inline via
+    st.markdown — a relative url('../font/...') would resolve against the
+    Streamlit page origin (which does not serve src/), so the fonts would
+    never load. unicode-range restricts Prompt to Thai codepoints only, so
+    English / Latin text keeps using AnthropicSans / AnthropicSerif.
+    """
+    weights = {
+        400: "Prompt-Regular-thai.woff2",
+        500: "Prompt-Medium-thai.woff2",
+        600: "Prompt-SemiBold-thai.woff2",
+        700: "Prompt-Bold-thai.woff2",
+    }
+    base = os.path.join("src", "Font", "google_font")
+    blocks = []
+    for weight, fname in weights.items():
+        with open(os.path.join(base, fname), "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+        blocks.append(
+            "@font-face{font-family:'Prompt';font-style:normal;"
+            f"font-weight:{weight};font-display:swap;"
+            f"src:url(data:font/woff2;base64,{b64}) format('woff2');"
+            f"unicode-range:{_THAI_UNICODE_RANGE};}}"
+        )
+    return "\n".join(blocks)
+
+
+# Inject the base64-embedded Thai @font-face first, then the main stylesheet.
+st.markdown(f"<style>\n{_thai_font_css()}\n</style>", unsafe_allow_html=True)
 st.markdown(_load_css(os.path.join("src", "frontend", "index.css")), unsafe_allow_html=True)
 
 # ── Import scanning / AI modules ─────────────────────────────────

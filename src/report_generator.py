@@ -80,7 +80,7 @@ def _setup_fonts() -> str:
         return REG
 
     _here   = os.path.dirname(os.path.abspath(__file__))
-    _assets = os.path.join(_here, "..", "assets", "fonts")
+    _assets = os.path.normpath(os.path.join(_here, "..", "assets", "fonts"))
 
     candidates = [
         # ── Windows (Tahoma = Thai + Latin + Bold ครบ) ──
@@ -152,6 +152,7 @@ def _styles(f: str) -> dict:
     BUG-3 FIX: style "code" และ "code_comment" ใช้ fontName Helvetica ชุด built-in
     เพราะ config snippet เป็น ASCII ล้วน ไม่ต้องการ Thai glyph
     """
+    bold_f = f + "-Bold"
     return {
         "title": ParagraphStyle(
             "title", fontName=f, fontSize=15, leading=20,
@@ -175,7 +176,7 @@ def _styles(f: str) -> dict:
             "cell", fontName=f, fontSize=8, leading=11, textColor=C_BLACK,
         ),
         "cell_b": ParagraphStyle(
-            "cell_b", fontName="Helvetica-Bold",
+            "cell_b", fontName=bold_f,
             fontSize=8, leading=11, textColor=C_BLACK,
         ),
         "badge": ParagraphStyle(
@@ -188,13 +189,14 @@ def _styles(f: str) -> dict:
         ),
         # BUG-3 FIX ─ fontName = Helvetica-Bold (ไม่ใช่ ThaiFont)
         # Code snippet เป็น ASCII ล้วน Helvetica-Bold แสดงได้สมบูรณ์
+        # ขยายขนาดตัวอักษรของ code block ให้เด่นและเต็มพื้นที่กระดาษมากขึ้น
         "code": ParagraphStyle(
-            "code", fontName="Helvetica-Bold", fontSize=7.5, leading=11,
+            "code", fontName="Helvetica-Bold", fontSize=10, leading=14,
             textColor=colors.HexColor("#e2e8f0"), backColor=C_CODE_BG,
-            leftIndent=8, rightIndent=4, spaceAfter=1,
+            leftIndent=8, rightIndent=4, spaceAfter=2,
         ),
         "code_comment": ParagraphStyle(
-            "code_comment", fontName="Helvetica", fontSize=7.5, leading=11,
+            "code_comment", fontName="Helvetica", fontSize=10, leading=14,
             textColor=colors.HexColor("#94a3b8"), backColor=C_CODE_BG,
             leftIndent=8, rightIndent=4, spaceAfter=1,
         ),
@@ -513,7 +515,7 @@ def _hardening_section(story: list, s: dict, f: str,
     story.append(Spacer(1, 0.15 * cm))
     story.append(_section_bar(
         "4. แผนงานปรับแต่งระบบเพื่อความปลอดภัยสูงสุด (Hardening Guidelines)", s))
-    story.append(Spacer(1, 0.1 * cm))
+    story.append(Spacer(1, 0.04 * cm))
 
     failed_items = [c for c in checklist if c["result"] == "FAILED"]
     if not failed_items:
@@ -523,7 +525,8 @@ def _hardening_section(story: list, s: dict, f: str,
         return
 
     intro = "ดำเนินการแก้ไขไฟล์คอนฟิกหลักของ Web Server ในส่วนที่ขึ้นสถานะไม่ผ่านทันที:"
-    story.append(Paragraph(intro, s["body"]))
+    # leftIndent=8 ให้ตรงกับ leftIndent ของ code/code_comment style ด้านล่าง
+    story.append(Paragraph(intro, s["body"].clone("body_indent", leftIndent=8)))
     story.append(Spacer(1, 0.08 * cm))
 
     code_lines = _build_hardening(scan_data, server_data)
@@ -536,10 +539,6 @@ def _hardening_section(story: list, s: dict, f: str,
                 story.append(Paragraph(line if line else " ", s["code"]))
 
     story.append(Spacer(1, 0.08 * cm))
-    failed_topics = " · ".join(c["topic"] for c in failed_items[:3])
-    story.append(Paragraph(
-        f"<b>สรุปจาก AI:</b> พบ {len(failed_items)} รายการที่ต้องแก้ไข — {failed_topics}",
-        s["body"]))
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -614,7 +613,7 @@ class HeaderBanner(Flowable):
 # Main build function
 # ─────────────────────────────────────────────────────────────────
 def build_report(scan_data: dict, ai_data: dict, server_data: dict,
-                 org_name: str = "วิทยาลัยเทคนิคปัตตานี") -> bytes:
+                 org_name: str = "Your Company") -> bytes:
     """
     สร้าง PDF Security Audit Report
     แก้ไขครบ 3 bugs + Score Donut + layout ใหม่
@@ -664,21 +663,27 @@ def build_report(scan_data: dict, ai_data: dict, server_data: dict,
     story.append(Spacer(1, 0.2 * cm))
 
     # ── Section 1: Executive Summary + Donut (side-by-side) ─────
-    story.append(_section_bar("1. บทสรุปผู้บริหาร (Executive Summary)", s))
+    story.append(_section_bar("1. บทสรุปการประเมิน (Executive Summary)", s))
     story.append(Spacer(1, 0.1 * cm))
 
-    ai_analysis  = str(ai_data.get("analysis", "") or "")
-    summary_text = ""
-    for line in ai_analysis.split("\n"):
-        line = line.strip()
-        if line and not line.startswith("#"):
-            summary_text = line[:400]
-            break
-    if not summary_text:
-        summary_text = (
-            f"ระบบมีความเสี่ยงอยู่ในระดับ {_risk_th(risk)} (คะแนน {score}/100) "
-            "จากการตรวจสอบแบบ Passive Scan ระบบควรปรับปรุงการตั้งค่า Security Headers "
-            "และซ่อนข้อมูล Server Version เพื่อลดพื้นที่การโจมตี"
+    # บทสรุปการประเมิน — ไม่ใช้ประโยคจาก AI ที่อาจมีชื่อสถาบันปนมา
+    # ใช้ template คงที่ที่อ้างอิงแค่ URL + คะแนน + ระดับความเสี่ยง
+    summary_text = (
+        f'<b>URL:</b> <font name="Helvetica">{url}</font>  |  '
+        f"มีคะแนนความปลอดภัยโดยรวมอยู่ที่ {score}/100 "
+        f"ซึ่งถือว่าอยู่ในระดับ{_risk_th(risk)} "
+        "ยังมีช่องโหว่ที่ต้องได้รับการแก้ไขอย่างเร่งด่วน"
+    )
+
+    # ── AI summary สำหรับแสดงใน Section 1 ──
+    checklist_preview = _build_checklist(scan_data, server_data, ai_data)
+    failed_preview    = [c for c in checklist_preview if c["result"] == "FAILED"]
+    ai_summary_line   = ""
+    if failed_preview:
+        failed_topics_str = " \u00b7 ".join(c["topic"] for c in failed_preview[:3])
+        ai_summary_line = (
+            f"<b>สรุปจาก AI:</b> พบ {len(failed_preview)} รายการที่ต้องแก้ไข"
+            f" — {failed_topics_str}"
         )
 
     # วาง Donut ด้านขวา, summary ด้านซ้าย ใน Table 2 คอลัมน์
@@ -686,12 +691,15 @@ def build_report(scan_data: dict, ai_data: dict, server_data: dict,
                        label="คะแนนความปลอดภัย")
     summary_para = [
         Paragraph(summary_text, s["body"]),
-        Spacer(1, 0.12 * cm),
-        Paragraph(
-            f"<b>หน่วยงาน:</b> {org_name}  |  "
-            f"<b>วันตรวจ:</b> {date_th}",
-            s["body_sm"]),
+        Spacer(1, 0.08 * cm),
     ]
+    if ai_summary_line:
+        summary_para.append(Paragraph(ai_summary_line, s["body"]))
+        summary_para.append(Spacer(1, 0.08 * cm))
+    summary_para.append(Paragraph(
+        f"<b>หน่วยงาน:</b> {org_name}  |  "
+        f"<b>วันตรวจ:</b> {date_th}",
+        s["body_sm"]))
 
     exec_tbl = Table(
         [[summary_para, donut]],
@@ -757,10 +765,11 @@ def build_report(scan_data: dict, ai_data: dict, server_data: dict,
     # ── Section 3: Detailed Checklist ────────────────────────────
     story.append(_section_bar(
         "3. ตารางบันทึกผลการตรวจสอบแบบละเอียด (Detailed Security Checklist)", s))
-    story.append(Spacer(1, 0.06 * cm))
+    story.append(Spacer(1, 0.02 * cm))
+    # leftIndent=5 ให้ตรงกับ LEFTPADDING ของตาราง checklist ด้านล่าง
     story.append(Paragraph(
-        "รายงานแสดงผลการตรวจครบทุกหัวข้อเพื่อใช้เป็น Security Baseline อ้างอิง",
-        s["body_sm"]))
+        f'รายงานแสดงผลการตรวจครบทุกหัวข้อเพื่อใช้เป็น {_h("Security Baseline")} อ้างอิง',
+        s["body_sm"].clone("body_sm_indent", leftIndent=5)))
     story.append(Spacer(1, 0.06 * cm))
 
     # Header row

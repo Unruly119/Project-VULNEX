@@ -243,6 +243,34 @@ code, .mono {
   animation: fade-up var(--t-slow) var(--ease) both;
 }
 
+/* ── Hero layout: text column + visual column (ไม่กระทบ .hero เดิม) ── */
+.hero-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2.5rem;
+}
+.hero-text { flex: 1 1 auto; min-width: 0; }
+.hero-visual {
+  flex: 0 0 auto;
+  width: 520px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade-up var(--t-slow) var(--ease) both;
+  animation-delay: 0.08s;
+}
+.hero-visual svg,
+.hero-visual img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-lg);
+}
+@media (max-width: 1100px) {
+  .hero-grid { flex-direction: column; }
+  .hero-visual { width: 380px; order: -1; }
+}
+
 .hero-eyebrow {
   display: inline-flex;
   align-items: center;
@@ -462,7 +490,7 @@ hr { border-color: var(--border) !important; opacity: 0.6 !important; }
 .sev-CRITICAL { background: var(--c-crit-bg); border: 1px solid var(--c-crit-bdr); color: var(--c-crit); }
 .sev-HIGH     { background: var(--c-high-bg); border: 1px solid var(--c-high-bdr); color: var(--c-high); }
 .sev-MEDIUM   { background: var(--c-med-bg);  border: 1px solid var(--c-med-bdr);  color: var(--c-med);  }
-.sev-LOW      { background: var(--c-low-bg);  border: 1px solid var(--c-low-bdr);  color: var(--c-low);  }
+.sev-LOW      { background: var(--c-crit-bg); border: 1px solid var(--c-crit-bdr); color: var(--c-crit); }
 .sev-PASS     { background: var(--c-low-bg);  border: 1px solid var(--c-low-bdr);  color: var(--c-low);  }
 
 /* ── Finding rows ─────────────────────────────────────────────── */

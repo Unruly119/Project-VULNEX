@@ -20,6 +20,7 @@ import math
 import re
 import time
 import html as _html
+import base64
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -39,6 +40,16 @@ def _load_css(path: str) -> str:
     """Read a CSS file and return it wrapped in a <style> tag."""
     with open(path, "r", encoding="utf-8") as f:
         return f"<style>\n{f.read()}\n</style>"
+
+
+def _img_data_uri(path: str) -> str:
+    """Encode a local image file as a base64 data: URI for inline HTML use."""
+    ext = os.path.splitext(path)[1].lower().lstrip(".")
+    mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png",
+            "webp": "webp", "gif": "gif"}.get(ext, "jpeg")
+    with open(path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("ascii")
+    return f"data:image/{mime};base64,{b64}"
 
 
 st.markdown(_load_css(os.path.join("src", "frontend", "index.css")), unsafe_allow_html=True)
@@ -275,11 +286,19 @@ def _init_session_state() -> None:
 _init_session_state()
 
 # ── Hero ─────────────────────────────────────────────────────────
-st.markdown("""
+_hero_img_uri = _img_data_uri(os.path.join("src", "Public", "Window_Image.jpg"))
+st.markdown(f"""
 <div class="hero">
-  <div class="hero-eyebrow">Project-VULNEX · Cybersecurity Track · PSU Future Tech 2026</div>
-  <h1 class="hero-title"><svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:10px;margin-bottom:4px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>Project-<span class="accent">VULNEX</span></h1>
-  <p class="hero-sub">ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาด้วย AI &nbsp;·&nbsp; Passive Scan Only &nbsp;·&nbsp; PDF Report</p>
+  <div class="hero-grid">
+    <div class="hero-text">
+      <div class="hero-eyebrow">Project-VULNEX · Cybersecurity Track · PSU Future Tech 2026</div>
+      <h1 class="hero-title"><svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:10px;margin-bottom:4px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>Project-<span class="accent">VULNEX</span></h1>
+      <p class="hero-sub">ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาด้วย AI &nbsp;·&nbsp; Passive Scan Only &nbsp;·&nbsp; PDF Report</p>
+    </div>
+    <div class="hero-visual">
+      <img src="{_hero_img_uri}" alt="Project-VULNEX banner" />
+    </div>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 

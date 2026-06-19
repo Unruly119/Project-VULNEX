@@ -59,6 +59,13 @@ SEV_COLOR = {
     "SECURE":   C_LIME,  "INFO": C_STEEL,
 }
 
+# จัดลำดับความรุนแรง — ใช้เรียงรายการจากร้ายแรงสุด → ปลอดภัยสุด
+# (FAILED มี sev เป็น CRITICAL/HIGH/MEDIUM/LOW, PASSED เป็น SECURE)
+# จึงทำให้รายการที่ "ไม่ผ่าน" ลอยขึ้นบนสุดเสมอ
+SEV_ORDER = {
+    "CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "SECURE": 4, "INFO": 5,
+}
+
 # ─────────────────────────────────────────────────────────────────
 # BUG-1 FIX: Font setup — ใช้ฟอนต์ที่มีทั้ง Thai + Latin glyph ครบ
 # ─────────────────────────────────────────────────────────────────
@@ -79,10 +86,19 @@ def _setup_fonts() -> str:
     if REG in pdfmetrics.getRegisteredFontNames():
         return REG
 
-    _here   = os.path.dirname(os.path.abspath(__file__))
-    _assets = os.path.normpath(os.path.join(_here, "..", "assets", "fonts"))
+    _here    = os.path.dirname(os.path.abspath(__file__))
+    _assets  = os.path.normpath(os.path.join(_here, "..", "assets", "fonts"))
+    _gprompt = os.path.join(_here, "Font", "google_font")
 
     candidates = [
+        # ── Google Prompt (Thai webfont) — ให้ตรงกับ frontend ──
+        # ใช้ไฟล์ TTF (ReportLab อ่าน woff2 ไม่ได้) ที่ดาวน์โหลดมาจาก
+        # Google Fonts; มี glyph ทั้ง Thai + Latin ครบในไฟล์เดียว ดังนั้น
+        # ข้อความไทยใน PDF จะ render ด้วย Prompt เหมือนหน้าเว็บ
+        (
+            os.path.join(_gprompt, "Prompt-Regular.ttf"),
+            os.path.join(_gprompt, "Prompt-Bold.ttf"),
+        ),
         # ── Windows (Tahoma = Thai + Latin + Bold ครบ) ──
         (
             os.path.join(_assets, "Tahoma.ttf"),
@@ -443,6 +459,10 @@ def _build_checklist(scan_data: dict, server_data: dict, ai_data: dict) -> list:
                 "analysis": f"SPF ตั้งค่าแล้ว, DMARC p={dmarc_p} — ปลอดภัยจาก Email Spoofing",
             })
 
+    # เรียงจากร้ายแรงสุด → ปลอดภัยสุด (CRITICAL ก่อน, SECURE/ผ่าน ท้ายสุด)
+    # stable sort คงลำดับเดิมไว้สำหรับรายการที่มีความรุนแรงเท่ากัน
+    items.sort(key=lambda it: SEV_ORDER.get(it["sev"], 9))
+
     return items
 
 
@@ -450,7 +470,16 @@ def _build_checklist(scan_data: dict, server_data: dict, ai_data: dict) -> list:
 # สร้าง hardening code lines
 # ─────────────────────────────────────────────────────────────────
 def _build_hardening(scan_data: dict, server_data: dict) -> list:
-    lines   = []
+    """คืน 'กลุ่ม' คำแนะนำ hardening เรียงตามความรุนแรง (ร้ายแรงสุดก่อน)
+
+    แต่ละกลุ่ม = {
+        "sev":   ระดับความรุนแรง — ใช้เลือกสีหัวข้อให้ตรงกับหมวดใน Section 3,
+        "title": ชื่อหมวด (ไทย),
+        "lines": บรรทัด config (ASCII; ขึ้นต้น '#' = comment),
+    }
+    การจัดกลุ่ม + สีหัวข้อ + เรียงลำดับ ช่วยให้ผู้ดูแลเห็นชัดว่าควรแก้อะไรก่อน
+    และ config แต่ละชุดสังกัดช่องโหว่หมวดใด
+    """
     hdr     = scan_data.get("headers", {}) or {}
     missing = hdr.get("headers_missing", []) or []
     srv     = server_data or {}
@@ -458,26 +487,25 @@ def _build_hardening(scan_data: dict, server_data: dict) -> list:
     dos     = srv.get("dos_risk", False)
     stype   = str(srv.get("server_type", "")).lower()
     is_apache = "apache" in stype
-    is_nginx  = "nginx" in stype or not is_apache
 
-    if ver_exp:
-        if is_apache:
-            lines += [
-                "# Hide server version (Apache)",
-                "ServerTokens Prod",
-                "ServerSignature Off",
-                "",
-            ]
-        else:
-            lines += [
-                "# Hide server version (nginx)",
-                "server_tokens off;",
-                "",
-            ]
+    groups = []
 
+    # CRITICAL — HTTP/2 Rapid Reset DoS
+    if dos:
+        groups.append({
+            "sev": "CRITICAL",
+            "title": "ลดความเสี่ยง HTTP/2 Rapid Reset DoS (CVE-2023-44487)",
+            "lines": [
+                "# Mitigate HTTP/2 Rapid Reset DoS (nginx)",
+                "limit_conn_zone $binary_remote_addr zone=conn_limit:10m;",
+                "limit_req_zone  $binary_remote_addr zone=req_limit:10m rate=20r/s;",
+            ],
+        })
+
+    # MEDIUM — Security Headers
     if missing:
         comment = "# Security Headers (Apache)" if is_apache else "# Security Headers (nginx)"
-        lines.append(comment)
+        hdr_lines = [comment]
         hdr_map = {
             "Content-Security-Policy":
                 'Header set Content-Security-Policy "default-src \'self\';"',
@@ -494,22 +522,56 @@ def _build_hardening(scan_data: dict, server_data: dict) -> list:
         }
         for h in missing:
             if h in hdr_map:
-                lines.append(hdr_map[h])
+                hdr_lines.append(hdr_map[h])
+        groups.append({
+            "sev": "MEDIUM",
+            "title": "เพิ่ม HTTP Security Headers",
+            "lines": hdr_lines,
+        })
 
-    if dos:
-        lines += [
-            "",
-            "# Mitigate HTTP/2 Rapid Reset DoS (nginx)",
-            "limit_conn_zone $binary_remote_addr zone=conn_limit:10m;",
-            "limit_req_zone  $binary_remote_addr zone=req_limit:10m rate=20r/s;",
-        ]
+    # LOW — Hide server version banner
+    if ver_exp:
+        if is_apache:
+            ver_lines = [
+                "# Hide server version (Apache)",
+                "ServerTokens Prod",
+                "ServerSignature Off",
+            ]
+        else:
+            ver_lines = [
+                "# Hide server version (nginx)",
+                "server_tokens off;",
+            ]
+        groups.append({
+            "sev": "LOW",
+            "title": "ซ่อน Version ของ Web Server",
+            "lines": ver_lines,
+        })
 
-    return lines
+    # เรียงตามความรุนแรง — ร้ายแรงสุดก่อน
+    groups.sort(key=lambda g: SEV_ORDER.get(g["sev"], 9))
+    return groups
 
 
 # ─────────────────────────────────────────────────────────────────
 # Section 4 — Hardening
 # ─────────────────────────────────────────────────────────────────
+def _hardening_group_bar(title: str, sev: str, s: dict):
+    """หัวข้อย่อยของกลุ่ม hardening — แถบสีตามระดับความรุนแรง
+    (อ้างอิงสีหมวดเดียวกับตารางในหัวข้อ 3 เพื่อให้เชื่อมโยงกันได้ทันที)"""
+    sev_c = SEV_COLOR.get(sev, C_STEEL)
+    # ป้ายความรุนแรงเป็น ASCII → ครอบ Helvetica (_h) ให้คงฟอนต์อังกฤษเดิม
+    label = Paragraph(f'{_h(sev)}&nbsp;&nbsp;&nbsp;{title}', s["section"])
+    tbl = Table([[label]], colWidths=[17 * cm])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, -1), sev_c),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+    ]))
+    return tbl
+
+
 def _hardening_section(story: list, s: dict, f: str,
                         checklist: list, scan_data: dict, server_data: dict):
     story.append(Spacer(1, 0.15 * cm))
@@ -524,19 +586,33 @@ def _hardening_section(story: list, s: dict, f: str,
             s["body"]))
         return
 
-    intro = "ดำเนินการแก้ไขไฟล์คอนฟิกหลักของ Web Server ในส่วนที่ขึ้นสถานะไม่ผ่านทันที:"
+    groups = _build_hardening(scan_data, server_data)
+    if not groups:
+        # มีรายการไม่ผ่าน แต่ไม่มีชุด config สำเร็จรูป (เช่น SSL/DNS) — ชี้ไปหัวข้อ 3
+        story.append(Paragraph(
+            "รายการที่ไม่ผ่านต้องแก้ไขที่ระดับใบรับรอง / DNS / ผู้ให้บริการ "
+            "ซึ่งไม่มีชุดคำสั่ง config สำเร็จรูป — ดูคำแนะนำเฉพาะรายการในตารางหัวข้อ 3",
+            s["body"].clone("body_indent", leftIndent=8)))
+        return
+
+    intro = ("ดำเนินการแก้ไขไฟล์คอนฟิกหลักของ Web Server ตามลำดับความสำคัญ "
+             "(เรียงจากร้ายแรงสุดก่อน) โดยสีหัวข้อของแต่ละชุดอ้างอิงระดับความรุนแรง "
+             "เดียวกับตารางในหัวข้อ 3:")
     # leftIndent=8 ให้ตรงกับ leftIndent ของ code/code_comment style ด้านล่าง
     story.append(Paragraph(intro, s["body"].clone("body_indent", leftIndent=8)))
-    story.append(Spacer(1, 0.08 * cm))
+    story.append(Spacer(1, 0.1 * cm))
 
-    code_lines = _build_hardening(scan_data, server_data)
-    if code_lines:
-        for line in code_lines:
+    for g in groups:
+        # รวมหัวข้อสี + บรรทัด config เป็นบล็อกเดียว ไม่ให้หลุดหน้ากัน
+        block = [_hardening_group_bar(g["title"], g["sev"], s), Spacer(1, 0.05 * cm)]
+        for line in g["lines"]:
             # BUG-3 FIX: code style ใช้ Helvetica-Bold — แสดง ASCII ได้สมบูรณ์
             if line.startswith("#"):
-                story.append(Paragraph(line if line else " ", s["code_comment"]))
+                block.append(Paragraph(line if line else " ", s["code_comment"]))
             else:
-                story.append(Paragraph(line if line else " ", s["code"]))
+                block.append(Paragraph(line if line else " ", s["code"]))
+        block.append(Spacer(1, 0.12 * cm))
+        story.append(KeepTogether(block))
 
     story.append(Spacer(1, 0.08 * cm))
 
@@ -719,7 +795,7 @@ def build_report(scan_data: dict, ai_data: dict, server_data: dict,
 
     # ── Section 2: Dashboard ─────────────────────────────────────
     story.append(_section_bar(
-        "2. สรุปสถานะรายการตรวจสอบความปลอดภัย (Security Dashboard)", s))
+        "2. สรุปสถานะรายการตรวจสอบความปลอดภัย (Security)", s))
     story.append(Spacer(1, 0.1 * cm))
 
     risk_c  = _risk_color(risk)

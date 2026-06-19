@@ -6,3 +6,6 @@ __pycache__/
 .root/
 .vscode/
 Claude.md
+
+# Generated security report PDFs (build artifacts)
+VULNEX_Report_*.pdf

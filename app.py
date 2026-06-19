@@ -315,7 +315,7 @@ with col_url:
         placeholder="https://www.school.ac.th",
     )
 with col_org:
-    org = st.text_input("Company Name (For Report)", value="Your Company")
+    org = st.text_input("สถาบันการศึกษา", placeholder="ชื่อสถาบันของคุณ")
 
 scan_btn = st.button("เริ่มตรวจสอบ", use_container_width=True)
 
@@ -714,7 +714,10 @@ if st.session_state.get("scanned"):
         if st.button("สร้างรายงาน PDF", use_container_width=True):
             with st.spinner("กำลังสร้าง PDF..."):
                 try:
-                    pdf_bytes = build_report(scan_data, ai_data, server_data, org)
+                    pdf_bytes = build_report(
+                        scan_data, ai_data, server_data,
+                        org.strip() or "Your Company",
+                    )
                     st.session_state["pdf_bytes"] = pdf_bytes
                     st.session_state["pdf_ready"] = True
                     st.success(f"สร้าง PDF สำเร็จ ({len(pdf_bytes):,} bytes)")

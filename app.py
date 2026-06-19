@@ -286,7 +286,7 @@ def _init_session_state() -> None:
 _init_session_state()
 
 # ── Hero ─────────────────────────────────────────────────────────
-_hero_img_uri = _img_data_uri(os.path.join("src", "Public", "Window_Image.jpg"))
+_hero_img_uri = _img_data_uri(os.path.join("src", "Public", "Hero_Image.jpg"))
 st.markdown(f"""
 <div class="hero">
   <div class="hero-grid">

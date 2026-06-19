@@ -4,6 +4,44 @@
    serif + sans, generous whitespace, minimal chrome.
    ════════════════════════════════════════════════════════════════ */
 
+/* ── Prompt — Thai characters only (src/font/google_font) ─────── */
+/* unicode-range matches exactly what Google Fonts serves for the   */
+/* Thai subset: core Thai block + combining marks + dotted circle.  */
+/* Browsers load these files ONLY when Thai glyphs are needed;      */
+/* English / Latin falls through to AnthropicSans / AnthropicSerif. */
+@font-face {
+  font-family: 'Prompt';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../font/google_font/Prompt-Regular-thai.woff2') format('woff2');
+  unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+@font-face {
+  font-family: 'Prompt';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../font/google_font/Prompt-Medium-thai.woff2') format('woff2');
+  unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+@font-face {
+  font-family: 'Prompt';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../font/google_font/Prompt-SemiBold-thai.woff2') format('woff2');
+  unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+@font-face {
+  font-family: 'Prompt';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../font/google_font/Prompt-Bold-thai.woff2') format('woff2');
+  unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+
 /* ── Font faces (local, from src/Font) ────────────────────────── */
 @font-face {
   font-family: 'AnthropicSans';
@@ -86,8 +124,8 @@
   --c-info:     #1d4ed8;
 
   /* Typography */
-  --font-serif:  'AnthropicSerif', Georgia, 'Times New Roman', serif;
-  --font-sans:   'AnthropicSans', 'Inter', system-ui, sans-serif;
+  --font-serif:  'Prompt', 'AnthropicSerif', Georgia, 'Times New Roman', serif;
+  --font-sans:   'Prompt', 'AnthropicSans', 'Inter', system-ui, sans-serif;
   --font-mono:   'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
 
   /* Scale */

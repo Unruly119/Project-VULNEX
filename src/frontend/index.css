@@ -300,18 +300,28 @@ code, .mono {
   .hero-visual img { max-height: 240px; object-fit: cover; }
 }
 
-/* Phone: the hero becomes a compact task header. The decorative banner
-   is dropped so the URL field + scan button reach the first viewport. */
+/* Phone: a bespoke "floating scene" hero — its own composition, not the
+   desktop split. The illustration returns reframed for the vertical screen:
+   it sits between the kicker and the wordmark, its edges dissolved into the
+   parchment by an elliptical mask with a warm terracotta halo behind it, so
+   it reads as a floating illustration rather than a pasted banner.
+   `display:contents` on .hero-text promotes the kicker/wordmark/subtitle into
+   the grid so the image can be interleaved between them via `order`. */
 @media (max-width: 640px) {
   .hero {
     padding: 1.5rem 0 1.25rem;
     margin-bottom: 1.5rem;
   }
-  .hero-grid { gap: 0; }
-  .hero-visual { display: none; }
+  .hero-grid {
+    gap: 0;
+    align-items: stretch;
+  }
+  .hero-text { display: contents; }
+
   .hero-eyebrow {
+    order: 1;
     display: block;          /* block text wraps; flex kept the tagline on one line */
-    margin-bottom: 0.75rem;
+    margin: 0 0 0.9rem;
     font-size: 0.6875rem;
     letter-spacing: 0.07em;
     line-height: 1.5;
@@ -321,15 +331,59 @@ code, .mono {
     vertical-align: middle;
     margin-right: 8px;
   }
+
+  /* The floating scene */
+  .hero-visual {
+    order: 2;
+    display: block;          /* was hidden on phone — bring it back, reframed */
+    position: relative;
+    isolation: isolate;      /* local stacking: halo behind, image in front */
+    width: 100%;
+    max-width: 100%;
+    margin: 0 0 1.15rem;
+    align-self: stretch;
+  }
+  .hero-visual::before {     /* warm terracotta halo bleeding past the edges */
+    content: '';
+    position: absolute;
+    inset: -18% -3%;          /* vertical bleed for the float; horizontal kept
+                                 tight so the blur can't spill past the viewport */
+    z-index: 0;
+    background: radial-gradient(58% 62% at 50% 47%,
+                rgba(196, 98, 45, 0.32), transparent 70%);
+    filter: blur(18px);
+    pointer-events: none;
+  }
+  .hero-visual img {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 156px;
+    max-height: none;
+    object-fit: cover;
+    object-position: 50% 48%; /* hold the shield + browser as the focal point */
+    border-radius: 0;         /* the mask defines the edge, not a hard corner */
+    /* soft vignette: the fade lands INSIDE the box so all four edges dissolve
+       into the parchment (radii kept < the box so the fade isn't only corners) */
+    -webkit-mask-image: radial-gradient(78% 62% at 50% 47%,
+                        #000 38%, transparent 96%);
+    mask-image: radial-gradient(78% 62% at 50% 47%,
+                #000 38%, transparent 96%);
+  }
+
   .hero-title {
+    order: 3;
     font-size: 1.875rem;     /* 30px fixed — predictable on small DPI */
     line-height: 1.14;
-    margin-bottom: 0.625rem;
+    margin: 0 0 0.5rem;
   }
-  .hero-title svg { width: 26px; height: 26px; }
+  .hero-title svg { display: none; } /* the scene carries the shield motif now */
+
   .hero-sub {
+    order: 4;
     font-size: 0.9375rem;
     line-height: 1.55;
+    margin: 0;
   }
 }
 

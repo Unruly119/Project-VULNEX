@@ -5,7 +5,11 @@ __pycache__/
 .DS_Store
 .root/
 .vscode/
+.devcontainer/
+.impeccable/
 Claude.md
-
+.claude
+.codex
+.cursor
 # Generated security report PDFs (build artifacts)
 VULNEX_Report_*.pdf

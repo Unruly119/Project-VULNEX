@@ -1,6 +1,0 @@
-{
-  "framework": "streamlit",
-  "note": "Streamlit injects HTML server-side; live browser injection via script tag is not applicable. Use /impeccable craft or /impeccable polish instead of /impeccable live for this project.",
-  "files": [],
-  "cspChecked": true
-}

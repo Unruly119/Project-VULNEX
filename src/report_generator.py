@@ -162,62 +162,64 @@ def _hb(text: str) -> str:
 # ─────────────────────────────────────────────────────────────────
 # Styles  — BUG-3 FIX: "code" ใช้ Helvetica-Bold โดยตรง
 # ─────────────────────────────────────────────────────────────────
-def _styles(f: str) -> dict:
+def _styles(f: str, scale: float = 1.0) -> dict:
     """
     f = ชื่อ Thai font family ที่ลงทะเบียนแล้ว
+    scale = ตัวคูณขนาดฟอนต์ (ใช้บีบเนื้อหาให้พอดี 1 หน้าเมื่อมีรายการมาก)
     BUG-3 FIX: style "code" และ "code_comment" ใช้ fontName Helvetica ชุด built-in
     เพราะ config snippet เป็น ASCII ล้วน ไม่ต้องการ Thai glyph
     """
     bold_f = f + "-Bold"
+    sz = lambda v: round(v * scale, 2)   # noqa: E731 — ย่อขนาดฟอนต์ตาม scale
     return {
         "title": ParagraphStyle(
-            "title", fontName=f, fontSize=15, leading=20,
+            "title", fontName=f, fontSize=sz(15), leading=sz(20),
             textColor=C_WHITE, alignment=TA_CENTER, spaceAfter=1,
         ),
         "subtitle": ParagraphStyle(
-            "subtitle", fontName=f, fontSize=9, leading=13,
+            "subtitle", fontName=f, fontSize=sz(9), leading=sz(13),
             textColor=colors.HexColor("#cbd5e1"), alignment=TA_CENTER, spaceAfter=1,
         ),
         "section": ParagraphStyle(
-            "section", fontName=f, fontSize=9, leading=12, textColor=C_WHITE,
+            "section", fontName=f, fontSize=sz(9), leading=sz(12), textColor=C_WHITE,
         ),
         "body": ParagraphStyle(
-            "body", fontName=f, fontSize=8.5, leading=12,
+            "body", fontName=f, fontSize=sz(8.5), leading=sz(12),
             textColor=C_BLACK, alignment=TA_JUSTIFY,
         ),
         "body_sm": ParagraphStyle(
-            "body_sm", fontName=f, fontSize=7.5, leading=10, textColor=C_DGRAY,
+            "body_sm", fontName=f, fontSize=sz(7.5), leading=sz(10), textColor=C_DGRAY,
         ),
         "cell": ParagraphStyle(
-            "cell", fontName=f, fontSize=8, leading=11, textColor=C_BLACK,
+            "cell", fontName=f, fontSize=sz(8), leading=sz(11), textColor=C_BLACK,
         ),
         "cell_b": ParagraphStyle(
             "cell_b", fontName=bold_f,
-            fontSize=8, leading=11, textColor=C_BLACK,
+            fontSize=sz(8), leading=sz(11), textColor=C_BLACK,
         ),
         "badge": ParagraphStyle(
-            "badge", fontName=f, fontSize=8, leading=10,
+            "badge", fontName=f, fontSize=sz(8), leading=sz(10),
             textColor=C_WHITE, alignment=TA_CENTER,
         ),
         "badge_dark": ParagraphStyle(
-            "badge_dark", fontName=f, fontSize=8, leading=10,
+            "badge_dark", fontName=f, fontSize=sz(8), leading=sz(10),
             textColor=C_BLACK, alignment=TA_CENTER,
         ),
         # BUG-3 FIX ─ fontName = Helvetica-Bold (ไม่ใช่ ThaiFont)
         # Code snippet เป็น ASCII ล้วน Helvetica-Bold แสดงได้สมบูรณ์
         # ขยายขนาดตัวอักษรของ code block ให้เด่นและเต็มพื้นที่กระดาษมากขึ้น
         "code": ParagraphStyle(
-            "code", fontName="Helvetica-Bold", fontSize=10, leading=14,
+            "code", fontName="Helvetica-Bold", fontSize=sz(10), leading=sz(14),
             textColor=colors.HexColor("#e2e8f0"), backColor=C_CODE_BG,
             leftIndent=8, rightIndent=4, spaceAfter=2,
         ),
         "code_comment": ParagraphStyle(
-            "code_comment", fontName="Helvetica", fontSize=10, leading=14,
+            "code_comment", fontName="Helvetica", fontSize=sz(10), leading=sz(14),
             textColor=colors.HexColor("#94a3b8"), backColor=C_CODE_BG,
             leftIndent=8, rightIndent=4, spaceAfter=1,
         ),
         "footer": ParagraphStyle(
-            "footer", fontName=f, fontSize=7, leading=9,
+            "footer", fontName=f, fontSize=sz(7), leading=sz(9),
             textColor=C_DGRAY, alignment=TA_CENTER,
         ),
     }
@@ -573,11 +575,13 @@ def _hardening_group_bar(title: str, sev: str, s: dict):
 
 
 def _hardening_section(story: list, s: dict, f: str,
-                        checklist: list, scan_data: dict, server_data: dict):
-    story.append(Spacer(1, 0.15 * cm))
+                        checklist: list, scan_data: dict, server_data: dict,
+                        scale: float = 1.0):
+    _sp = lambda v: Spacer(1, v * scale * cm)   # noqa: E731 — ย่อระยะตาม scale
+    story.append(_sp(0.15))
     story.append(_section_bar(
         "4. แผนงานปรับแต่งระบบเพื่อความปลอดภัยสูงสุด (Hardening Guidelines)", s))
-    story.append(Spacer(1, 0.04 * cm))
+    story.append(_sp(0.04))
 
     failed_items = [c for c in checklist if c["result"] == "FAILED"]
     if not failed_items:
@@ -600,21 +604,21 @@ def _hardening_section(story: list, s: dict, f: str,
              "เดียวกับตารางในหัวข้อ 3:")
     # leftIndent=8 ให้ตรงกับ leftIndent ของ code/code_comment style ด้านล่าง
     story.append(Paragraph(intro, s["body"].clone("body_indent", leftIndent=8)))
-    story.append(Spacer(1, 0.1 * cm))
+    story.append(_sp(0.1))
 
     for g in groups:
         # รวมหัวข้อสี + บรรทัด config เป็นบล็อกเดียว ไม่ให้หลุดหน้ากัน
-        block = [_hardening_group_bar(g["title"], g["sev"], s), Spacer(1, 0.05 * cm)]
+        block = [_hardening_group_bar(g["title"], g["sev"], s), _sp(0.05)]
         for line in g["lines"]:
             # BUG-3 FIX: code style ใช้ Helvetica-Bold — แสดง ASCII ได้สมบูรณ์
             if line.startswith("#"):
                 block.append(Paragraph(line if line else " ", s["code_comment"]))
             else:
                 block.append(Paragraph(line if line else " ", s["code"]))
-        block.append(Spacer(1, 0.12 * cm))
+        block.append(_sp(0.12))
         story.append(KeepTogether(block))
 
-    story.append(Spacer(1, 0.08 * cm))
+    story.append(_sp(0.08))
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -694,18 +698,9 @@ def build_report(scan_data: dict, ai_data: dict, server_data: dict,
     สร้าง PDF Security Audit Report
     แก้ไขครบ 3 bugs + Score Donut + layout ใหม่
     """
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=1.6 * cm, rightMargin=1.6 * cm,
-        topMargin=1.2 * cm,  bottomMargin=1.4 * cm,
-        title="รายงานความปลอดภัยเว็บไซต์ — Project VULNEX",
-    )
-
     f = _setup_fonts()
     # cell_b ต้องการชื่อ bold font ที่แน่นอน
     bold_f = (f + "-Bold") if f not in ("Helvetica", "Helvetica-Bold") else "Helvetica-Bold"
-    s = _styles(f)
 
     score   = int(ai_data.get("score", 0))
     risk    = str(ai_data.get("risk_level", "HIGH")).upper()
@@ -725,188 +720,214 @@ def build_report(scan_data: dict, ai_data: dict, server_data: dict,
     passed = sum(1 for c in checklist if c["result"] == "PASSED")
     failed = sum(1 for c in checklist if c["result"] == "FAILED")
 
-    story = []
-
-    # ── Header Banner ───────────────────────────────────────────
-    story.append(HeaderBanner(
-        title_th="รายงานผลการตรวจประเมินความปลอดภัยเทคโนโลยีเว็บ",
-        subtitle_th="Comprehensive Security Audit Report — Project VULNEX",
-        url=url,
-        thai_font=f,
-        width=17 * cm,
-        date_str=date_en,
-    ))
-    story.append(Spacer(1, 0.2 * cm))
-
-    # ── Section 1: Executive Summary + Donut (side-by-side) ─────
-    story.append(_section_bar("1. บทสรุปการประเมิน (Executive Summary)", s))
-    story.append(Spacer(1, 0.1 * cm))
-
-    # บทสรุปการประเมิน — ไม่ใช้ประโยคจาก AI ที่อาจมีชื่อสถาบันปนมา
-    # ใช้ template คงที่ที่อ้างอิงแค่ URL + คะแนน + ระดับความเสี่ยง
-    summary_text = (
-        f'<b>URL:</b> <font name="Helvetica">{url}</font>  |  '
-        f"มีคะแนนความปลอดภัยโดยรวมอยู่ที่ {score}/100 "
-        f"ซึ่งถือว่าอยู่ในระดับ{_risk_th(risk)} "
-        "ยังมีช่องโหว่ที่ต้องได้รับการแก้ไขอย่างเร่งด่วน"
-    )
-
     # ── AI summary สำหรับแสดงใน Section 1 ──
-    checklist_preview = _build_checklist(scan_data, server_data, ai_data)
-    failed_preview    = [c for c in checklist_preview if c["result"] == "FAILED"]
-    ai_summary_line   = ""
+    failed_preview  = [c for c in checklist if c["result"] == "FAILED"]
+    ai_summary_line = ""
     if failed_preview:
-        failed_topics_str = " \u00b7 ".join(c["topic"] for c in failed_preview[:3])
+        failed_topics_str = " · ".join(c["topic"] for c in failed_preview[:3])
         ai_summary_line = (
             f"<b>สรุปจาก AI:</b> พบ {len(failed_preview)} รายการที่ต้องแก้ไข"
             f" — {failed_topics_str}"
         )
 
-    # วาง Donut ด้านขวา, summary ด้านซ้าย ใน Table 2 คอลัมน์
-    donut = DonutGauge(score=score, thai_font=f, width=110, height=110,
-                       label="คะแนนความปลอดภัย")
-    summary_para = [
-        Paragraph(summary_text, s["body"]),
-        Spacer(1, 0.08 * cm),
-    ]
-    if ai_summary_line:
-        summary_para.append(Paragraph(ai_summary_line, s["body"]))
-        summary_para.append(Spacer(1, 0.08 * cm))
-    summary_para.append(Paragraph(
-        f"<b>หน่วยงาน:</b> {org_name}  |  "
-        f"<b>วันตรวจ:</b> {date_th}",
-        s["body_sm"]))
+    risk_c = _risk_color(risk)
 
-    exec_tbl = Table(
-        [[summary_para, donut]],
-        colWidths=[12.5 * cm, 4.5 * cm],
-    )
-    exec_tbl.setStyle(TableStyle([
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING",   (0, 0), (0,  0),  0),
-        ("RIGHTPADDING",  (0, 0), (0,  0),  6),
-        ("LEFTPADDING",   (1, 0), (1,  0),  0),
-        ("RIGHTPADDING",  (1, 0), (1,  0),  0),
-        ("TOPPADDING",    (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    story.append(exec_tbl)
-    story.append(Spacer(1, 0.14 * cm))
+    # ─────────────────────────────────────────────────────────────
+    # ประกอบ story ที่ scale หนึ่ง ๆ — ใช้ใน auto-fit loop ด้านล่าง
+    # scale < 1.0 จะย่อขนาดฟอนต์/ระยะห่างทั้งฉบับเพื่อบีบให้พอดี 1 หน้า
+    # ─────────────────────────────────────────────────────────────
+    def _compose(scale: float) -> list:
+        s   = _styles(f, scale)
+        _sp = lambda v: Spacer(1, v * scale * cm)          # noqa: E731
+        pad = lambda v: max(1, round(v * scale))           # noqa: E731
+        story = []
 
-    # ── Section 2: Dashboard ─────────────────────────────────────
-    story.append(_section_bar(
-        "2. สรุปสถานะรายการตรวจสอบความปลอดภัย (Security)", s))
-    story.append(Spacer(1, 0.1 * cm))
+        # ── Header Banner ──
+        story.append(HeaderBanner(
+            title_th="รายงานผลการตรวจประเมินความปลอดภัยเทคโนโลยีเว็บ",
+            subtitle_th="Comprehensive Security Audit Report — Project VULNEX",
+            url=url,
+            thai_font=f,
+            width=17 * cm,
+            date_str=date_en,
+        ))
+        story.append(_sp(0.2))
 
-    risk_c  = _risk_color(risk)
-    score_c, _, = _score_to_risk(score)[1], None
+        # ── Section 1: Executive Summary + Donut ──
+        story.append(_section_bar("1. บทสรุปการประเมิน (Executive Summary)", s))
+        story.append(_sp(0.1))
 
-    # BUG-2 FIX: แถว label + แถวค่า — ไม่ใช้ Emoji ✅❌ แต่ใช้ข้อความไทย
-    dash_labels = [
-        Paragraph("ระดับความเสี่ยงรวม",   s["body_sm"]),
-        Paragraph("ผลการตรวจประเมิน",     s["body_sm"]),
-        Paragraph("เวอร์ชันเซิร์ฟเวอร์",  s["body_sm"]),
-        Paragraph("โพรโทคอลเครือข่าย",   s["body_sm"]),
-    ]
-    # BUG-1 FIX: ส่วนที่เป็น ASCII (version string, http version) ครอบด้วย _h()
-    dash_values = [
-        Paragraph(f"<b>{_risk_th(risk).upper()} RISK</b>", s["badge"]),
-        Paragraph(
-            f"<b>ผ่าน {_h(str(passed))} / ไม่ผ่าน {_h(str(failed))}</b>",
-            s["badge"]),
-        Paragraph(f"<b>{_h(stype)}/{_h(sver or 'N/A')}</b>", s["badge"]),
-        Paragraph(f"<b>{_h(http_v)}</b>", s["badge"]),
-    ]
+        # บทสรุปการประเมิน — ไม่ใช้ประโยคจาก AI ที่อาจมีชื่อสถาบันปนมา
+        # ใช้ template คงที่ที่อ้างอิงแค่ URL + คะแนน + ระดับความเสี่ยง
+        summary_text = (
+            f'<b>URL:</b> <font name="Helvetica">{url}</font>  |  '
+            f"มีคะแนนความปลอดภัยโดยรวมอยู่ที่ {score}/100 "
+            f"ซึ่งถือว่าอยู่ในระดับ{_risk_th(risk)} "
+            "ยังมีช่องโหว่ที่ต้องได้รับการแก้ไขอย่างเร่งด่วน"
+        )
 
-    dash_tbl = Table([dash_labels, dash_values], colWidths=[4.25 * cm] * 4)
-    dash_tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 1), (0, 1), risk_c),
-        ("BACKGROUND",    (1, 1), (1, 1), _score_to_risk(score)[1]),
-        ("BACKGROUND",    (2, 1), (2, 1), C_STEEL),
-        ("BACKGROUND",    (3, 1), (3, 1), C_NAVY),
-        ("TEXTCOLOR",     (0, 1), (3, 1), C_WHITE),
-        ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING",    (0, 1), (3, 1),   5),
-        ("BOTTOMPADDING", (0, 1), (3, 1),   5),
-        ("TOPPADDING",    (0, 0), (3, 0),   3),
-        ("BOTTOMPADDING", (0, 0), (3, 0),   3),
-        ("FONTSIZE",      (0, 0), (-1, -1), 8),
-        ("BOX",           (0, 0), (-1, -1), 0.5, C_MGRAY),
-        ("INNERGRID",     (0, 0), (-1, -1), 0.3, C_MGRAY),
-    ]))
-    story.append(dash_tbl)
-    story.append(Spacer(1, 0.14 * cm))
+        # วาง Donut ด้านขวา, summary ด้านซ้าย ใน Table 2 คอลัมน์
+        donut = DonutGauge(score=score, thai_font=f, width=110, height=110,
+                           label="คะแนนความปลอดภัย")
+        summary_para = [
+            Paragraph(summary_text, s["body"]),
+            _sp(0.08),
+        ]
+        if ai_summary_line:
+            summary_para.append(Paragraph(ai_summary_line, s["body"]))
+            summary_para.append(_sp(0.08))
+        summary_para.append(Paragraph(
+            f"<b>หน่วยงาน:</b> {org_name}  |  "
+            f"<b>วันตรวจ:</b> {date_th}",
+            s["body_sm"]))
 
-    # ── Section 3: Detailed Checklist ────────────────────────────
-    story.append(_section_bar(
-        "3. ตารางบันทึกผลการตรวจสอบแบบละเอียด (Detailed Security Checklist)", s))
-    story.append(Spacer(1, 0.02 * cm))
-    # leftIndent=5 ให้ตรงกับ LEFTPADDING ของตาราง checklist ด้านล่าง
-    story.append(Paragraph(
-        f'รายงานแสดงผลการตรวจครบทุกหัวข้อเพื่อใช้เป็น {_h("Security Baseline")} อ้างอิง',
-        s["body_sm"].clone("body_sm_indent", leftIndent=5)))
-    story.append(Spacer(1, 0.06 * cm))
+        exec_tbl = Table(
+            [[summary_para, donut]],
+            colWidths=[12.5 * cm, 4.5 * cm],
+        )
+        exec_tbl.setStyle(TableStyle([
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING",   (0, 0), (0,  0),  0),
+            ("RIGHTPADDING",  (0, 0), (0,  0),  6),
+            ("LEFTPADDING",   (1, 0), (1,  0),  0),
+            ("RIGHTPADDING",  (1, 0), (1,  0),  0),
+            ("TOPPADDING",    (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        story.append(exec_tbl)
+        story.append(_sp(0.14))
 
-    # Header row
-    chk_rows = [[
-        Paragraph("<b>ผลตรวจ</b>",                                s["cell_b"]),
-        Paragraph("<b>ความรุนแรง</b>",                             s["cell_b"]),
-        Paragraph("<b>หัวข้อ / ข้อมูลที่ตรวจพบ</b>",              s["cell_b"]),
-        Paragraph("<b>บทวิเคราะห์สถานะ (Analysis &amp; Evidence)</b>", s["cell_b"]),
-    ]]
+        # ── Section 2: Dashboard ──
+        story.append(_section_bar(
+            "2. สรุปสถานะรายการตรวจสอบความปลอดภัย (Security)", s))
+        story.append(_sp(0.1))
 
-    chk_style = [
-        ("BACKGROUND",    (0, 0), (-1, 0),  C_LGRAY),
-        ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
-        ("TOPPADDING",    (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 5),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID",          (0, 0), (-1, -1), 0.3, C_MGRAY),
-        ("ALIGN",         (0, 0), (1,  -1), "CENTER"),
-    ]
-
-    for i, item in enumerate(checklist, 1):
-        is_pass  = item["result"] == "PASSED"
-        res_c    = C_LIME if is_pass else C_RED
-        sev_c    = SEV_COLOR.get(item["sev"], C_STEEL)
-
-        # BUG-2 FIX: ใช้ข้อความไทย "ผ่าน" / "ไม่ผ่าน" แทน emoji ✅❌
-        res_label = "ผ่าน"     if is_pass else "ไม่ผ่าน"
-        row_bg    = C_PASS_BG if is_pass else C_FAIL_BG
-
-        chk_rows.append([
-            Paragraph(f"<b>{res_label}</b>",    s["badge"]),
-            Paragraph(f"<b>{item['sev']}</b>",  s["badge"]),
-            Paragraph(item["topic"],            s["cell"]),
-            Paragraph(item["analysis"],         s["cell"]),
-        ])
-
-        chk_style += [
-            ("BACKGROUND", (0, i), (0, i), res_c),
-            ("BACKGROUND", (1, i), (1, i), sev_c),
-            ("TEXTCOLOR",  (0, i), (1, i), C_WHITE),
-            ("BACKGROUND", (2, i), (3, i), row_bg),
+        # BUG-2 FIX: แถว label + แถวค่า — ไม่ใช้ Emoji ✅❌ แต่ใช้ข้อความไทย
+        dash_labels = [
+            Paragraph("ระดับความเสี่ยงรวม",   s["body_sm"]),
+            Paragraph("ผลการตรวจประเมิน",     s["body_sm"]),
+            Paragraph("เวอร์ชันเซิร์ฟเวอร์",  s["body_sm"]),
+            Paragraph("โพรโทคอลเครือข่าย",   s["body_sm"]),
+        ]
+        # BUG-1 FIX: ส่วนที่เป็น ASCII (version string, http version) ครอบด้วย _h()
+        dash_values = [
+            Paragraph(f"<b>{_risk_th(risk).upper()} RISK</b>", s["badge"]),
+            Paragraph(
+                f"<b>ผ่าน {_h(str(passed))} / ไม่ผ่าน {_h(str(failed))}</b>",
+                s["badge"]),
+            Paragraph(f"<b>{_h(stype)}/{_h(sver or 'N/A')}</b>", s["badge"]),
+            Paragraph(f"<b>{_h(http_v)}</b>", s["badge"]),
         ]
 
-    chk_tbl = Table(chk_rows, colWidths=[2.0 * cm, 1.9 * cm, 5.7 * cm, 7.4 * cm])
-    chk_tbl.setStyle(TableStyle(chk_style))
-    story.append(KeepTogether([chk_tbl]))
+        dash_tbl = Table([dash_labels, dash_values], colWidths=[4.25 * cm] * 4)
+        dash_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 1), (0, 1), risk_c),
+            ("BACKGROUND",    (1, 1), (1, 1), _score_to_risk(score)[1]),
+            ("BACKGROUND",    (2, 1), (2, 1), C_STEEL),
+            ("BACKGROUND",    (3, 1), (3, 1), C_NAVY),
+            ("TEXTCOLOR",     (0, 1), (3, 1), C_WHITE),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING",    (0, 1), (3, 1),   pad(5)),
+            ("BOTTOMPADDING", (0, 1), (3, 1),   pad(5)),
+            ("TOPPADDING",    (0, 0), (3, 0),   pad(3)),
+            ("BOTTOMPADDING", (0, 0), (3, 0),   pad(3)),
+            ("FONTSIZE",      (0, 0), (-1, -1), round(8 * scale, 2)),
+            ("BOX",           (0, 0), (-1, -1), 0.5, C_MGRAY),
+            ("INNERGRID",     (0, 0), (-1, -1), 0.3, C_MGRAY),
+        ]))
+        story.append(dash_tbl)
+        story.append(_sp(0.14))
 
-    # ── Section 4: Hardening ─────────────────────────────────────
-    _hardening_section(story, s, f, checklist, scan_data, server_data)
+        # ── Section 3: Detailed Checklist ──
+        story.append(_section_bar(
+            "3. ตารางบันทึกผลการตรวจสอบแบบละเอียด (Detailed Security Checklist)", s))
+        story.append(_sp(0.02))
+        # leftIndent=5 ให้ตรงกับ LEFTPADDING ของตาราง checklist ด้านล่าง
+        story.append(Paragraph(
+            f'รายงานแสดงผลการตรวจครบทุกหัวข้อเพื่อใช้เป็น {_h("Security Baseline")} อ้างอิง',
+            s["body_sm"].clone("body_sm_indent", leftIndent=5)))
+        story.append(_sp(0.06))
 
-    # ── Footer ───────────────────────────────────────────────────
-    story.append(Spacer(1, 0.15 * cm))
-    story.append(_rule(C_MGRAY, 0.4))
-    story.append(Paragraph(
-        f"รายงาน Comprehensive Security Audit — Project VULNEX  |  "
-        f"มาตรฐาน Security Baseline 2026  |  {org_name}  |  หน้า 1 จาก 1",
-        s["footer"]))
+        # Header row
+        chk_rows = [[
+            Paragraph("<b>ผลตรวจ</b>",                                s["cell_b"]),
+            Paragraph("<b>ความรุนแรง</b>",                             s["cell_b"]),
+            Paragraph("<b>หัวข้อ / ข้อมูลที่ตรวจพบ</b>",              s["cell_b"]),
+            Paragraph("<b>บทวิเคราะห์สถานะ (Analysis &amp; Evidence)</b>", s["cell_b"]),
+        ]]
 
-    doc.build(story)
-    return buf.getvalue()
+        chk_style = [
+            ("BACKGROUND",    (0, 0), (-1, 0),  C_LGRAY),
+            ("FONTSIZE",      (0, 0), (-1, -1), round(7.5 * scale, 2)),
+            ("TOPPADDING",    (0, 0), (-1, -1), pad(4)),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), pad(4)),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID",          (0, 0), (-1, -1), 0.3, C_MGRAY),
+            ("ALIGN",         (0, 0), (1,  -1), "CENTER"),
+        ]
+
+        for i, item in enumerate(checklist, 1):
+            is_pass  = item["result"] == "PASSED"
+            res_c    = C_LIME if is_pass else C_RED
+            sev_c    = SEV_COLOR.get(item["sev"], C_STEEL)
+
+            # BUG-2 FIX: ใช้ข้อความไทย "ผ่าน" / "ไม่ผ่าน" แทน emoji ✅❌
+            res_label = "ผ่าน"     if is_pass else "ไม่ผ่าน"
+            row_bg    = C_PASS_BG if is_pass else C_FAIL_BG
+
+            chk_rows.append([
+                Paragraph(f"<b>{res_label}</b>",    s["badge"]),
+                Paragraph(f"<b>{item['sev']}</b>",  s["badge"]),
+                Paragraph(item["topic"],            s["cell"]),
+                Paragraph(item["analysis"],         s["cell"]),
+            ])
+
+            chk_style += [
+                ("BACKGROUND", (0, i), (0, i), res_c),
+                ("BACKGROUND", (1, i), (1, i), sev_c),
+                ("TEXTCOLOR",  (0, i), (1, i), C_WHITE),
+                ("BACKGROUND", (2, i), (3, i), row_bg),
+            ]
+
+        chk_tbl = Table(chk_rows, colWidths=[2.0 * cm, 1.9 * cm, 5.7 * cm, 7.4 * cm])
+        chk_tbl.setStyle(TableStyle(chk_style))
+        story.append(KeepTogether([chk_tbl]))
+
+        # ── Section 4: Hardening ──
+        _hardening_section(story, s, f, checklist, scan_data, server_data, scale)
+
+        # ── Footer ──
+        story.append(_sp(0.15))
+        story.append(_rule(C_MGRAY, 0.4))
+        story.append(Paragraph(
+            f"รายงาน Comprehensive Security Audit — Project VULNEX  |  "
+            f"มาตรฐาน Security Baseline 2026  |  {org_name}  |  หน้า 1 จาก 1",
+            s["footer"]))
+
+        return story
+
+    # ─────────────────────────────────────────────────────────────
+    # Auto-fit: รับประกัน 1 หน้า — ค่อย ๆ ย่อ scale จนรายงานพอดีหน้าเดียว
+    # (footer ระบุ "หน้า 1 จาก 1" ตายตัว จึงต้องไม่ให้ล้นไปหน้า 2 เมื่อมี
+    #  รายการไม่ผ่าน / คำแนะนำ hardening จำนวนมาก)
+    # ─────────────────────────────────────────────────────────────
+    pdf_bytes = b""
+    for scale in (1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7):
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf, pagesize=A4,
+            leftMargin=1.6 * cm, rightMargin=1.6 * cm,
+            topMargin=1.2 * cm,  bottomMargin=1.4 * cm,
+            title="รายงานความปลอดภัยเว็บไซต์ — Project VULNEX",
+        )
+        doc.build(_compose(scale))
+        pdf_bytes = buf.getvalue()
+        if doc.page <= 1:
+            break
+
+    return pdf_bytes
 
 
 # ─────────────────────────────────────────────────────────────────

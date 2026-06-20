@@ -171,6 +171,10 @@ body {
   max-width: 1080px !important;
   padding: 2.5rem 2rem 4rem !important;
 }
+/* Phone: reclaim horizontal/top space so the scan task sits up front */
+@media (max-width: 640px) {
+  .block-container { padding: 1.25rem 1.1rem 3rem !important; }
+}
 
 /* ── Typography ────────────────────────────────────────────────── */
 h1, h2, h3 {
@@ -277,9 +281,56 @@ code, .mono {
   height: auto;
   border-radius: var(--r-lg);
 }
+/* Tablet: stack, but text leads (the task) and the banner follows,
+   constrained so it no longer dominates the first screen. */
 @media (max-width: 1100px) {
-  .hero-grid { flex-direction: column; }
-  .hero-visual { width: 380px; order: -1; }
+  .hero { padding: 3rem 0 2rem; margin-bottom: 2rem; }
+  .hero-grid {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.75rem;
+  }
+  .hero-text { width: 100%; min-width: 0; }
+  .hero-visual {
+    order: 0;                /* text-first: drop the desktop image-on-top */
+    width: 100%;
+    max-width: 440px;
+    align-self: center;
+  }
+  .hero-visual img { max-height: 240px; object-fit: cover; }
+}
+
+/* Phone: the hero becomes a compact task header. The decorative banner
+   is dropped so the URL field + scan button reach the first viewport. */
+@media (max-width: 640px) {
+  .hero {
+    padding: 1.5rem 0 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .hero-grid { gap: 0; }
+  .hero-visual { display: none; }
+  .hero-eyebrow {
+    display: block;          /* block text wraps; flex kept the tagline on one line */
+    margin-bottom: 0.75rem;
+    font-size: 0.6875rem;
+    letter-spacing: 0.07em;
+    line-height: 1.5;
+  }
+  .hero-eyebrow::before {
+    display: inline-block;   /* keep the accent dash, but inline before wrapping text */
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  .hero-title {
+    font-size: 1.875rem;     /* 30px fixed — predictable on small DPI */
+    line-height: 1.14;
+    margin-bottom: 0.625rem;
+  }
+  .hero-title svg { width: 26px; height: 26px; }
+  .hero-sub {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
 }
 
 .hero-eyebrow {

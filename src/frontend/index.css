@@ -435,6 +435,15 @@ hr { border-color: var(--border) !important; opacity: 0.6 !important; }
   border-radius: var(--r-lg);
   padding: 1.25rem 0.875rem 1rem;
   text-align: center;
+  /* Fixed height + centred content so every card matches the score-ring
+     card (box 1), regardless of whether its value is an SVG ring, an icon,
+     a number, or short text — keeps all six boxes the same size. */
+  box-sizing: border-box;
+  min-height: 8rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   animation: fade-up var(--t-slow) var(--ease) both;
   transition: border-color var(--t-base) var(--ease),
               transform    var(--t-base) var(--ease),

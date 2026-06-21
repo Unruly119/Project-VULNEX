@@ -17,10 +17,45 @@
 from __future__ import annotations
 
 import concurrent.futures
+import subprocess
+import sys
+
+# Chromium launch flags ที่จำเป็นบน container/cloud (ไม่มี sandbox, /dev/shm เล็ก)
+_LAUNCH_ARGS = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+
+# โหลด Chromium ครั้งเดียวต่อโปรเซส (เซิร์ฟเวอร์) — กันเรียก subprocess ซ้ำ
+_BROWSER_READY = False
 
 
 class PdfEngineError(RuntimeError):
     """ข้อผิดพลาดระดับเอนจิน — Playwright/Chromium ไม่พร้อมใช้งาน หรือ render ล้มเหลว"""
+
+
+def ensure_browser(force: bool = False) -> None:
+    """
+    ติดตั้งเบราว์เซอร์ Chromium ของ Playwright ลงในเครื่อง "เซิร์ฟเวอร์" (ไม่ใช่
+    เครื่องผู้ใช้) — ทำงานครั้งเดียวต่อโปรเซส คำสั่งนี้ idempotent: ถ้ามีอยู่แล้ว
+    จะเช็กแล้วข้ามอย่างรวดเร็ว ผู้ใช้ปลายทางไม่ต้องทำอะไร
+
+    ใช้บน Streamlit Cloud ได้: เขียนลง cache (~/.cache/ms-playwright) ซึ่ง
+    เขียนได้และไม่ต้องสิทธิ์ root (ส่วน system library ใช้ packages.txt)
+    """
+    global _BROWSER_READY
+    if _BROWSER_READY and not force:
+        return
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=True, capture_output=True, text=True, timeout=600,
+        )
+        _BROWSER_READY = True
+    except subprocess.CalledProcessError as exc:
+        raise PdfEngineError(
+            "ติดตั้ง Chromium อัตโนมัติไม่สำเร็จ: "
+            f"{(exc.stderr or exc.stdout or '').strip()[:500]}"
+        ) from exc
+    except Exception as exc:          # noqa: BLE001 — timeout / playwright ไม่ติดตั้ง ฯลฯ
+        raise PdfEngineError(f"ติดตั้ง Chromium อัตโนมัติไม่สำเร็จ: {exc}") from exc
 
 
 # JS: วัดพื้นที่ว่างของหน้า (.page) เทียบความสูงเนื้อหา (.content) ที่ zoom ปัจจุบัน
@@ -53,37 +88,53 @@ def _fit_one_page(page) -> None:
         )
 
 
+def _launch_and_render(html: str) -> bytes:
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = p.chromium.launch(args=_LAUNCH_ARGS)
+        try:
+            page = browser.new_page()
+            page.set_content(html, wait_until="load")
+            page.emulate_media(media="print")
+            # รอให้ฟอนต์ (Prompt ฝัง base64) โหลดเสร็จก่อนวัดความสูง
+            page.evaluate("async () => { await document.fonts.ready; }")
+            _fit_one_page(page)
+            return page.pdf(prefer_css_page_size=True, print_background=True)
+        finally:
+            browser.close()
+
+
+def _is_missing_browser(exc: Exception) -> bool:
+    msg = str(exc)
+    return (
+        "Executable doesn't exist" in msg
+        or "playwright install" in msg
+        or "Failed to launch" in msg
+    )
+
+
 def _render(html: str) -> bytes:
     try:
-        from playwright.sync_api import sync_playwright
+        import playwright.sync_api  # noqa: F401
     except ImportError as exc:        # ไลบรารียังไม่ติดตั้ง
         raise PdfEngineError(
-            "ไม่พบไลบรารี Playwright — ติดตั้งด้วย `pip install playwright` "
-            "แล้วรัน `python -m playwright install chromium`"
+            "ไม่พบไลบรารี Playwright — ติดตั้งด้วย `pip install playwright`"
         ) from exc
 
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(args=["--no-sandbox"])
-            try:
-                page = browser.new_page()
-                page.set_content(html, wait_until="load")
-                page.emulate_media(media="print")
-                # รอให้ฟอนต์ (Prompt ฝัง base64) โหลดเสร็จก่อนวัดความสูง
-                page.evaluate("async () => { await document.fonts.ready; }")
-                _fit_one_page(page)
-                return page.pdf(prefer_css_page_size=True, print_background=True)
-            finally:
-                browser.close()
+        return _launch_and_render(html)
     except PdfEngineError:
         raise
     except Exception as exc:          # noqa: BLE001
-        msg = str(exc)
-        if "Executable doesn't exist" in msg or "playwright install" in msg:
-            raise PdfEngineError(
-                "ไม่พบเบราว์เซอร์ Chromium ของ Playwright — "
-                "รัน `python -m playwright install chromium` ก่อน"
-            ) from exc
+        # ถ้าเป็นเพราะยังไม่มี Chromium → ดาวน์โหลดอัตโนมัติบนเซิร์ฟเวอร์แล้วลองใหม่
+        if _is_missing_browser(exc):
+            ensure_browser(force=True)
+            try:
+                return _launch_and_render(html)
+            except Exception as exc2:     # noqa: BLE001
+                raise PdfEngineError(
+                    f"แปลง HTML เป็น PDF ไม่สำเร็จ (หลังติดตั้ง Chromium): {exc2}"
+                ) from exc2
         raise PdfEngineError(f"แปลง HTML เป็น PDF ไม่สำเร็จ: {exc}") from exc
 
 

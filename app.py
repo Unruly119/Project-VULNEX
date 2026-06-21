@@ -94,9 +94,10 @@ st.markdown(_load_css(os.path.join("src", "frontend", "index.css")), unsafe_allo
 # ── Import scanning / AI modules ─────────────────────────────────
 try:
     from scanner             import run_scan
-    from ai_engine           import analyze
+    from ai_engine           import analyze, generate_report_analysis
     from scanner.server_info import check_server
-    from report_generator    import build_report
+    from html_generator      import build_report_html
+    from report_generator    import html_to_pdf
     from utils.network       import is_safe_host
 
     MODULES_OK = True
@@ -749,14 +750,26 @@ if st.session_state.get("scanned"):
         )
     with col_pdf2:
         if st.button("สร้างรายงาน PDF", use_container_width=True):
-            with st.spinner("กำลังสร้าง PDF..."):
+            with st.spinner("กำลังเรียก AI (คีย์สำรอง) และสร้างรายงาน..."):
                 try:
-                    pdf_bytes = build_report(
-                        scan_data, ai_data, server_data,
+                    # 1) เรียก Gemini ด้วยคีย์สำรอง (GEMINI_API_KEY_Backup) เพื่อสร้าง
+                    #    บทวิเคราะห์เฉพาะของรายงาน — แยกโควต้าจากการวิเคราะห์บนหน้าจอ
+                    report_ai = generate_report_analysis(scan_data, server_data, ai_data)
+                    # 2) ประกอบ HTML รายงาน 1 หน้า (เลย์เอาต์อ่านง่าย)
+                    report_html = build_report_html(
+                        scan_data, report_ai, server_data,
                         org.strip() or "Your Company",
                     )
+                    # 3) แปลง HTML 1 หน้า → PDF 1 หน้า ด้วย Playwright (Chromium)
+                    pdf_bytes = html_to_pdf(report_html)
                     st.session_state["pdf_bytes"] = pdf_bytes
                     st.session_state["pdf_ready"] = True
+                    if report_ai.get("offline_fallback"):
+                        st.info(
+                            "หมายเหตุ: ใช้บทวิเคราะห์ offline ในรายงาน "
+                            "(คีย์สำรองเรียก Gemini ไม่ได้ หรือไม่ได้ตั้งค่า "
+                            "GEMINI_API_KEY_Backup)"
+                        )
                     st.success(f"สร้าง PDF สำเร็จ ({len(pdf_bytes):,} bytes)")
                 except Exception as exc:
                     st.error(f"สร้าง PDF ไม่สำเร็จ: {exc}")

@@ -10,3 +10,5 @@ python-dotenv>=1.0.0
 reportlab>=4.0.0
 dnspython>=2.6.0
 pandas>=2.0.0
+# HTML→PDF report engine (run once after install:  python -m playwright install chromium)
+playwright>=1.40.0

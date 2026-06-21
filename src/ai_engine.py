@@ -17,6 +17,8 @@ load_dotenv()
 
 # ── Configure API Key ─────────────────────────────────────────────
 API_KEY = os.getenv("GEMINI_API_KEY")
+# คีย์สำรอง — ใช้เฉพาะตอนสร้างรายงาน PDF/HTML (แยกโควต้าจากการวิเคราะห์บนหน้าจอ)
+API_KEY_BACKUP = os.getenv("GEMINI_API_KEY_Backup")
 if API_KEY:
     genai.configure(api_key=API_KEY)
 
@@ -596,6 +598,82 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
             + offline_body
         )
 
+    return result
+
+
+def _generate_with_key(prompt: str, api_key: str) -> str:
+    """
+    เรียก generate_with_fallback ด้วย API key ที่ระบุ (เช่นคีย์สำรอง)
+    แล้วคืนค่าการตั้งค่า genai กลับเป็นคีย์หลักเสมอ — กันไม่ให้คีย์สำรอง
+    ค้างไปใช้กับการเรียกครั้งถัดไปบนหน้าจอ
+    """
+    genai.configure(api_key=api_key)
+    try:
+        return generate_with_fallback(prompt)
+    finally:
+        if API_KEY:
+            genai.configure(api_key=API_KEY)
+
+
+def generate_report_analysis(
+    scan_data: dict,
+    server_data: dict | None = None,
+    screen_ai_data: dict | None = None,
+) -> dict:
+    """
+    สร้างบทวิเคราะห์สำหรับ "รายงาน" (HTML→PDF) โดยเรียก Gemini ด้วย
+    คีย์สำรอง GEMINI_API_KEY_Backup โดยเฉพาะ — แยกโควต้าจากการวิเคราะห์
+    บนหน้าจอที่ใช้คีย์หลัก (เรียกก่อนสร้าง HTML เสมอ)
+
+    ลำดับ fallback:
+        1) เรียก Gemini ใหม่ด้วยคีย์สำรอง
+        2) ถ้าล้มเหลว/ไม่มีคีย์สำรอง → ใช้บทวิเคราะห์บนหน้าจอ (ถ้ามีและไม่ใช่ offline)
+        3) ถ้ายังไม่ได้ → offline rule-based analysis
+
+    คืน dict โครงสร้างเดียวกับ analyze():
+        analysis, risk_level, score, breakdown, error, offline_fallback
+    """
+    server_data = server_data or {}
+
+    # score คำนวณใหม่เสมอ (deterministic, ไม่เสียโควต้า)
+    score, risk, breakdown = _compute_score(scan_data, server_data)
+    result = {
+        "analysis":         "",
+        "risk_level":       risk,
+        "score":            score,
+        "breakdown":        breakdown,
+        "error":            None,
+        "offline_fallback": False,
+    }
+
+    # 1) คีย์สำรองก่อน
+    if API_KEY_BACKUP:
+        try:
+            prompt = build_prompt(scan_data, server_data, composite_score=score)
+            result["analysis"] = _generate_with_key(prompt, API_KEY_BACKUP)
+            return result
+        except Exception as exc:           # noqa: BLE001 — เก็บ error ไว้แล้วไป fallback
+            result["error"] = _format_ai_error(exc)
+
+    # 2) บทวิเคราะห์บนหน้าจอ (ที่เรียกด้วยคีย์หลักไปแล้ว) ถ้าใช้งานได้จริง
+    if (
+        screen_ai_data
+        and screen_ai_data.get("analysis")
+        and not screen_ai_data.get("offline_fallback")
+    ):
+        result["analysis"]   = screen_ai_data["analysis"]
+        result["risk_level"] = screen_ai_data.get("risk_level", risk)
+        result["score"]      = screen_ai_data.get("score", score)
+        result["breakdown"]  = screen_ai_data.get("breakdown", breakdown)
+        return result
+
+    # 3) offline rule-based
+    note = result["error"] or "ไม่พบ GEMINI_API_KEY_Backup ในไฟล์ .env"
+    result["offline_fallback"] = True
+    result["analysis"] = (
+        f"> **โหมดวิเคราะห์อัตโนมัติ (Offline)** — {note}\n\n"
+        + _build_offline_analysis(scan_data, server_data, score, risk, breakdown)
+    )
     return result
 
 

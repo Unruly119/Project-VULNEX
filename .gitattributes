@@ -1,0 +1,5 @@
+# Files consumed by the Linux deploy host (Streamlit Cloud) must stay LF,
+# otherwise a trailing CR makes apt fail to find each package name.
+packages.txt text eol=lf
+requirements.txt text eol=lf
+*.sh text eol=lf

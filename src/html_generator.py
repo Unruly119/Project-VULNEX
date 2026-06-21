@@ -105,6 +105,48 @@ def _section_text(md: str, prefix: str) -> str:
     return ""
 
 
+# ── ชื่อหน่วยงาน — ดึงแบบ deterministic จากตัวเว็บ ไม่พึ่งข้อความ AI ──
+# AI มักเดา/แต่งชื่อสถาบัน (เช่นสแกน "ปัตตานี" แต่เขียน "นราธิวาส") ทำให้รายงาน
+# เสียความน่าเชื่อถือ — ชื่อจริงอยู่ใน <title> ของหน้าเว็บอยู่แล้ว ใช้ค่านั้นแทน
+_ORG_KW = ("วิทยาลัย", "โรงเรียน", "มหาวิทยาลัย", "สถาบัน", "เทศบาล", "สำนักงาน",
+           "องค์การบริหารส่วน", "กรม", "คณะ", "โรงพยาบาล", "เทคนิค", "อาชีวศึกษา",
+           "ราชภัฏ", "วิทยาเขต", "เทคโนโลยี")
+_ORG_BOILER = ("ยินดีต้อนรับเข้าสู่เว็บไซต์ของ", "ยินดีต้อนรับเข้าสู่เว็บไซต์",
+               "ยินดีต้อนรับสู่", "ยินดีต้อนรับ", "เว็บไซต์อย่างเป็นทางการของ",
+               "เว็บไซต์อย่างเป็นทางการ", "เว็บไซต์", "หน้าแรก", "หน้าหลัก",
+               "Welcome to", "Home")
+
+
+def _domain_of(url: str) -> str:
+    m = re.search(r"https?://([^/]+)", url or "")
+    host = (m.group(1) if m else (url or "")).split(":")[0].strip()
+    return host[4:] if host.startswith("www.") else host
+
+
+def _name_from_title(title: str) -> str:
+    """ดึงชื่อหน่วยงานจาก <title> แบบระมัดระวัง — คืน '' ถ้าไม่มั่นใจ (ให้ fallback ไปโดเมน)."""
+    if not title:
+        return ""
+    t = title
+    for b in _ORG_BOILER:
+        t = t.replace(b, " ")
+    parts = [p.strip(" \t -|:·•") for p in re.split(r"[|｜\-–—:：»·•]", t) if p.strip()]
+    for p in parts:
+        if any(k in p for k in _ORG_KW):
+            return p[:80]
+    return ""
+
+
+def _institution_name(scan_data: dict, org_name: str = "") -> str:
+    """ชื่อหน่วยงานที่แสดงในรายงาน: org ที่ผู้ใช้กรอก → ชื่อจาก <title> → โดเมน."""
+    org = (org_name or "").strip()
+    if org and org.lower() not in ("your company", "n/a"):
+        return org
+    html_mod = scan_data.get("html", {}) or {}
+    name = _name_from_title((html_mod.get("title") or "").strip())
+    return name or _domain_of(scan_data.get("url", ""))
+
+
 # ── ฟอนต์ Prompt (Thai + Latin) ฝัง base64 ให้รายงานพึ่งตัวเองได้ ──
 _FONT_CACHE: dict | None = None
 
@@ -482,6 +524,9 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     failed = sum(1 for c in checklist if c["result"] == "FAILED")
     risk_c = _risk_color(risk)
 
+    # ชื่อหน่วยงานแบบ deterministic (ไม่เอาจากข้อความ AI ที่อาจมโนชื่อ)
+    org_display = _institution_name(scan_data, org_name)
+
     # ── §1 บทสรุป — ข้อความ template คงที่ (ไม่ดึงประโยค AI ที่อาจมีชื่อสถาบัน) ──
     summary_line = (
         f'<b>URL:</b> <span style="word-break:break-all">{_esc(url, 300)}</span> &nbsp;|&nbsp; '
@@ -514,7 +559,7 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
         + f"<p>{summary_line}</p>"
         + ai_summary_line
         + exec_ai_html
-        + f'<div class="exec-meta"><b>หน่วยงาน:</b> {_esc(org_name, 120)} &nbsp;|&nbsp; '
+        + f'<div class="exec-meta"><b>หน่วยงาน:</b> {_esc(org_display, 120)} &nbsp;|&nbsp; '
         + f"<b>วันตรวจ:</b> {date_th}</div>"
         + '</div>'
         + f'<div class="donut">{_donut_svg(score, risk_c)}'
@@ -613,7 +658,7 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     )
     footer = (
         '<div class="foot">รายงาน Comprehensive Security Audit — Project VULNEX'
-        f' &nbsp;|&nbsp; มาตรฐาน Security Baseline 2026 &nbsp;|&nbsp; {_esc(org_name, 120)}'
+        f' &nbsp;|&nbsp; มาตรฐาน Security Baseline 2026 &nbsp;|&nbsp; {_esc(org_display, 120)}'
         ' &nbsp;|&nbsp; หน้า 1 จาก 1</div>'
     )
 

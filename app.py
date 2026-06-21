@@ -776,7 +776,7 @@ if st.session_state.get("scanned"):
                     # 2) ประกอบ HTML รายงาน 1 หน้า (เลย์เอาต์อ่านง่าย)
                     report_html = build_report_html(
                         scan_data, report_ai, server_data,
-                        org.strip() or "Your Company",
+                        org.strip(),       # ว่าง → html_generator ดึงชื่อจาก <title>/โดเมนเอง
                     )
                     # 3) แปลง HTML 1 หน้า → PDF 1 หน้า ด้วย Playwright (Chromium)
                     pdf_bytes = html_to_pdf(report_html)

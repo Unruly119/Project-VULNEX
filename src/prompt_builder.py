@@ -33,6 +33,11 @@ def _format_module_summary(scan_result: dict, server_data: dict) -> str:
     tls_warnings = ssl.get("tls_warnings", []) or []
     scripts_no_sri = html.get("scripts_missing_sri", 0)
 
+    # ── อัตลักษณ์ของเว็บไซต์ (ground truth จากตัวเว็บเอง) ──
+    # ใช้ป้องกัน AI เดา/แต่งชื่อสถาบัน — ชื่อจริงอยู่ใน <title> / meta ของหน้าเว็บ
+    site_title = _sanitize(html.get("title", ""), 200) or "ไม่พบ"
+    site_desc  = _sanitize(html.get("meta_description", ""), 300) or "ไม่พบ"
+
     stype = _sanitize(server_data.get("server_type", "unknown"))
     sver = _sanitize(server_data.get("server_version", "N/A"))
     ver_exposed = server_data.get("version_exposed", False)
@@ -67,6 +72,8 @@ def _format_module_summary(scan_result: dict, server_data: dict) -> str:
 
     return f"""
 ผลการตรวจสอบเว็บไซต์: {url}
+ชื่อหน้าเว็บ (HTML title): {site_title}
+คำอธิบายเว็บไซต์ (meta description): {site_desc}
 ────────────────────────────────
 Security Headers Score: {headers.get('score', 0)}/100
 Headers ที่มี: {', '.join(found.keys()) if found else 'ไม่มี'}
@@ -107,6 +114,14 @@ def build_prompt(
     data_section = _format_module_summary(scan_result, server_data)
     data_section = f"คะแนนความปลอดภัย (Composite): {composite_score}/100\n" + data_section
 
+    # กันการ "มโน" ชื่อสถาบัน/สถานที่ — เป็นปัญหาที่ทำให้รายงานเสียความน่าเชื่อถือ
+    constraints = """
+ข้อกำหนดด้านความถูกต้อง (สำคัญมาก — ห้ามละเมิด):
+- ระบุชื่อหน่วยงาน/สถานศึกษาตาม "ชื่อหน้าเว็บ (HTML title)" หรือ URL ข้างต้นเท่านั้น
+- ห้ามเดา แต่ง หรือสรุปชื่อสถาบัน ชื่อจังหวัด อำเภอ หรือสถานที่ ที่ไม่ปรากฏในข้อมูลข้างต้นโดยเด็ดขาด
+- ถ้าไม่ทราบชื่อหน่วยงานที่ชัดเจน ให้เรียกว่า "เว็บไซต์นี้" หรืออ้างอิงด้วยชื่อโดเมนแทน
+"""
+
     output_format = """
 กรุณาวิเคราะห์และตอบกลับเป็นภาษาไทย แบ่งเป็น 4 ส่วนชัดเจน โดยใช้หัวข้อตามนี้เป๊ะ ๆ (ห้ามใส่ emoji หรือสัญลักษณ์รูปภาพใด ๆ ในหัวข้อหรือเนื้อหา):
 
@@ -123,7 +138,7 @@ def build_prompt(
 [สิ่งที่เว็บไซต์ทำได้ถูกต้อง]
 """
 
-    return f"{role}\n\n{data_section}\n{output_format}"
+    return f"{role}\n\n{data_section}\n{constraints}\n{output_format}"
 
 
 def build_chat_prompt(
@@ -146,6 +161,7 @@ def build_chat_prompt(
     try:
         compact = {
             "url": scan_result.get("url"),
+            "html": scan_result.get("html"),
             "headers": scan_result.get("headers"),
             "ssl": scan_result.get("ssl"),
             "dns": scan_result.get("dns"),
@@ -173,6 +189,8 @@ def build_chat_prompt(
 ตอบเป็นภาษาไทย อธิบายเข้าใจง่าย ไม่ใช้ jargon เกินจำเป็น
 คุณมีข้อมูลผลการสแกนเว็บไซต์ทั้งหมดด้านล่าง — ใช้ข้อมูลนี้ตอบคำถามอย่างแม่นยำ
 ถ้าไม่แน่ใจ ให้บอกตรงๆ ว่าไม่พบในผลสแกน
+ห้ามเดาหรือแต่งชื่อสถาบัน จังหวัด อำเภอ หรือสถานที่ ที่ไม่ปรากฏในผลสแกน —
+อ้างถึงหน่วยงานด้วยชื่อหน้าเว็บ (HTML title) หรือโดเมน/URL เท่านั้น
 
 === SCAN CONTEXT ===
 {context}

@@ -49,7 +49,7 @@ def _img_data_uri(path: str) -> str:
 # Inject the base64-embedded Thai @font-face + the main stylesheet, then the
 # shared branded sidebar navigation. Both live in ui_shared so the scan page
 # and the user-manual page can never drift apart visually.
-from ui_shared import inject_base_styles, render_sidebar_nav
+from ui_shared import inject_base_styles, render_sidebar_nav, manual_anchor_html
 
 inject_base_styles()
 render_sidebar_nav("scan")
@@ -324,8 +324,9 @@ if not MODULES_OK:
 # ── Input section ─────────────────────────────────────────────────
 # The institution name is no longer typed in here — the PDF report
 # auto-derives it from the site <title>/domain (org="" → html_generator
-# fallback). That slot now links to the step-by-step user manual, bottom-
-# aligned to the URL field so the two controls share a baseline.
+# fallback). That slot now links to the step-by-step user manual, which
+# opens in a NEW browser tab (target="_blank") so the scan page and any
+# results on it are never replaced. Bottom-aligned to share the URL baseline.
 col_url, col_manual = st.columns([3, 1], vertical_alignment="bottom")
 with col_url:
     url = st.text_input(
@@ -333,13 +334,10 @@ with col_url:
         placeholder="https://www.school.ac.th",
     )
 with col_manual:
-    if st.button(
-        ":material/menu_book: คู่มือการใช้งาน",
-        key="manual_nav_btn",
-        use_container_width=True,
-        help="ดูตัวอย่างการใช้งานและคำอธิบายของปุ่มต่าง ๆ ทีละขั้นตอน",
-    ):
-        st.switch_page("pages/user_manual.py")
+    st.markdown(
+        manual_anchor_html("manual-link-btn", "คู่มือการใช้งาน"),
+        unsafe_allow_html=True,
+    )
 
 org = ""  # institution name auto-derived in the report (no manual input)
 

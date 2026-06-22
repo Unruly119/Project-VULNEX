@@ -786,19 +786,68 @@ section[data-testid="stSidebar"] [class*="st-key-sidenav_"] button p {
   font-weight: 500 !important;
 }
 
-/* ── Manual-link button (secondary, beside the primary scan CTA) ─── */
-.st-key-manual_nav_btn button {
-  background: transparent !important;
-  color: var(--accent) !important;
-  border: 1px solid var(--border-hi) !important;
-  font-weight: 500 !important;
+/* ── Manual link, beside the primary scan CTA ─────────────────────
+   An <a target="_blank"> (opens the manual in a new tab), styled to read
+   as a secondary control next to the dark "เริ่มตรวจสอบ" button. */
+.manual-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.625rem;          /* match the adjacent text input's height */
+  padding: 0.55rem 1rem;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r-md);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background   var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color        var(--t-fast) var(--ease),
+              transform    var(--t-fast) var(--ease);
 }
-.st-key-manual_nav_btn button:hover {
-  background: var(--accent-dim) !important;
-  border-color: var(--accent) !important;
-  color: var(--accent-2) !important;
-  transform: translateY(-1px) !important;
+.manual-link-btn:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent-2);
+  transform: translateY(-1px);
 }
+.manual-link-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.manual-link-btn svg { flex: none; }
+.manual-link-btn .ext-ico { color: var(--muted); }
+.manual-link-btn:hover .ext-ico { color: var(--accent); }
+
+/* Manual link inside the sidebar nav (also opens a new tab) */
+section[data-testid="stSidebar"] .side-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: var(--r-md);
+  padding: 0.55rem 0.7rem;
+  margin: 0.15rem 0;
+  color: var(--ink-2);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background var(--t-fast) var(--ease),
+              color      var(--t-fast) var(--ease);
+}
+section[data-testid="stSidebar"] .side-nav-link:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.side-nav-link svg { flex: none; }
+.side-nav-link .ext-ico { margin-left: auto; color: var(--muted); }
+.side-nav-link:hover .ext-ico { color: var(--accent); }
 
 /* ════════════════════════════════════════════════════════════════
    User-manual page

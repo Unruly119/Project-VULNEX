@@ -92,20 +92,39 @@ _BOOK_SVG = (
     '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>'
 )
 
-# key, target script, label, glyph (inline SVG for the current item),
-# Material icon name (for the clickable button label)
-_NAV_ITEMS = (
-    ("scan",   "app.py",                 "หน้าตรวจสอบ",    _SHIELD_SVG, ":material/security:"),
-    ("manual", "pages/user_manual.py",   "คู่มือการใช้งาน", _BOOK_SVG,   ":material/menu_book:"),
+# Small "opens in a new tab" arrow appended to manual links.
+_EXT_SVG = (
+    '<svg class="ext-ico" xmlns="http://www.w3.org/2000/svg" width="13" height="13"'
+    ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+    ' stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M15 3h6v6"/><path d="M10 14 21 3"/>'
+    '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>'
 )
+
+# URL slug of pages/user_manual.py (filename without extension). Manual links
+# point here with target="_blank" so the manual pops into a NEW browser tab
+# and the scan page — including any scan results on it — is never replaced.
+MANUAL_URL = "user_manual"
+
+
+def manual_anchor_html(css_class: str, label: str) -> str:
+    """Return an <a> that opens the user manual in a new browser tab, styled
+    by `css_class`. Centralised so the scan page's manual button and the
+    sidebar nav share one piece of markup."""
+    return (
+        f'<a class="{css_class}" href="{MANUAL_URL}" target="_blank"'
+        ' rel="noopener noreferrer" title="เปิดคู่มือการใช้งานในแท็บใหม่">'
+        f'{_BOOK_SVG}<span>{label}</span>{_EXT_SVG}</a>'
+    )
 
 
 def render_sidebar_nav(active: str = "scan") -> None:
     """Render the shared branded sidebar navigation.
 
     `active` is the key of the current page ("scan" or "manual"); that item
-    is shown as a highlighted current-page indicator, the others as buttons
-    that switch to their page.
+    is shown as a highlighted current-page indicator. The scan link uses
+    same-tab st.switch_page (it is the primary "home"); the manual link opens
+    in a new tab so it never replaces the scan page.
     """
     with st.sidebar:
         st.markdown(
@@ -118,15 +137,30 @@ def render_sidebar_nav(active: str = "scan") -> None:
             '<span>Project-<b>VULNEX</b></span></div>',
             unsafe_allow_html=True,
         )
-        for key, target, label, glyph, micon in _NAV_ITEMS:
-            if key == active:
-                st.markdown(
-                    f'<div class="side-nav-current">{glyph}<span>{label}</span></div>',
-                    unsafe_allow_html=True,
-                )
-            elif st.button(
-                f"{micon} {label}",
-                key=f"sidenav_{key}",
-                use_container_width=True,
-            ):
-                st.switch_page(target)
+
+        # Scan page — same-tab navigation
+        if active == "scan":
+            st.markdown(
+                f'<div class="side-nav-current">{_SHIELD_SVG}'
+                '<span>หน้าตรวจสอบ</span></div>',
+                unsafe_allow_html=True,
+            )
+        elif st.button(
+            ":material/security: หน้าตรวจสอบ",
+            key="sidenav_scan",
+            use_container_width=True,
+        ):
+            st.switch_page("app.py")
+
+        # Manual page — pops out into a new tab
+        if active == "manual":
+            st.markdown(
+                f'<div class="side-nav-current">{_BOOK_SVG}'
+                '<span>คู่มือการใช้งาน</span></div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                manual_anchor_html("side-nav-link", "คู่มือการใช้งาน"),
+                unsafe_allow_html=True,
+            )

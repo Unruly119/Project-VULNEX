@@ -32,16 +32,10 @@ st.set_page_config(
     page_title="Project-VULNEX",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",   # expanded on desktop, collapsed on phones
 )
 
 # ── Custom CSS ───────────────────────────────────────────────────
-def _load_css(path: str) -> str:
-    """Read a CSS file and return it wrapped in a <style> tag."""
-    with open(path, "r", encoding="utf-8") as f:
-        return f"<style>\n{f.read()}\n</style>"
-
-
 def _img_data_uri(path: str) -> str:
     """Encode a local image file as a base64 data: URI for inline HTML use."""
     ext = os.path.splitext(path)[1].lower().lstrip(".")
@@ -52,44 +46,13 @@ def _img_data_uri(path: str) -> str:
     return f"data:image/{mime};base64,{b64}"
 
 
-# Exact unicode-range Google Fonts uses for the Prompt "thai" subset:
-# core Thai block + the combining marks / dotted-circle it ships with.
-_THAI_UNICODE_RANGE = "U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC"
+# Inject the base64-embedded Thai @font-face + the main stylesheet, then the
+# shared branded sidebar navigation. Both live in ui_shared so the scan page
+# and the user-manual page can never drift apart visually.
+from ui_shared import inject_base_styles, render_sidebar_nav
 
-
-def _thai_font_css() -> str:
-    """Build @font-face blocks for the Prompt Thai webfont with each woff2
-    file base64-embedded as a data: URI.
-
-    Embedding is required because this stylesheet is injected inline via
-    st.markdown — a relative url('../font/...') would resolve against the
-    Streamlit page origin (which does not serve src/), so the fonts would
-    never load. unicode-range restricts Prompt to Thai codepoints only, so
-    English / Latin text keeps using AnthropicSans / AnthropicSerif.
-    """
-    weights = {
-        400: "Prompt-Regular-thai.woff2",
-        500: "Prompt-Medium-thai.woff2",
-        600: "Prompt-SemiBold-thai.woff2",
-        700: "Prompt-Bold-thai.woff2",
-    }
-    base = os.path.join("src", "Font", "google_font")
-    blocks = []
-    for weight, fname in weights.items():
-        with open(os.path.join(base, fname), "rb") as f:
-            b64 = base64.b64encode(f.read()).decode("ascii")
-        blocks.append(
-            "@font-face{font-family:'Prompt';font-style:normal;"
-            f"font-weight:{weight};font-display:swap;"
-            f"src:url(data:font/woff2;base64,{b64}) format('woff2');"
-            f"unicode-range:{_THAI_UNICODE_RANGE};}}"
-        )
-    return "\n".join(blocks)
-
-
-# Inject the base64-embedded Thai @font-face first, then the main stylesheet.
-st.markdown(f"<style>\n{_thai_font_css()}\n</style>", unsafe_allow_html=True)
-st.markdown(_load_css(os.path.join("src", "frontend", "index.css")), unsafe_allow_html=True)
+inject_base_styles()
+render_sidebar_nav()
 
 # ── Import scanning / AI modules ─────────────────────────────────
 try:
@@ -359,14 +322,26 @@ if not MODULES_OK:
     st.stop()
 
 # ── Input section ─────────────────────────────────────────────────
-col_url, col_org = st.columns([3, 1])
+# The institution name is no longer typed in here — the PDF report
+# auto-derives it from the site <title>/domain (org="" → html_generator
+# fallback). That slot now links to the step-by-step user manual, bottom-
+# aligned to the URL field so the two controls share a baseline.
+col_url, col_manual = st.columns([3, 1], vertical_alignment="bottom")
 with col_url:
     url = st.text_input(
         "URL เว็บไซต์ที่ต้องการตรวจสอบ",
         placeholder="https://www.school.ac.th",
     )
-with col_org:
-    org = st.text_input("สถาบันการศึกษา", placeholder="ชื่อสถาบันของคุณ")
+with col_manual:
+    if st.button(
+        ":material/menu_book: คู่มือการใช้งาน",
+        key="manual_nav_btn",
+        use_container_width=True,
+        help="ดูตัวอย่างการใช้งานและคำอธิบายของปุ่มต่าง ๆ ทีละขั้นตอน",
+    ):
+        st.switch_page("pages/user_manual.py")
+
+org = ""  # institution name auto-derived in the report (no manual input)
 
 scan_btn = st.button("เริ่มตรวจสอบ", use_container_width=True)
 

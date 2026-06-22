@@ -164,3 +164,50 @@ def render_sidebar_nav(active: str = "scan") -> None:
                 manual_anchor_html("side-nav-link", "คู่มือการใช้งาน"),
                 unsafe_allow_html=True,
             )
+
+
+# ── Site footer ──────────────────────────────────────────────────
+# The standards VULNEX's own modules are modelled on — surfaced as a black
+# footer bar so users can see the credible, public references behind the
+# scan. Each entry maps to a VULNEX module: headers → SecurityHeaders,
+# SSL → SSL Labs, server/exposure → Shodan. Links open in a new tab.
+_BADGE_CHECK_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"'
+    ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+    ' stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78'
+    ' 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1'
+    '-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg>'
+)
+
+_FOOTER_REFS = (
+    ("SecurityHeaders", "https://securityheaders.com/",
+     "มาตรฐานการตั้งค่า HTTP Security Headers"),
+    ("SSL Labs · SSL Server Test", "https://www.ssllabs.com/ssltest/",
+     "การประเมินใบรับรองและโปรโตคอล SSL/TLS"),
+    ("Shodan", "https://www.shodan.io/",
+     "ฐานข้อมูลการเปิดเผยบริการบนอินเทอร์เน็ต"),
+)
+
+
+def render_footer() -> None:
+    """Render the shared black footer bar with the credibility references."""
+    refs = "".join(
+        f'<a class="footer-ref" href="{url}" target="_blank"'
+        ' rel="noopener noreferrer">'
+        f'<span class="footer-ref-name">{name}{_EXT_SVG}</span>'
+        f'<span class="footer-ref-sub">{desc}</span></a>'
+        for name, url, desc in _FOOTER_REFS
+    )
+    st.markdown(
+        '<footer class="site-footer"><div class="site-footer-inner">'
+        f'<div class="site-footer-head">{_BADGE_CHECK_SVG}'
+        '<span>อ้างอิงมาตรฐานการตรวจสอบจากแหล่งข้อมูลที่เชื่อถือได้ระดับสากล '
+        'เพื่อความถูกต้องและความน่าเชื่อถือของผลการตรวจสอบ</span></div>'
+        f'<div class="site-footer-refs">{refs}</div>'
+        '<div class="site-footer-base">'
+        '<span>Project-VULNEX · ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาแบบ Passive</span>'
+        '<span>© 2026</span></div>'
+        '</div></footer>',
+        unsafe_allow_html=True,
+    )

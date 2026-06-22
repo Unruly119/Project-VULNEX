@@ -49,7 +49,9 @@ def _img_data_uri(path: str) -> str:
 # Inject the base64-embedded Thai @font-face + the main stylesheet, then the
 # shared branded sidebar navigation. Both live in ui_shared so the scan page
 # and the user-manual page can never drift apart visually.
-from ui_shared import inject_base_styles, render_sidebar_nav, manual_anchor_html
+from ui_shared import (
+    inject_base_styles, render_sidebar_nav, manual_anchor_html, render_footer,
+)
 
 inject_base_styles()
 render_sidebar_nav("scan")
@@ -787,3 +789,6 @@ elif not st.session_state.get("scanned"):
   </div>
 </div>
 """, unsafe_allow_html=True)
+
+# Site footer — credibility references (renders on every state)
+render_footer()

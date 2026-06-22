@@ -515,7 +515,7 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     month_th = ["", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
                 "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
     date_th  = f"{now_dt.day} {month_th[now_dt.month]} {now_dt.year + 543}"
-    date_en  = now_dt.strftime("%d %b %Y  %H:%M")
+    time_th  = f"เวลาที่ตรวจสอบ {now_dt.strftime('%H:%M')} น."
 
     checklist = _build_checklist(scan_data, server_data, ai_data)
     passed = sum(1 for c in checklist if c["result"] == "PASSED")
@@ -524,14 +524,6 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
 
     # ชื่อหน่วยงานแบบ deterministic (ไม่เอาจากข้อความ AI ที่อาจมโนชื่อ)
     org_display = _institution_name(scan_data, org_name)
-
-    # ── §1 บทสรุป — ข้อความ template คงที่ (ไม่ดึงประโยค AI ที่อาจมีชื่อสถาบัน) ──
-    summary_line = (
-        f'<b>URL:</b> <span style="word-break:break-all">{_esc(url, 300)}</span> &nbsp;|&nbsp; '
-        f"มีคะแนนความปลอดภัยโดยรวมอยู่ที่ {score}/100 "
-        f"ซึ่งถือว่าอยู่ในระดับ{_risk_th(risk)} "
-        "ยังมีช่องโหว่ที่ต้องได้รับการแก้ไขอย่างเร่งด่วน"
-    )
 
     # บทวิเคราะห์ AI (เรียกด้วยคีย์สำรอง) — ใช้ส่วน "สรุปภาพรวม" ในกล่อง exec-ai
     overview = _section_text(ai_data.get("analysis", ""), "สรุปภาพรวม")
@@ -554,7 +546,6 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     sec1 = (
         _section_bar("1", "บทสรุปการประเมิน (Executive Summary)")
         + '<div class="exec"><div class="exec-text">'
-        + f"<p>{summary_line}</p>"
         + ai_summary_line
         + exec_ai_html
         + f'<div class="exec-meta"><b>หน่วยงาน:</b> {_esc(org_display, 120)} &nbsp;|&nbsp; '
@@ -599,8 +590,6 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
         )
     sec3 = (
         _section_bar("3", "ตารางบันทึกผลการตรวจสอบแบบละเอียด (Detailed Security Checklist)")
-        + '<div class="note">รายงานแสดงผลการตรวจครบทุกหัวข้อเพื่อใช้เป็น '
-          'Security Baseline อ้างอิง</div>'
         + '<table class="chk"><thead><tr>'
         + '<th class="col-res center">ผลตรวจ</th>'
         + '<th class="col-sev center">ความรุนแรง</th>'
@@ -625,11 +614,6 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
             'ผู้ให้บริการ ซึ่งไม่มีชุดคำสั่ง config สำเร็จรูป — ดูคำแนะนำเฉพาะรายการในตารางหัวข้อ 3</div>'
         )
     else:
-        sec4_parts.append(
-            '<div class="hard-note">ดำเนินการแก้ไขไฟล์คอนฟิกหลักของ Web Server '
-            'ตามลำดับความสำคัญ (เรียงจากร้ายแรงสุดก่อน) โดยสีหัวข้ออ้างอิงระดับความรุนแรง'
-            'เดียวกับตารางในหัวข้อ 3:</div>'
-        )
         for g in groups:
             sev   = g["sev"]
             sev_bg = SEV_BG.get(sev, C_STEEL)
@@ -651,7 +635,7 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
         '<h1>รายงานผลกระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาด้วย AI</h1>'
         '<div class="sub">Comprehensive Security Audit Report — Project VULNEX</div>'
         f'<div class="meta"><span>Target: {_esc(url, 200)}</span>'
-        f'<span>{date_en}</span></div>'
+        f'<span>{time_th}</span></div>'
         '</div>'
     )
     footer = (

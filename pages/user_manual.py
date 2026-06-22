@@ -22,7 +22,7 @@ st.set_page_config(
     initial_sidebar_state="auto",   # expanded on desktop, collapsed on phones
 )
 
-from ui_shared import inject_base_styles, render_sidebar_nav
+from ui_shared import inject_base_styles, render_sidebar_nav, render_footer
 
 inject_base_styles()
 render_sidebar_nav("manual")
@@ -259,3 +259,6 @@ with _c2:
         type="primary",
     ):
         st.switch_page("app.py")
+
+# Site footer — credibility references
+render_footer()

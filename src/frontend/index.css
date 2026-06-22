@@ -1078,16 +1078,21 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
   height: 2.5rem;
   border-radius: 50%;
   background: var(--ink);
-  color: var(--bg);
+  color: #fff;
+  border: 2px solid var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-serif);
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
   z-index: 1;
-  box-shadow: 0 2px 8px rgba(20, 20, 19, 0.12);
+  box-shadow: 0 2px 10px rgba(196, 98, 45, 0.28);
 }
+/* The markdown body-hardening rule (.stMarkdown div) forces div text to
+   --ink-2 with !important, which made the step number nearly invisible on
+   its dark badge. Override at higher specificity so it stays bright white. */
+[data-testid="stMarkdownContainer"] .manual-step-num { color: #fff !important; }
 .manual-step-title {
   font-family: var(--font-serif);
   font-size: 1.15rem;
@@ -1284,5 +1289,5 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
   .manual-hero-title { font-size: 1.75rem; }
   .manual-step { grid-template-columns: 2rem 1fr; gap: 0.9rem; }
   .manual-step:not(:last-child)::before { left: 1rem; }
-  .manual-step-num { width: 2rem; height: 2rem; font-size: 0.9rem; }
+  .manual-step-num { width: 2rem; height: 2rem; font-size: 1rem; }
 }

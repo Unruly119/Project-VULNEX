@@ -71,16 +71,42 @@ def inject_base_styles() -> None:
 # ── Branded side navigation ──────────────────────────────────────
 # Streamlit's auto-generated page list (`[data-testid="stSidebarNav"]`) is
 # hidden in index.css; this renders an intentional two-item nav in its
-# place. st.page_link auto-highlights whichever page is currently active,
-# so no manual "active" bookkeeping is needed.
+# place. We deliberately AVOID st.page_link here: on some Streamlit
+# versions (e.g. Streamlit Community Cloud) its internal page lookup reads a
+# `url_pathname` key that isn't present in every page record, raising a
+# KeyError. st.switch_page only touches `script_path` / `page_script_hash`,
+# so it navigates reliably everywhere — the active page is rendered as a
+# non-clickable "current" indicator instead of a button.
+_SHIELD_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17"'
+    ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+    ' stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
+    '<path d="m9 12 2 2 4-4"/></svg>'
+)
+_BOOK_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17"'
+    ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+    ' stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>'
+    '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>'
+)
+
+# key, target script, label, glyph (inline SVG for the current item),
+# Material icon name (for the clickable button label)
 _NAV_ITEMS = (
-    ("app.py", "หน้าตรวจสอบ", ":material/security:"),
-    ("pages/user_manual.py", "คู่มือการใช้งาน", ":material/menu_book:"),
+    ("scan",   "app.py",                 "หน้าตรวจสอบ",    _SHIELD_SVG, ":material/security:"),
+    ("manual", "pages/user_manual.py",   "คู่มือการใช้งาน", _BOOK_SVG,   ":material/menu_book:"),
 )
 
 
-def render_sidebar_nav() -> None:
-    """Render the shared branded sidebar navigation on any page."""
+def render_sidebar_nav(active: str = "scan") -> None:
+    """Render the shared branded sidebar navigation.
+
+    `active` is the key of the current page ("scan" or "manual"); that item
+    is shown as a highlighted current-page indicator, the others as buttons
+    that switch to their page.
+    """
     with st.sidebar:
         st.markdown(
             '<div class="side-nav-brand">'
@@ -92,5 +118,15 @@ def render_sidebar_nav() -> None:
             '<span>Project-<b>VULNEX</b></span></div>',
             unsafe_allow_html=True,
         )
-        for target, label, icon in _NAV_ITEMS:
-            st.page_link(target, label=label, icon=icon)
+        for key, target, label, glyph, micon in _NAV_ITEMS:
+            if key == active:
+                st.markdown(
+                    f'<div class="side-nav-current">{glyph}<span>{label}</span></div>',
+                    unsafe_allow_html=True,
+                )
+            elif st.button(
+                f"{micon} {label}",
+                key=f"sidenav_{key}",
+                use_container_width=True,
+            ):
+                st.switch_page(target)

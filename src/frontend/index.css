@@ -746,32 +746,44 @@ section[data-testid="stSidebar"] .block-container { padding-top: 1.5rem !importa
 }
 .side-nav-brand b { color: var(--accent); font-weight: 600; }
 
-section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
+/* Current page — a non-clickable highlighted indicator */
+.side-nav-current {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: var(--r-md);
+  padding: 0.55rem 0.7rem;
+  margin: 0.15rem 0;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.side-nav-current svg { flex: none; }
+
+/* Other pages — switch_page buttons styled as quiet nav links */
+section[data-testid="stSidebar"] [class*="st-key-sidenav_"] button {
+  background: transparent !important;
+  border: none !important;
   border-radius: var(--r-md) !important;
   padding: 0.55rem 0.7rem !important;
   margin: 0.15rem 0 !important;
-  transition: background var(--t-fast) var(--ease),
-              color      var(--t-fast) var(--ease) !important;
-}
-section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] p {
+  justify-content: flex-start !important;
+  color: var(--ink-2) !important;
   font-family: var(--font-sans) !important;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
-  color: var(--ink-2) !important;
+  transition: background var(--t-fast) var(--ease),
+              color      var(--t-fast) var(--ease) !important;
 }
-section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
+section[data-testid="stSidebar"] [class*="st-key-sidenav_"] button:hover {
   background: var(--accent-dim) !important;
-}
-section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover p {
   color: var(--accent) !important;
+  transform: none !important;
 }
-/* Current page (Streamlit sets aria-current="page" on the active link). */
-section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][aria-current="page"] {
-  background: var(--accent-dim) !important;
-}
-section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][aria-current="page"] p {
-  color: var(--accent) !important;
-  font-weight: 600 !important;
+section[data-testid="stSidebar"] [class*="st-key-sidenav_"] button p {
+  font-weight: 500 !important;
 }
 
 /* ── Manual-link button (secondary, beside the primary scan CTA) ─── */

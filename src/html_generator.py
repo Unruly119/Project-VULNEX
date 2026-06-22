@@ -384,10 +384,8 @@ def _donut_svg(score: int, color: str) -> str:
         f'stroke-width="13" stroke-linecap="round" '
         f'stroke-dasharray="{dash:.2f} {circ - dash:.2f}" '
         'transform="rotate(-90 62 62)"/>'
-        f'<text x="62" y="58" text-anchor="middle" font-size="32" '
-        f'font-weight="700" fill="{color}">{int(score)}</text>'
-        '<text x="62" y="79" text-anchor="middle" font-size="12" '
-        'fill="#64748b">/ 100</text>'
+        f'<text x="62" y="62" text-anchor="middle" dominant-baseline="central" '
+        f'font-size="36" font-weight="700" fill="{color}">{int(score)}</text>'
         '</svg>'
     )
 

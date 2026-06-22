@@ -720,3 +720,366 @@ hr { border-color: var(--border) !important; opacity: 0.6 !important; }
   font-size: 0.6875rem;
   color: var(--accent);
 }
+
+/* ── Sidebar navigation ───────────────────────────────────────── */
+/* Hide Streamlit's auto-generated multipage list; ui_shared renders a
+   deliberate branded nav in its place. */
+[data-testid="stSidebarNav"] { display: none !important; }
+
+section[data-testid="stSidebar"] {
+  background: var(--bg-warm) !important;
+  border-right: 1px solid var(--border) !important;
+}
+section[data-testid="stSidebar"] .block-container { padding-top: 1.5rem !important; }
+
+.side-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  padding: 0 0.25rem 0.9rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.side-nav-brand b { color: var(--accent); font-weight: 600; }
+
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
+  border-radius: var(--r-md) !important;
+  padding: 0.55rem 0.7rem !important;
+  margin: 0.15rem 0 !important;
+  transition: background var(--t-fast) var(--ease),
+              color      var(--t-fast) var(--ease) !important;
+}
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] p {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: var(--ink-2) !important;
+}
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
+  background: var(--accent-dim) !important;
+}
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover p {
+  color: var(--accent) !important;
+}
+/* Current page (Streamlit sets aria-current="page" on the active link). */
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][aria-current="page"] {
+  background: var(--accent-dim) !important;
+}
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][aria-current="page"] p {
+  color: var(--accent) !important;
+  font-weight: 600 !important;
+}
+
+/* ── Manual-link button (secondary, beside the primary scan CTA) ─── */
+.st-key-manual_nav_btn button {
+  background: transparent !important;
+  color: var(--accent) !important;
+  border: 1px solid var(--border-hi) !important;
+  font-weight: 500 !important;
+}
+.st-key-manual_nav_btn button:hover {
+  background: var(--accent-dim) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-2) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   User-manual page
+   ════════════════════════════════════════════════════════════════ */
+.manual-hero {
+  margin-bottom: 2rem;
+  animation: fade-up var(--t-slow) var(--ease) both;
+}
+.manual-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+.manual-hero-eyebrow::before {
+  content: "";
+  width: 1.75rem;
+  height: 1px;
+  background: var(--accent);
+}
+.manual-hero-title {
+  font-family: var(--font-serif);
+  font-size: 2.25rem;
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  text-wrap: balance;
+  margin-bottom: 0.75rem;
+}
+.manual-hero-sub {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--ink-2);
+  max-width: 60ch;
+}
+
+/* Lead / intro card */
+.manual-lead {
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.5rem 1.625rem;
+  margin-bottom: 2.5rem;
+}
+.manual-lead p { margin: 0; color: var(--ink-2); line-height: 1.8; max-width: none; }
+.manual-lead strong { color: var(--ink); font-weight: 600; }
+
+/* Section heading inside the manual */
+.manual-h2 {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.015em;
+  margin: 0.5rem 0 1.5rem;
+}
+
+/* ── Stepper ──────────────────────────────────────────────────── */
+.manual-step {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr;
+  gap: 1.25rem;
+  position: relative;
+  padding-bottom: 2.25rem;
+}
+/* Connector line that threads the step numbers together */
+.manual-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 1.25rem;
+  top: 3rem;
+  bottom: 0.25rem;
+  width: 2px;
+  transform: translateX(-50%);
+  background: linear-gradient(var(--border-hi), var(--border) 60%, transparent);
+}
+.manual-step-num {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  z-index: 1;
+  box-shadow: 0 2px 8px rgba(20, 20, 19, 0.12);
+}
+.manual-step-title {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin: 0.35rem 0 0.4rem;
+}
+.manual-step-desc {
+  font-size: 0.9375rem;
+  line-height: 1.75;
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+.manual-step-desc + .manual-step-desc { margin-top: 0.5rem; }
+
+/* ── On-screen control replica ────────────────────────────────── */
+.manual-preview {
+  margin-top: 1rem;
+  background: var(--bg-warm);
+  border: 1px dashed var(--border-hi);
+  border-radius: var(--r-lg);
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+.manual-preview-cap {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+}
+.manual-preview-cap svg { color: var(--accent); }
+
+/* faux text field */
+.faux-field-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  margin-bottom: 0.4rem;
+}
+.faux-input {
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+}
+.faux-input.is-placeholder { color: var(--muted); }
+.faux-input .caret {
+  width: 1px;
+  height: 1.05rem;
+  background: var(--accent);
+  margin-left: 1px;
+  animation: faux-caret 1.1s steps(1) infinite;
+}
+@keyframes faux-caret { 50% { opacity: 0; } }
+
+/* faux button */
+.faux-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: var(--r-md);
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+}
+.faux-btn.is-primary { background: var(--ink);     color: var(--bg); }
+.faux-btn.is-accent  { background: var(--accent);  color: #fff; font-weight: 600; }
+.faux-btn.is-ghost   {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--border-hi);
+}
+.faux-btn svg { width: 16px; height: 16px; }
+.faux-btn-row { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+/* faux tab strip */
+.faux-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.1rem;
+}
+.faux-tab {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted);
+  padding-bottom: 0.55rem;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.faux-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Callout / tip ────────────────────────────────────────────── */
+.manual-tip {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.85rem;
+  align-items: start;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  border-radius: var(--r-lg);
+  padding: 1rem 1.2rem;
+  margin: 0 0 2.5rem;
+}
+.manual-tip svg { color: var(--accent); margin-top: 0.1rem; }
+.manual-tip p { margin: 0; font-size: 0.875rem; line-height: 1.7; color: var(--ink-2); }
+.manual-tip strong { color: var(--ink); font-weight: 600; }
+
+/* ── Button reference grid ────────────────────────────────────── */
+.btn-ref-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+.btn-ref {
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.15rem 1.25rem;
+  transition: border-color var(--t-base) var(--ease),
+              transform    var(--t-base) var(--ease),
+              box-shadow   var(--t-base) var(--ease);
+}
+.btn-ref:hover {
+  border-color: var(--border-hi);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(20, 20, 19, 0.06);
+}
+.btn-ref-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+.btn-ref-chip {
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: var(--r-md);
+  background: var(--accent-dim);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-ref-name {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.btn-ref-desc { font-size: 0.8438rem; line-height: 1.7; color: var(--ink-2); }
+.btn-ref-desc .where {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.6875rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+/* ── Back-to-scan CTA at the foot of the manual ───────────────── */
+.manual-foot {
+  margin-top: 1rem;
+  padding: 2rem 1.75rem;
+  background: linear-gradient(135deg, var(--bg-warm), var(--surface-hi));
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  text-align: center;
+}
+.manual-foot-title {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 0.4rem;
+}
+.manual-foot-sub { font-size: 0.875rem; color: var(--ink-2); margin-bottom: 1.1rem; }
+
+/* Phone: keep the stepper readable, drop the reference grid to one column */
+@media (max-width: 640px) {
+  .manual-hero-title { font-size: 1.75rem; }
+  .manual-step { grid-template-columns: 2rem 1fr; gap: 0.9rem; }
+  .manual-step:not(:last-child)::before { left: 1rem; }
+  .manual-step-num { width: 2rem; height: 2rem; font-size: 0.9rem; }
+}

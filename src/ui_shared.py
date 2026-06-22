@@ -167,62 +167,78 @@ def render_sidebar_nav(active: str = "scan") -> None:
 
 
 # ── Site footer ──────────────────────────────────────────────────
-# The standards VULNEX's own modules are modelled on — surfaced as a black
-# footer bar so users can see the credible, public references behind the
-# scan. Each entry maps to a VULNEX module: headers → SecurityHeaders,
-# SSL → SSL Labs, server/exposure → Shodan. Links open in a new tab.
-_BADGE_CHECK_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"'
-    ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
-    ' stroke-linecap="round" stroke-linejoin="round">'
-    '<path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78'
-    ' 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1'
-    '-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg>'
-)
-
+# A Fable-style footer (anthropic.com/claude/fable): a quiet parchment
+# panel with a brand block on the left and labelled columns of real,
+# working links on the right. The middle column preserves this footer's
+# original purpose — surfacing the credible public standards each VULNEX
+# module is modelled on (headers → SecurityHeaders, SSL → SSL Labs,
+# server/exposure → Shodan) — alongside in-app navigation and learning
+# resources. Every link goes somewhere real; nothing is decorative.
 _FOOTER_SHIELD_LG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"'
+    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"'
     ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
     ' stroke-linecap="round" stroke-linejoin="round">'
     '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
     '<path d="m9 12 2 2 4-4"/></svg>'
 )
 
-_FOOTER_REFS = (
-    ("SecurityHeaders", "https://securityheaders.com/",
-     "มาตรฐาน HTTP Security Headers"),
-    ("SSL Labs · SSL Server Test", "https://www.ssllabs.com/ssltest/",
-     "ตรวจใบรับรองและโปรโตคอล TLS"),
-    ("Shodan", "https://www.shodan.io/",
-     "ฐานข้อมูลการเปิดเผยบริการบนอินเทอร์เน็ต"),
+# (heading, ((label, url, external?), ...)). external links open in a new
+# tab and carry the "opens elsewhere" arrow; internal ones navigate in place.
+_FOOTER_COLUMNS = (
+    ("เมนู", (
+        ("หน้าตรวจสอบ", "./", False),
+        ("คู่มือการใช้งาน", MANUAL_URL, True),
+    )),
+    ("มาตรฐานที่อ้างอิง", (
+        ("SecurityHeaders", "https://securityheaders.com/", True),
+        ("SSL Labs", "https://www.ssllabs.com/ssltest/", True),
+        ("Shodan", "https://www.shodan.io/", True),
+    )),
+    ("แหล่งความรู้", (
+        ("OWASP Top 10", "https://owasp.org/www-project-top-ten/", True),
+        ("MDN Web Security",
+         "https://developer.mozilla.org/en-US/docs/Web/Security", True),
+        ("Mozilla Observatory",
+         "https://developer.mozilla.org/en-US/observatory", True),
+    )),
 )
 
 
+def _footer_link(label: str, url: str, external: bool) -> str:
+    """One footer link. External links open in a new tab (with the small
+    out-arrow); internal links navigate in the same tab."""
+    attrs = ' target="_blank" rel="noopener noreferrer"' if external else ""
+    arrow = _EXT_SVG if external else ""
+    return (
+        f'<a class="ft-link" href="{url}"{attrs}>'
+        f'<span>{label}</span>{arrow}</a>'
+    )
+
+
 def render_footer() -> None:
-    """Render the shared black footer: a compact VULNEX brand block beside a
-    divided list of the public standards the scan is modelled on."""
-    refs = "".join(
-        f'<a class="footer-ref" href="{url}" target="_blank"'
-        ' rel="noopener noreferrer">'
-        f'<span class="footer-ref-name">{name}</span>'
-        f'<span class="footer-ref-sub">{desc}</span>{_EXT_SVG}</a>'
-        for name, url, desc in _FOOTER_REFS
+    """Render the shared Fable-style footer: a parchment panel with a VULNEX
+    brand block beside labelled columns of in-app and reference links."""
+    columns = "".join(
+        '<nav class="ft-col">'
+        f'<h2 class="ft-col-head">{head}</h2>'
+        + "".join(_footer_link(*link) for link in links)
+        + "</nav>"
+        for head, links in _FOOTER_COLUMNS
     )
     st.markdown(
         '<footer class="site-footer"><div class="site-footer-inner">'
         '<div class="site-footer-top">'
         # ── brand block ──
-        f'<div class="footer-brand"><span class="footer-brand-ico">'
-        f'{_FOOTER_SHIELD_LG}</span><div>'
-        '<div class="footer-brand-name">Project-<b>VULNEX</b></div>'
-        '<p class="footer-brand-tag">ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษา '
-        'แบบ Passive เพื่อความถูกต้องและน่าเชื่อถือของผลการตรวจสอบ</p>'
-        '</div></div>'
-        # ── reference list ──
-        '<div class="footer-refs">'
-        f'<div class="footer-refs-label">{_BADGE_CHECK_SVG}'
-        '<span>อ้างอิงมาตรฐานจากแหล่งที่เชื่อถือได้ระดับสากล</span></div>'
-        f'{refs}</div>'
+        '<div class="ft-brand">'
+        f'<span class="ft-brand-ico">{_FOOTER_SHIELD_LG}</span>'
+        '<div class="ft-brand-name">Project-<b>VULNEX</b></div>'
+        '<p class="ft-brand-tag">ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาแบบ Passive '
+        '— วิเคราะห์ความเสี่ยง ให้คะแนน และสรุปผลเป็นภาษาไทยที่เข้าใจง่าย '
+        'โดยไม่รุกล้ำหรือสร้างความเสียหายต่อระบบเป้าหมาย</p>'
+        '<span class="ft-brand-badge">ตรวจแบบ Passive · ปลอดภัยต่อระบบเป้าหมาย</span>'
+        '</div>'
+        # ── link columns ──
+        f'<div class="ft-cols">{columns}</div>'
         '</div>'
         # ── baseline ──
         '<div class="site-footer-base">'

@@ -858,7 +858,9 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
 .side-nav-link:hover .ext-ico { color: var(--accent); }
 
 /* ════════════════════════════════════════════════════════════════
-   Site footer — black credibility bar (same ink as the scan button)
+   Site footer — Fable-style parchment panel (anthropic.com/claude/fable)
+   A quiet warm panel: brand block on the left, labelled columns of real
+   links on the right, a hairline rule, then a low-key copyright row.
    Breaks out of the block-container's horizontal padding to reach the
    content-area edges, and cancels the bottom padding so it sits flush.
    (A 100vw bleed is avoided on purpose: it misaligns when the sidebar is
@@ -868,127 +870,151 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
   /* override the base `footer { visibility:hidden }` rule (which exists to
      hide Streamlit's own footer) — this is our intentional footer. */
   visibility: visible !important;
-  margin: 4.5rem -2rem -4rem;
-  padding: 2.5rem 2rem 2.25rem;
-  background: var(--ink);
-  border-top: 2px solid var(--accent);
+  margin: 5rem -2rem -4rem;
+  padding: 3.25rem 2rem 2rem;
+  background: var(--bg-warm);
+  border-top: 1px solid var(--border);
 }
 .site-footer-inner { max-width: 1016px; margin: 0 auto; }
 
-/* Two columns: brand block | reference list */
+/* Brand block | three link columns */
 .site-footer-top {
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-  gap: 2rem 3.5rem;
+  grid-template-columns: minmax(0, 1.55fr) repeat(3, minmax(0, 1fr));
+  gap: 2.5rem 3rem;
   align-items: start;
 }
 
-/* Brand block */
-.footer-brand { display: flex; gap: 0.85rem; align-items: flex-start; }
-.footer-brand-ico {
-  flex: none;
-  display: grid;
+/* ── Brand block ── */
+.ft-brand { max-width: 38ch; }
+.ft-brand-ico {
+  display: inline-grid;
   place-items: center;
   width: 2.5rem;
   height: 2.5rem;
   border-radius: var(--r-md);
-  background: rgba(196, 98, 45, 0.16);
+  background: var(--accent-dim);
   color: var(--accent);
+  margin-bottom: 0.9rem;
 }
-.footer-brand-name {
+.ft-brand-name {
   font-family: var(--font-serif);
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--bg);
+  letter-spacing: -0.015em;
+  color: var(--ink);
 }
-.footer-brand-name b { color: var(--accent); font-weight: 600; }
-.footer-brand-tag {
-  margin: 0.4rem 0 0;
-  max-width: 34ch;
+.ft-brand-name b { color: var(--accent); font-weight: 600; }
+.ft-brand-tag {
+  margin: 0.55rem 0 1rem;
   font-size: 0.8125rem;
-  line-height: 1.65;
-  color: rgba(245, 240, 232, 0.6);
+  line-height: 1.7;
+  color: var(--ink-2);
+  text-wrap: pretty;
 }
-
-/* Reference list */
-.footer-refs-label {
-  display: flex;
+.ft-brand-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
   font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(245, 240, 232, 0.55);
-  margin-bottom: 0.35rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-2);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  border-radius: var(--r-pill);
+  padding: 0.3rem 0.7rem;
 }
-.footer-refs-label svg { flex: none; width: 15px; height: 15px; color: var(--accent); }
+
+/* ── Link columns ── */
+.ft-cols {
+  display: contents;   /* columns become direct grid items of -top */
+}
+.ft-col { display: flex; flex-direction: column; align-items: flex-start; }
+/* High specificity: the project's global h2 rule (heavy serif display)
+   otherwise wins and blows these labels up. Pin every property here. */
+[data-testid="stMarkdownContainer"] .site-footer .ft-col-head {
+  margin: 0.15rem 0 0.95rem;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #635b50;            /* warm mid-gray, ≥5.4:1 on parchment */
+}
 
 /* Beat Streamlit's markdown-link underline (higher-specificity rule). */
-[data-testid="stMarkdownContainer"] a.footer-ref,
-[data-testid="stMarkdownContainer"] a.footer-ref:hover,
-[data-testid="stMarkdownContainer"] a.footer-ref * {
+[data-testid="stMarkdownContainer"] a.ft-link,
+[data-testid="stMarkdownContainer"] a.ft-link:hover,
+[data-testid="stMarkdownContainer"] a.ft-link * {
   text-decoration: none !important;
 }
-.footer-ref {
-  display: flex;
+.ft-link {
+  display: inline-flex;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.8rem 0.5rem 0.8rem 0;
-  border-top: 1px solid rgba(245, 240, 232, 0.1);
-  transition: padding-left var(--t-base) var(--ease);
-}
-.footer-ref:hover { padding-left: 0.5rem; }
-.footer-ref-name {
-  flex: none;
-  color: var(--bg);
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  gap: 0.3rem;
+  padding: 0.32rem 0;
+  font-size: 0.875rem;
+  font-weight: 450;
+  line-height: 1.5;
+  color: var(--ink-2);
   transition: color var(--t-fast) var(--ease);
 }
-.footer-ref:hover .footer-ref-name { color: var(--accent); }
-.footer-ref-sub {
-  margin-left: auto;
-  text-align: right;
-  color: rgba(245, 240, 232, 0.55);
-  font-size: 0.78rem;
-  line-height: 1.4;
-}
-.footer-ref .ext-ico {
+.ft-link:hover { color: var(--accent-2); }
+.ft-link .ext-ico {
   flex: none;
-  color: rgba(245, 240, 232, 0.4);
-  transition: color     var(--t-fast) var(--ease),
-              transform var(--t-base) var(--ease);
+  width: 12px;
+  height: 12px;
+  color: var(--muted);
+  opacity: 0;
+  transform: translate(-2px, 1px);
+  transition: opacity   var(--t-fast) var(--ease),
+              transform var(--t-base) var(--ease),
+              color     var(--t-fast) var(--ease);
 }
-.footer-ref:hover .ext-ico { color: var(--accent); transform: translate(2px, -2px); }
-.footer-ref:focus-visible {
+.ft-link:hover .ext-ico,
+.ft-link:focus-visible .ext-ico {
+  opacity: 1;
+  transform: translate(0, 0);
+  color: var(--accent-2);
+}
+.ft-link:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: 3px;
   border-radius: var(--r-sm);
 }
 
+/* ── Copyright baseline ── */
 .site-footer-base {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1rem;
-  margin-top: 2rem;
+  margin-top: 3rem;
   padding-top: 1.25rem;
-  border-top: 1px solid rgba(245, 240, 232, 0.12);
-  color: rgba(245, 240, 232, 0.5);
+  border-top: 1px solid var(--border);
+  color: #635b50;
   font-size: 0.75rem;
   letter-spacing: 0.01em;
 }
 
-@media (max-width: 760px) {
-  .site-footer-top { grid-template-columns: 1fr; gap: 1.75rem; }
+/* Tablet: brand spans full width, three columns sit below it */
+@media (max-width: 860px) {
+  .site-footer-top {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2rem 2rem;
+  }
+  .ft-brand { grid-column: 1 / -1; max-width: 52ch; }
 }
-@media (max-width: 640px) {
-  .site-footer { margin: 3.5rem -1.1rem -3rem; padding: 2rem 1.1rem 1.75rem; }
-  .footer-ref-sub { font-size: 0.72rem; }
+/* Phone: columns stack two-up, then the panel tightens to the edges */
+@media (max-width: 560px) {
+  .site-footer { margin: 4rem -1.1rem -3rem; padding: 2.5rem 1.1rem 1.75rem; }
+  .site-footer-top { grid-template-columns: 1fr 1fr; gap: 1.75rem 1.5rem; }
+  .ft-link .ext-ico { opacity: 1; transform: none; }  /* no hover on touch */
+}
+@media (max-width: 380px) {
+  .site-footer-top { grid-template-columns: 1fr; }
 }
 
 /* ════════════════════════════════════════════════════════════════

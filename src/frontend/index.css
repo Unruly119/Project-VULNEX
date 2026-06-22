@@ -949,7 +949,8 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
 [data-testid="stMarkdownContainer"] a.ft-link * {
   text-decoration: none !important;
 }
-.ft-link {
+.ft-link,
+.ft-name {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -958,8 +959,8 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
   font-weight: 450;
   line-height: 1.5;
   color: var(--ink-2);
-  transition: color var(--t-fast) var(--ease);
 }
+.ft-link { transition: color var(--t-fast) var(--ease); }
 .ft-link:hover { color: var(--accent-2); }
 .ft-link .ext-ico {
   flex: none;

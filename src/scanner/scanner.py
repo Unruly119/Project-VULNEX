@@ -54,8 +54,11 @@ def run_scan(url: str) -> dict:
         "cms":          check_cms,
     }
 
+    # All modules are I/O-bound (network waits), so give each its own worker —
+    # capping below len(modules) only forces the slowest few to queue and adds
+    # wall-clock latency for no benefit.
     results = {}
-    with ThreadPoolExecutor(max_workers=min(len(modules), 8)) as pool:
+    with ThreadPoolExecutor(max_workers=len(modules)) as pool:
         futures = {pool.submit(fn, url): key for key, fn in modules.items()}
         for future in as_completed(futures):
             key = futures[future]

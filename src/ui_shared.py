@@ -59,13 +59,24 @@ def _load_css(path: str) -> str:
         return f"<style>\n{f.read()}\n</style>"
 
 
+@st.cache_data(show_spinner=False)
+def _base_styles_html() -> str:
+    """Build the Thai @font-face block + main stylesheet once and memoise it.
+
+    The font woff2 files (~52 KB) and index.css (~46 KB) are static assets, so
+    the base64 encoding and file reads only need to happen once per server
+    process. Without this, Streamlit re-reads and re-encodes every asset on
+    every rerun (i.e. every widget interaction) — pure wasted work. The font
+    @font-face goes first, then the stylesheet, matching the order app.py has
+    always used.
+    """
+    return f"<style>\n{_thai_font_css()}\n</style>\n{_load_css(_CSS_PATH)}"
+
+
 def inject_base_styles() -> None:
-    """Inject the base64-embedded Thai @font-face first, then the main
-    stylesheet — the exact order app.py has always used."""
-    st.markdown(
-        f"<style>\n{_thai_font_css()}\n</style>", unsafe_allow_html=True
-    )
-    st.markdown(_load_css(_CSS_PATH), unsafe_allow_html=True)
+    """Inject the base64-embedded Thai @font-face + the main stylesheet
+    (built once and cached — see _base_styles_html)."""
+    st.markdown(_base_styles_html(), unsafe_allow_html=True)
 
 
 # ── Branded side navigation ──────────────────────────────────────

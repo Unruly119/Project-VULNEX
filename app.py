@@ -21,6 +21,7 @@ import re
 import time
 import html as _html
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -36,8 +37,14 @@ st.set_page_config(
 )
 
 # ── Custom CSS ───────────────────────────────────────────────────
+@st.cache_data(show_spinner=False)
 def _img_data_uri(path: str) -> str:
-    """Encode a local image file as a base64 data: URI for inline HTML use."""
+    """Encode a local image file as a base64 data: URI for inline HTML use.
+
+    Cached: the hero JPG is ~827 KB → ~1.1 MB base64 string. Streamlit reruns
+    the whole script on every interaction, so without memoising this the image
+    would be re-read and re-encoded on every rerun. The path is static, so one
+    encode per server process is enough."""
     ext = os.path.splitext(path)[1].lower().lstrip(".")
     mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png",
             "webp": "webp", "gif": "gif"}.get(ext, "jpeg")
@@ -356,13 +363,20 @@ if scan_btn and url:
         prog = st.progress(0, text="เริ่มสแกน...")
 
         with st.spinner("กำลังสแกนและวิเคราะห์..."):
-            prog.progress(20, text="กำลังดึง HTTP Headers และ SSL...")
-            scan_data = run_scan(clean_url)
+            prog.progress(20, text="กำลังสแกน Passive (Headers, SSL, DNS, "
+                                   "Web Server, CVE)...")
+            # run_scan (11 modules) and check_server both spend their time
+            # waiting on the network. Run them concurrently so the server/CVE
+            # probe overlaps the scan instead of adding its round-trip on top.
+            # They stay architecturally separate (check_server is not inside
+            # run_scan) — only their network waits are shared.
+            with ThreadPoolExecutor(max_workers=2) as _ex:
+                _fut_scan   = _ex.submit(run_scan, clean_url)
+                _fut_server = _ex.submit(check_server, clean_url)
+                scan_data   = _fut_scan.result()
+                server_data = _fut_server.result()
 
-            prog.progress(50, text="ตรวจสอบ Web Server และ CVE Database...")
-            server_data = check_server(clean_url)
-
-            prog.progress(75, text="AI กำลังวิเคราะห์ผล Passive Scan...")
+            prog.progress(70, text="AI กำลังวิเคราะห์ผล Passive Scan...")
             ai_data = analyze(scan_data, server_data)
 
             prog.progress(100, text="เสร็จสิ้น")

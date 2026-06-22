@@ -163,6 +163,14 @@ body {
 /* Streamlit base overrides */
 #MainMenu, footer, header { visibility: hidden !important; }
 .stDeployButton { display: none !important; }
+/* The header is hidden for a clean look, but the "expand sidebar" control
+   lives inside it — without this, a collapsed sidebar can never be reopened.
+   visibility:visible on the control itself wins over the hidden ancestor. */
+[data-testid="stExpandSidebarButton"],
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+  visibility: visible !important;
+}
 
 [class*="css"] { font-family: var(--font-sans) !important; }
 

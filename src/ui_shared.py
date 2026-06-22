@@ -194,19 +194,20 @@ _FOOTER_COLUMNS = (
         ("SSL Labs", "https://www.ssllabs.com/ssltest/", True),
         ("Shodan", "https://www.shodan.io/", True),
     )),
-    ("แหล่งความรู้", (
-        ("OWASP Top 10", "https://owasp.org/www-project-top-ten/", True),
-        ("MDN Web Security",
-         "https://developer.mozilla.org/en-US/docs/Web/Security", True),
-        ("Mozilla Observatory",
-         "https://developer.mozilla.org/en-US/observatory", True),
+    ("ทีมพัฒนา", (
+        ("Dev01", None, False),
+        ("Dev02", None, False),
+        ("Dev03", None, False),
+        ("Dev04", None, False),
     )),
 )
 
 
-def _footer_link(label: str, url: str, external: bool) -> str:
-    """One footer link. External links open in a new tab (with the small
-    out-arrow); internal links navigate in the same tab."""
+def _footer_link(label: str, url: str | None, external: bool) -> str:
+    """One footer item. Renders as a plain span when url is None (e.g. names),
+    an external link (new tab + arrow) when external=True, else same-tab link."""
+    if url is None:
+        return f'<span class="ft-name">{label}</span>'
     attrs = ' target="_blank" rel="noopener noreferrer"' if external else ""
     arrow = _EXT_SVG if external else ""
     return (

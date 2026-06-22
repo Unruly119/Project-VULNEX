@@ -650,7 +650,7 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     # ── Header + Footer ──
     banner = (
         '<div class="banner">'
-        '<h1>รายงานผลการตรวจประเมินความปลอดภัยเทคโนโลยีเว็บ</h1>'
+        '<h1>รายงานผลกระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาด้วย AI</h1>'
         '<div class="sub">Comprehensive Security Audit Report — Project VULNEX</div>'
         f'<div class="meta"><span>Target: {_esc(url, 200)}</span>'
         f'<span>{date_en}</span></div>'

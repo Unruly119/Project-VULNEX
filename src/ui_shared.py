@@ -180,34 +180,55 @@ _BADGE_CHECK_SVG = (
     '-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg>'
 )
 
+_FOOTER_SHIELD_LG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"'
+    ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+    ' stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
+    '<path d="m9 12 2 2 4-4"/></svg>'
+)
+
 _FOOTER_REFS = (
     ("SecurityHeaders", "https://securityheaders.com/",
-     "มาตรฐานการตั้งค่า HTTP Security Headers"),
+     "มาตรฐาน HTTP Security Headers"),
     ("SSL Labs · SSL Server Test", "https://www.ssllabs.com/ssltest/",
-     "การประเมินใบรับรองและโปรโตคอล SSL/TLS"),
+     "ตรวจใบรับรองและโปรโตคอล TLS"),
     ("Shodan", "https://www.shodan.io/",
      "ฐานข้อมูลการเปิดเผยบริการบนอินเทอร์เน็ต"),
 )
 
 
 def render_footer() -> None:
-    """Render the shared black footer bar with the credibility references."""
+    """Render the shared black footer: a compact VULNEX brand block beside a
+    divided list of the public standards the scan is modelled on."""
     refs = "".join(
         f'<a class="footer-ref" href="{url}" target="_blank"'
         ' rel="noopener noreferrer">'
-        f'<span class="footer-ref-name">{name}{_EXT_SVG}</span>'
-        f'<span class="footer-ref-sub">{desc}</span></a>'
+        f'<span class="footer-ref-name">{name}</span>'
+        f'<span class="footer-ref-sub">{desc}</span>{_EXT_SVG}</a>'
         for name, url, desc in _FOOTER_REFS
     )
     st.markdown(
         '<footer class="site-footer"><div class="site-footer-inner">'
-        f'<div class="site-footer-head">{_BADGE_CHECK_SVG}'
-        '<span>อ้างอิงมาตรฐานการตรวจสอบจากแหล่งข้อมูลที่เชื่อถือได้ระดับสากล '
-        'เพื่อความถูกต้องและความน่าเชื่อถือของผลการตรวจสอบ</span></div>'
-        f'<div class="site-footer-refs">{refs}</div>'
+        '<div class="site-footer-top">'
+        # ── brand block ──
+        f'<div class="footer-brand"><span class="footer-brand-ico">'
+        f'{_FOOTER_SHIELD_LG}</span><div>'
+        '<div class="footer-brand-name">Project-<b>VULNEX</b></div>'
+        '<p class="footer-brand-tag">ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษา '
+        'แบบ Passive เพื่อความถูกต้องและน่าเชื่อถือของผลการตรวจสอบ</p>'
+        '</div></div>'
+        # ── reference list ──
+        '<div class="footer-refs">'
+        f'<div class="footer-refs-label">{_BADGE_CHECK_SVG}'
+        '<span>อ้างอิงมาตรฐานจากแหล่งที่เชื่อถือได้ระดับสากล</span></div>'
+        f'{refs}</div>'
+        '</div>'
+        # ── baseline ──
         '<div class="site-footer-base">'
-        '<span>Project-VULNEX · ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาแบบ Passive</span>'
-        '<span>© 2026</span></div>'
+        '<span>© 2026 Project-VULNEX</span>'
+        '<span>PSU Future Tech 2026 · Cybersecurity Track</span>'
+        '</div>'
         '</div></footer>',
         unsafe_allow_html=True,
     )

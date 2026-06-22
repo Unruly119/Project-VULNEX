@@ -52,7 +52,7 @@ def _img_data_uri(path: str) -> str:
 from ui_shared import inject_base_styles, render_sidebar_nav
 
 inject_base_styles()
-render_sidebar_nav()
+render_sidebar_nav("scan")
 
 # ── Import scanning / AI modules ─────────────────────────────────
 try:

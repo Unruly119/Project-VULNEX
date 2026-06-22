@@ -25,7 +25,7 @@ st.set_page_config(
 from ui_shared import inject_base_styles, render_sidebar_nav
 
 inject_base_styles()
-render_sidebar_nav()
+render_sidebar_nav("manual")
 
 
 # ── Inline icon helpers (lucide-style, matching app.py's icon language) ──

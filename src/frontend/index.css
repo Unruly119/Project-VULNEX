@@ -124,9 +124,15 @@
 }
 
 /* ── Keyframes ─────────────────────────────────────────────────── */
+/* fade-up animates only opacity (no translateY). The vertical rise promoted
+   each element to its own GPU layer, and on a long rerun — e.g. while the PDF
+   is being generated — Chromium left the start frame (14px lower, faded) as a
+   stale composited ghost, so every heading/card looked split into two: the real
+   one above and a lighter copy below. Fading in place removes the offset, so any
+   residual ghost overlaps the original instead of showing as a second copy. */
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 @keyframes fade-in {
   from { opacity: 0; }

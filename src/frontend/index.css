@@ -172,7 +172,50 @@ body {
   visibility: visible !important;
 }
 
-[class*="css"] { font-family: var(--font-sans) !important; }
+/* ── Sidebar control → hamburger icon ─────────────────────────────
+   Replace Streamlit's default double-chevron on the open/collapse control
+   with a three-bar hamburger. The inner Material glyph (or SVG) is hidden
+   and the bars are drawn with a pseudo-element, so it's font-independent
+   and survives Streamlit version changes. */
+[data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"],
+[data-testid="stSidebarCollapseButton"] [data-testid="stIconMaterial"],
+[data-testid="collapsedControl"] [data-testid="stIconMaterial"],
+[data-testid="stExpandSidebarButton"] svg,
+[data-testid="stSidebarCollapseButton"] svg,
+[data-testid="collapsedControl"] svg { display: none !important; }
+
+[data-testid="stExpandSidebarButton"],
+[data-testid="stSidebarCollapseButton"] { color: var(--ink-2) !important; }
+
+[data-testid="stExpandSidebarButton"]::after,
+[data-testid="stSidebarCollapseButton"]::after {
+  content: "";
+  display: block;
+  width: 17px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  box-shadow: 0 -5px 0 currentColor, 0 5px 0 currentColor;
+}
+
+/* ── Thai-font consistency ────────────────────────────────────────
+   The Prompt webfont is unicode-range-limited to Thai, so an element only
+   needs 'Prompt' first in its stack for Thai glyphs to resolve to Prompt
+   (Latin falls through to AnthropicSans, unchanged). The legacy [class*="css"]
+   hook no longer matches Streamlit's modern st-emotion-cache-* classes, so
+   native widgets (alerts, metrics, expanders, tabs, captions, input labels)
+   kept the default font and rendered Thai in a system face. Match those class
+   families + key widget testids so every section uses Prompt. Our own
+   serif/mono elements declare their font-family directly, so they're
+   unaffected by this inherited default. */
+[class*="css"], [class*="st-emotion-cache"],
+[data-testid="stAlertContainer"], [data-testid="stAlertContainer"] *,
+[data-testid="stMetricValue"], [data-testid="stMetricLabel"],
+[data-testid="stCaptionContainer"], [data-testid="stExpander"] summary,
+[data-testid="stWidgetLabel"] *,
+.stTabs [role="tab"] {
+  font-family: var(--font-sans) !important;
+}
 
 .stApp { background: var(--bg) !important; }
 .block-container {

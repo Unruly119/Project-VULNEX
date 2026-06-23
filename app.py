@@ -22,8 +22,12 @@ import time
 import html as _html
 import base64
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
+
+# Thailand is fixed UTC+7 (no DST) — used so the PDF filename timestamp matches
+# the Thai scan time in the report, regardless of the server's timezone.
+_ICT = timezone(timedelta(hours=7))
 
 import streamlit as st
 import pandas as pd
@@ -782,7 +786,7 @@ if st.session_state.get("scanned"):
                 st.error(f"สร้าง PDF ไม่สำเร็จ: {exc}")
 
     if st.session_state.get("pdf_ready"):
-        now   = datetime.now().strftime("%Y%m%d_%H%M")
+        now   = datetime.now(_ICT).strftime("%Y%m%d_%H%M")
         fname = f"VULNEX_Report_{now}.pdf"
         st.download_button(
             label="ดาวน์โหลด PDF Report",

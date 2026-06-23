@@ -22,7 +22,12 @@ import html
 import math
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# Thailand has no DST — a fixed UTC+7 offset gives the correct local scan time
+# regardless of the server's timezone (e.g. Streamlit Cloud runs in UTC, which
+# previously made the report show a time hours behind the user's actual scan).
+_ICT = timezone(timedelta(hours=7))
 
 # ─────────────────────────────────────────────────────────────────
 # สี — พาเลตอ้างอิงรายงานสแกน (อ่านง่าย) + แบรนด์ VULNEX (navy)
@@ -150,6 +155,10 @@ def _institution_name(scan_data: dict, org_name: str = "") -> str:
 # ── ฟอนต์ Prompt (Thai + Latin) ฝัง base64 ให้รายงานพึ่งตัวเองได้ ──
 _FONT_CACHE: dict | None = None
 
+# unicode-range เดียวกับที่หน้าเว็บใช้ (subset ไทยของ Google Fonts) — จำกัด
+# woff2 น้ำหนัก 500/600 ให้ครอบเฉพาะอักษรไทย ส่วน Latin จะ fall ไปที่ TTF เดิม
+_THAI_RANGE = "U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC"
+
 
 def _fonts_css() -> str:
     global _FONT_CACHE
@@ -157,6 +166,7 @@ def _fonts_css() -> str:
         _here = os.path.dirname(os.path.abspath(__file__))
         gdir  = os.path.join(_here, "Font", "google_font")
         faces: list[str] = []
+        # TTF เต็ม (Latin + Thai) น้ำหนัก 400/700 — ครอบทุกตัวอักษรทุกภาษา
         for fname, weight in (("Prompt-Regular.ttf", 400), ("Prompt-Bold.ttf", 700)):
             path = os.path.join(gdir, fname)
             try:
@@ -166,6 +176,24 @@ def _fonts_css() -> str:
                     "@font-face{font-family:'Prompt';font-style:normal;"
                     f"font-weight:{weight};font-display:block;"
                     f"src:url(data:font/ttf;base64,{b64}) format('truetype');}}"
+                )
+            except OSError:
+                pass
+        # woff2 subset ไทย น้ำหนัก 500/600 — TTF มีแค่ 400/700 ทำให้ข้อความไทย
+        # น้ำหนัก 500/600 (เช่น .topic, label ต่าง ๆ) ถูกสังเคราะห์เป็นน้ำหนักใกล้
+        # เคียงและดู "ไม่ใช่ Prompt" ในบางหัวข้อ — เติมเฟซจริงให้ครบเหมือนหน้าเว็บ
+        # (unicode-range จำกัดเฉพาะไทย → Latin 500/600 ยังใช้ TTF เดิม)
+        for fname, weight in (("Prompt-Medium-thai.woff2", 500),
+                              ("Prompt-SemiBold-thai.woff2", 600)):
+            path = os.path.join(gdir, fname)
+            try:
+                with open(path, "rb") as fh:
+                    b64 = base64.b64encode(fh.read()).decode("ascii")
+                faces.append(
+                    "@font-face{font-family:'Prompt';font-style:normal;"
+                    f"font-weight:{weight};font-display:block;"
+                    f"src:url(data:font/woff2;base64,{b64}) format('woff2');"
+                    f"unicode-range:{_THAI_RANGE};}}"
                 )
             except OSError:
                 pass
@@ -422,7 +450,7 @@ def _stylesheet() -> str:
             overflow:hidden;position:relative}
         .content{transform-origin:top left}
         a,code{color:#1f2937}
-        code{font-family:'Consolas','Courier New',monospace;background:#eef2f7;
+        code{font-family:'Consolas','Courier New','Prompt',monospace;background:#eef2f7;
             padding:0 3px;border-radius:3px;font-size:.92em}
 
         /* Header banner */
@@ -440,6 +468,13 @@ def _stylesheet() -> str:
         .sec-num{display:inline-flex;align-items:center;justify-content:center;
             min-width:17px;height:17px;background:rgba(255,255,255,.22);border-radius:3px;
             font-size:10px;margin-right:8px;padding:0 3px}
+
+        /* AI summary — promoted to the very top, above §1 */
+        .ai-top{background:#f5f8fc;border:1px solid #dbe6f3;border-left:4px solid #2563a8;
+            border-radius:5px;padding:9px 13px;margin:10px 0 2px}
+        .ai-top-label{font-size:9.5px;font-weight:700;color:#1e3a5f;text-transform:uppercase;
+            letter-spacing:.5px;margin-bottom:3px}
+        .ai-top-body{font-size:10.5px;color:#334155;line-height:1.55}
 
         /* §1 Executive summary */
         .exec{display:flex;gap:16px;align-items:center}
@@ -477,7 +512,7 @@ def _stylesheet() -> str:
         .hard-sev{font-size:8.5px;font-weight:700;background:rgba(0,0,0,.18);
             padding:1px 6px;border-radius:3px;margin-right:8px;letter-spacing:.4px}
         .code{background:#f5f7fa;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 4px 4px;
-            font-family:'Consolas','Courier New',monospace;font-size:9.5px;line-height:1.65;
+            font-family:'Consolas','Courier New','Prompt',monospace;font-size:9.5px;line-height:1.65;
             padding:8px 11px;color:#1e293b;white-space:pre-wrap;overflow-wrap:break-word}
         .code .cmt{color:#64748b}
         .hard-note{font-size:10px;color:#475569;margin:2px 0 4px;padding-left:2px}
@@ -485,6 +520,8 @@ def _stylesheet() -> str:
         /* Footer */
         .foot{border-top:1px solid #e2e8f0;margin-top:11px;padding-top:6px;
             font-size:8.5px;color:#94a3b8;text-align:center}
+        .foot-src{margin-top:4px;font-size:9px;color:#334155}
+        .foot-src a{color:#2563a8;font-weight:700;text-decoration:none}
         """
     )
 
@@ -511,7 +548,7 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     sver   = str(srv.get("server_version", "") or "")
     http_v = str(srv.get("http_version", "HTTP/1.1") or "HTTP/1.1")
 
-    now_dt   = datetime.now()
+    now_dt   = datetime.now(_ICT)          # Thai local time (UTC+7), server-independent
     month_th = ["", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
                 "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
     date_th  = f"{now_dt.day} {month_th[now_dt.month]} {now_dt.year + 543}"
@@ -525,14 +562,20 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     # ชื่อหน่วยงานแบบ deterministic (ไม่เอาจากข้อความ AI ที่อาจมโนชื่อ)
     org_display = _institution_name(scan_data, org_name)
 
-    # บทวิเคราะห์ AI (เรียกด้วยคีย์สำรอง) — ใช้ส่วน "สรุปภาพรวม" ในกล่อง exec-ai
+    # บทวิเคราะห์ AI (เรียกด้วยคีย์สำรอง) — ใช้ส่วน "สรุปภาพรวม" เป็นบล็อกบนสุด
+    # ของรายงาน (เหนือหัวข้อ 1) เพื่อให้ผู้อ่านเห็นบทสรุปจาก AI ก่อนสิ่งอื่น
     overview = _section_text(ai_data.get("analysis", ""), "สรุปภาพรวม")
     overview = re.sub(r"(?m)^\s*>.*$", "", overview).strip()      # ตัด blockquote banner
-    exec_ai_html = ""
+    ai_top_html = ""
     if overview:
         para = overview.split("\n\n")[0].replace("\n", " ").strip()
         if para:
-            exec_ai_html = f'<div class="exec-ai">{_md_inline(para)}</div>'
+            ai_top_html = (
+                '<div class="ai-top">'
+                '<div class="ai-top-label">บทสรุปจากการวิเคราะห์ด้วย AI</div>'
+                f'<div class="ai-top-body">{_md_inline(para)}</div>'
+                '</div>'
+            )
 
     # บรรทัด "สรุปจาก AI" จากรายการที่ไม่ผ่าน (เหมือนรายงานเดิม)
     failed_preview = [c for c in checklist if c["result"] == "FAILED"]
@@ -547,7 +590,6 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
         _section_bar("1", "บทสรุปการประเมิน (Executive Summary)")
         + '<div class="exec"><div class="exec-text">'
         + ai_summary_line
-        + exec_ai_html
         + f'<div class="exec-meta"><b>หน่วยงาน:</b> {_esc(org_display, 120)} &nbsp;|&nbsp; '
         + f"<b>วันตรวจ:</b> {date_th}</div>"
         + '</div>'
@@ -641,10 +683,14 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     footer = (
         '<div class="foot">รายงาน Comprehensive Security Audit — Project VULNEX'
         f' &nbsp;|&nbsp; มาตรฐาน Security Baseline 2026 &nbsp;|&nbsp; {_esc(org_display, 120)}'
-        ' &nbsp;|&nbsp; หน้า 1 จาก 1</div>'
+        ' &nbsp;|&nbsp; หน้า 1 จาก 1'
+        '<div class="foot-src">ผลการตรวจสอบนี้จัดทำผ่านเว็บไซต์ '
+        '<a href="https://project-vulnex.streamlit.app/">'
+        'https://project-vulnex.streamlit.app/</a></div>'
+        '</div>'
     )
 
-    body = banner + sec1 + sec2 + sec3 + sec4 + footer
+    body = banner + ai_top_html + sec1 + sec2 + sec3 + sec4 + footer
 
     return (
         '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">'

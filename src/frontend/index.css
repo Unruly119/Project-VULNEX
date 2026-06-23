@@ -113,6 +113,10 @@
   --t-fast: 120ms;
   --t-base: 220ms;
   --t-slow: 400ms;
+
+  /* Hamburger icon (three round-capped lines) — used as a CSS mask on the
+     sidebar control so it renders crisp and undistorted at any size. */
+  --hamburger-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='3.5' y1='6' x2='20.5' y2='6'/%3E%3Cline x1='3.5' y1='12' x2='20.5' y2='12'/%3E%3Cline x1='3.5' y1='18' x2='20.5' y2='18'/%3E%3C/svg%3E");
 }
 
 /* ── Motion safety ─────────────────────────────────────────────── */
@@ -211,15 +215,14 @@ body {
 [data-testid="stSidebarCollapseButton"]::after {
   content: "";
   display: block;
-  /* full 18×12 icon box: the three 2px bars are painted INSIDE it (background
-     gradients, no box-shadow), so nothing overflows the button's hit area —
-     explicit colour keeps them visible across Streamlit's hover-state resets */
-  width: 18px;
-  height: 12px;
-  background:
-    linear-gradient(var(--ink-2), var(--ink-2)) left top    / 18px 2px no-repeat,
-    linear-gradient(var(--ink-2), var(--ink-2)) left center / 18px 2px no-repeat,
-    linear-gradient(var(--ink-2), var(--ink-2)) left bottom / 18px 2px no-repeat;
+  /* Crisp three-line hamburger drawn from an SVG mask (square 20×20 viewBox) so
+     it scales without distorting, the bars stay evenly spaced and round-capped,
+     and nothing overflows the button's hit area. background-color tints it. */
+  width: 20px;
+  height: 20px;
+  background-color: var(--ink-2);
+  -webkit-mask: var(--hamburger-svg) center / 20px 20px no-repeat;
+  mask: var(--hamburger-svg) center / 20px 20px no-repeat;
 }
 
 /* ── Thai-font consistency ────────────────────────────────────────

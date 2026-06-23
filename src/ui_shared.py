@@ -198,6 +198,9 @@ _FOOTER_REFS = (
     ("SSL Labs", "https://www.ssllabs.com/ssltest/"),
 )
 
+# The development team — rendered as a numbered roster column in the footer.
+_FOOTER_TEAM = ("Dev01", "Dev02", "Dev03", "Dev04")
+
 
 def render_footer() -> None:
     """Render the site footer: a two-column product footer — brand block + CTAs
@@ -207,6 +210,11 @@ def render_footer() -> None:
         f'<a class="ft-link" href="{url}" target="_blank" rel="noopener noreferrer">'
         f'<span>{label}</span>{_EXT_SVG}</a>'
         for label, url in _FOOTER_REFS
+    )
+    team = "".join(
+        f'<li class="ft-team-item">'
+        f'<span class="ft-team-num">{i}.</span><span>{name}</span></li>'
+        for i, name in enumerate(_FOOTER_TEAM, start=1)
     )
     st.markdown(
         '<footer class="site-footer"><div class="site-footer-inner">'
@@ -226,6 +234,11 @@ def render_footer() -> None:
         '<nav class="ft-refs" aria-labelledby="ft-refs-head">'
         '<h2 id="ft-refs-head" class="ft-refs-head">อ้างอิง</h2>'
         f'{refs}'
+        '</nav>'
+        # ── tertiary column: development team ──
+        '<nav class="ft-team" aria-labelledby="ft-team-head">'
+        '<h2 id="ft-team-head" class="ft-refs-head">Development Team (Name)</h2>'
+        f'<ol class="ft-team-list">{team}</ol>'
         '</nav>'
         '</div>'
         # ── baseline ──

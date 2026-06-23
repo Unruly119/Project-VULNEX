@@ -194,23 +194,32 @@ body {
 [data-testid="stSidebarCollapseButton"] {
   color: var(--ink-2) !important;
   opacity: 1 !important;                 /* stay visible without needing hover */
-  display: inline-flex !important;       /* centre the bars in the button box so
-                                            the hover highlight aligns with them */
+  display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+  /* Hiding the inner glyph collapses the button, so the drawn bars spilled
+     outside its clickable area (you had to aim for the exact centre). Pin a real
+     square hitbox so the whole icon sits inside the button. */
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  min-width: 2.25rem !important;
+  min-height: 2.25rem !important;
+  padding: 0 !important;
 }
 
 [data-testid="stExpandSidebarButton"]::after,
 [data-testid="stSidebarCollapseButton"]::after {
   content: "";
   display: block;
-  width: 17px;
-  height: 2px;
-  border-radius: 2px;
-  /* explicit colour (not currentColor) so the bars don't vanish when Streamlit
-     resets the button's text colour between hover states */
-  background: var(--ink-2);
-  box-shadow: 0 -5px 0 var(--ink-2), 0 5px 0 var(--ink-2);
+  /* full 18×12 icon box: the three 2px bars are painted INSIDE it (background
+     gradients, no box-shadow), so nothing overflows the button's hit area —
+     explicit colour keeps them visible across Streamlit's hover-state resets */
+  width: 18px;
+  height: 12px;
+  background:
+    linear-gradient(var(--ink-2), var(--ink-2)) left top    / 18px 2px no-repeat,
+    linear-gradient(var(--ink-2), var(--ink-2)) left center / 18px 2px no-repeat,
+    linear-gradient(var(--ink-2), var(--ink-2)) left bottom / 18px 2px no-repeat;
 }
 
 /* ── Thai-font consistency ────────────────────────────────────────
@@ -539,12 +548,14 @@ div.stButton > button {
   border: none !important;
   border-radius: var(--r-md) !important;
   padding: 0.65rem 1.5rem !important;
-  transition: background var(--t-fast) var(--ease),
-              transform  var(--t-fast) var(--ease) !important;
+  transition: background var(--t-fast) var(--ease) !important;
 }
 div.stButton > button:hover {
   background: var(--ink-2) !important;
-  transform: translateY(-1px) !important;
+  /* No translateY lift: the transform promoted the button to its own GPU layer,
+     and pressing it (e.g. "สร้างรายงาน PDF") starts a long rerun during which
+     Chromium froze the lifted frame as a ghost — the button looked split in two.
+     The background shift alone gives the hover affordance without ghosting. */
 }
 div.stButton > button:focus-visible {
   outline: 2px solid var(--accent) !important;

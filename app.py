@@ -770,36 +770,43 @@ if st.session_state.get("scanned"):
             "บทสรุปผู้บริหาร · ผลการตรวจสอบทุกหัวข้อ · "
             "สถานะผ่าน/ไม่ผ่าน · คำแนะนำแก้ไขพร้อม Config จริง"
         )
+    pdf_requested = False
     with col_pdf2:
         if st.button("สร้างรายงาน PDF", use_container_width=True):
-            try:
-                # 0) เตรียมเอนจิน (ดาวน์โหลด Chromium บนเซิร์ฟเวอร์ครั้งแรกครั้งเดียว)
-                #    ครั้งถัด ๆ ไปจะข้ามทันทีเพราะ cache ไว้แล้ว
-                with st.spinner("กำลังเตรียมเอนจินสร้างรายงาน "
-                                "(ครั้งแรกของเซิร์ฟเวอร์อาจใช้เวลาสักครู่)..."):
-                    _prepare_pdf_engine()
-                with st.spinner("กำลังเรียก AI (คีย์สำรอง) และสร้างรายงาน..."):
-                    # 1) เรียก Gemini ด้วยคีย์สำรอง (GEMINI_API_KEY_Backup) เพื่อสร้าง
-                    #    บทวิเคราะห์เฉพาะของรายงาน — แยกโควต้าจากการวิเคราะห์บนหน้าจอ
-                    report_ai = generate_report_analysis(scan_data, server_data, ai_data)
-                    # 2) ประกอบ HTML รายงาน 1 หน้า (เลย์เอาต์อ่านง่าย)
-                    report_html = build_report_html(
-                        scan_data, report_ai, server_data,
-                        org.strip(),       # ว่าง → html_generator ดึงชื่อจาก <title>/โดเมนเอง
-                    )
-                    # 3) แปลง HTML 1 หน้า → PDF 1 หน้า ด้วย Playwright (Chromium)
-                    pdf_bytes = html_to_pdf(report_html)
-                    st.session_state["pdf_bytes"] = pdf_bytes
-                    st.session_state["pdf_ready"] = True
-                if report_ai.get("offline_fallback"):
-                    st.info(
-                        "หมายเหตุ: ใช้บทวิเคราะห์ offline ในรายงาน "
-                        "(คีย์สำรองเรียก Gemini ไม่ได้ หรือไม่ได้ตั้งค่า "
-                        "GEMINI_API_KEY_Backup)"
-                    )
-                st.success(f"สร้าง PDF สำเร็จ ({len(pdf_bytes):,} bytes)")
-            except Exception as exc:
-                st.error(f"สร้าง PDF ไม่สำเร็จ: {exc}")
+            pdf_requested = True
+
+    # การสร้างรายงาน (งานหนัก หลายวินาที) ทำที่ระดับบนสุด — "นอก" st.columns โดยตั้งใจ:
+    # ถ้าปล่อยให้บล็อกขณะเรนเดอร์อยู่ภายในคอลัมน์ Streamlit จะส่ง delta ของแถว
+    # คอลัมน์ซ้ำระหว่างรอ ทำให้กล่องข้อมูล+ปุ่มแสดงซ้อนกันสองชุด (ของจริง + เงาจาง)
+    if pdf_requested:
+        try:
+            # 0) เตรียมเอนจิน (ดาวน์โหลด Chromium บนเซิร์ฟเวอร์ครั้งแรกครั้งเดียว)
+            #    ครั้งถัด ๆ ไปจะข้ามทันทีเพราะ cache ไว้แล้ว
+            with st.spinner("กำลังเตรียมเอนจินสร้างรายงาน "
+                            "(ครั้งแรกของเซิร์ฟเวอร์อาจใช้เวลาสักครู่)..."):
+                _prepare_pdf_engine()
+            with st.spinner("กำลังเรียก AI (คีย์สำรอง) และสร้างรายงาน..."):
+                # 1) เรียก Gemini ด้วยคีย์สำรอง (GEMINI_API_KEY_Backup) เพื่อสร้าง
+                #    บทวิเคราะห์เฉพาะของรายงาน — แยกโควต้าจากการวิเคราะห์บนหน้าจอ
+                report_ai = generate_report_analysis(scan_data, server_data, ai_data)
+                # 2) ประกอบ HTML รายงาน 1 หน้า (เลย์เอาต์อ่านง่าย)
+                report_html = build_report_html(
+                    scan_data, report_ai, server_data,
+                    org.strip(),       # ว่าง → html_generator ดึงชื่อจาก <title>/โดเมนเอง
+                )
+                # 3) แปลง HTML 1 หน้า → PDF 1 หน้า ด้วย Playwright (Chromium)
+                pdf_bytes = html_to_pdf(report_html)
+                st.session_state["pdf_bytes"] = pdf_bytes
+                st.session_state["pdf_ready"] = True
+            if report_ai.get("offline_fallback"):
+                st.info(
+                    "หมายเหตุ: ใช้บทวิเคราะห์ offline ในรายงาน "
+                    "(คีย์สำรองเรียก Gemini ไม่ได้ หรือไม่ได้ตั้งค่า "
+                    "GEMINI_API_KEY_Backup)"
+                )
+            st.success(f"สร้าง PDF สำเร็จ ({len(pdf_bytes):,} bytes)")
+        except Exception as exc:
+            st.error(f"สร้าง PDF ไม่สำเร็จ: {exc}")
 
     if st.session_state.get("pdf_ready"):
         now    = datetime.now(_ICT).strftime("%Y%m%d_%H%M")

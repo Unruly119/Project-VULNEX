@@ -272,6 +272,92 @@ def render_ai_analysis(analysis: str) -> None:
             st.markdown(body.strip())
 
 
+@st.fragment
+def render_pdf_report_section() -> None:
+    """Render the 'สร้างรายงานความปลอดภัย' (create PDF) section in isolation.
+
+    Why a fragment: building the PDF blocks for several seconds (Gemini + the
+    Playwright/Chromium render). If that runs during a normal full-script rerun,
+    Streamlit keeps the previous frame mounted while the new one is computed, and
+    the long pause makes that stale frame visible — every card/heading/row looked
+    split into a normal copy above and a faded 'ghost' below. @st.fragment scopes
+    the button's rerun to THIS section only, so nothing above it is re-rendered
+    and there's no page-wide ghost. Inside the fragment the heavy work also runs
+    OUTSIDE the st.columns block, so the info-box + button row finishes rendering
+    before blocking and never duplicates either.
+    """
+    scan_data   = st.session_state.get("scan_data") or {}
+    ai_data     = st.session_state.get("ai_data") or {}
+    server_data = st.session_state.get("server_data") or {}
+    org         = st.session_state.get("org", "") or ""
+
+    st.markdown(
+        '<div class="cve-title-wrap" style="margin-bottom:12px">'
+        '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"'
+        ' fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
+        '<polyline points="14 2 14 8 20 8"/>'
+        '<line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
+        '<span class="report-title">สร้างรายงานความปลอดภัย</span>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+    col_pdf1, col_pdf2 = st.columns([2, 1])
+    with col_pdf1:
+        st.info(
+            "รายงาน PDF **1 หน้า** อ่านง่าย ครอบคลุม: "
+            "บทสรุปผู้บริหาร · ผลการตรวจสอบทุกหัวข้อ · "
+            "สถานะผ่าน/ไม่ผ่าน · คำแนะนำแก้ไขพร้อม Config จริง"
+        )
+    pdf_requested = False
+    with col_pdf2:
+        if st.button("สร้างรายงาน PDF", use_container_width=True):
+            pdf_requested = True
+
+    # งานหนักทำ "นอก" st.columns: ปิดแถวคอลัมน์ให้เสร็จก่อนค่อยบล็อก — กันแถว
+    # กล่องข้อมูล+ปุ่มแสดงซ้อนกันสองชุดระหว่างรอ
+    if pdf_requested:
+        try:
+            # 0) เตรียมเอนจิน (ดาวน์โหลด Chromium บนเซิร์ฟเวอร์ครั้งแรกครั้งเดียว)
+            with st.spinner("กำลังเตรียมเอนจินสร้างรายงาน "
+                            "(ครั้งแรกของเซิร์ฟเวอร์อาจใช้เวลาสักครู่)..."):
+                _prepare_pdf_engine()
+            with st.spinner("กำลังเรียก AI (คีย์สำรอง) และสร้างรายงาน..."):
+                # 1) เรียก Gemini ด้วยคีย์สำรอง (GEMINI_API_KEY_Backup)
+                report_ai = generate_report_analysis(scan_data, server_data, ai_data)
+                # 2) ประกอบ HTML รายงาน 1 หน้า
+                report_html = build_report_html(
+                    scan_data, report_ai, server_data,
+                    org.strip(),       # ว่าง → html_generator ดึงชื่อจาก <title>/โดเมนเอง
+                )
+                # 3) แปลง HTML 1 หน้า → PDF 1 หน้า ด้วย Playwright (Chromium)
+                pdf_bytes = html_to_pdf(report_html)
+                st.session_state["pdf_bytes"] = pdf_bytes
+                st.session_state["pdf_ready"] = True
+            if report_ai.get("offline_fallback"):
+                st.info(
+                    "หมายเหตุ: ใช้บทวิเคราะห์ offline ในรายงาน "
+                    "(คีย์สำรองเรียก Gemini ไม่ได้ หรือไม่ได้ตั้งค่า "
+                    "GEMINI_API_KEY_Backup)"
+                )
+            st.success(f"สร้าง PDF สำเร็จ ({len(pdf_bytes):,} bytes)")
+        except Exception as exc:
+            st.error(f"สร้าง PDF ไม่สำเร็จ: {exc}")
+
+    if st.session_state.get("pdf_ready"):
+        now    = datetime.now(_ICT).strftime("%Y%m%d_%H%M")
+        slug   = _site_slug(st.session_state.get("url", ""))
+        prefix = f"{slug}_" if slug else ""
+        fname  = f"{prefix}VULNEX_Report_{now}.pdf"
+        st.download_button(
+            label="ดาวน์โหลด PDF Report",
+            data=st.session_state["pdf_bytes"],
+            file_name=fname,
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+
 def score_ring_html(score: int, color_class: str) -> str:
     """Animated SVG progress ring for the score metric (SMIL, no JS required)."""
     R, CX, CY = 28, 35, 35
@@ -751,75 +837,9 @@ if st.session_state.get("scanned"):
 
     st.markdown("---")
 
-    # ── PDF report ──────────────────────────────────────────────
-    st.markdown(
-        '<div class="cve-title-wrap" style="margin-bottom:12px">'
-        '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"'
-        ' fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"'
-        ' stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
-        '<polyline points="14 2 14 8 20 8"/>'
-        '<line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
-        '<span class="report-title">สร้างรายงานความปลอดภัย</span>'
-        '</div>',
-        unsafe_allow_html=True
-    )
-    col_pdf1, col_pdf2 = st.columns([2, 1])
-    with col_pdf1:
-        st.info(
-            "รายงาน PDF **1 หน้า** อ่านง่าย ครอบคลุม: "
-            "บทสรุปผู้บริหาร · ผลการตรวจสอบทุกหัวข้อ · "
-            "สถานะผ่าน/ไม่ผ่าน · คำแนะนำแก้ไขพร้อม Config จริง"
-        )
-    pdf_requested = False
-    with col_pdf2:
-        if st.button("สร้างรายงาน PDF", use_container_width=True):
-            pdf_requested = True
-
-    # การสร้างรายงาน (งานหนัก หลายวินาที) ทำที่ระดับบนสุด — "นอก" st.columns โดยตั้งใจ:
-    # ถ้าปล่อยให้บล็อกขณะเรนเดอร์อยู่ภายในคอลัมน์ Streamlit จะส่ง delta ของแถว
-    # คอลัมน์ซ้ำระหว่างรอ ทำให้กล่องข้อมูล+ปุ่มแสดงซ้อนกันสองชุด (ของจริง + เงาจาง)
-    if pdf_requested:
-        try:
-            # 0) เตรียมเอนจิน (ดาวน์โหลด Chromium บนเซิร์ฟเวอร์ครั้งแรกครั้งเดียว)
-            #    ครั้งถัด ๆ ไปจะข้ามทันทีเพราะ cache ไว้แล้ว
-            with st.spinner("กำลังเตรียมเอนจินสร้างรายงาน "
-                            "(ครั้งแรกของเซิร์ฟเวอร์อาจใช้เวลาสักครู่)..."):
-                _prepare_pdf_engine()
-            with st.spinner("กำลังเรียก AI (คีย์สำรอง) และสร้างรายงาน..."):
-                # 1) เรียก Gemini ด้วยคีย์สำรอง (GEMINI_API_KEY_Backup) เพื่อสร้าง
-                #    บทวิเคราะห์เฉพาะของรายงาน — แยกโควต้าจากการวิเคราะห์บนหน้าจอ
-                report_ai = generate_report_analysis(scan_data, server_data, ai_data)
-                # 2) ประกอบ HTML รายงาน 1 หน้า (เลย์เอาต์อ่านง่าย)
-                report_html = build_report_html(
-                    scan_data, report_ai, server_data,
-                    org.strip(),       # ว่าง → html_generator ดึงชื่อจาก <title>/โดเมนเอง
-                )
-                # 3) แปลง HTML 1 หน้า → PDF 1 หน้า ด้วย Playwright (Chromium)
-                pdf_bytes = html_to_pdf(report_html)
-                st.session_state["pdf_bytes"] = pdf_bytes
-                st.session_state["pdf_ready"] = True
-            if report_ai.get("offline_fallback"):
-                st.info(
-                    "หมายเหตุ: ใช้บทวิเคราะห์ offline ในรายงาน "
-                    "(คีย์สำรองเรียก Gemini ไม่ได้ หรือไม่ได้ตั้งค่า "
-                    "GEMINI_API_KEY_Backup)"
-                )
-            st.success(f"สร้าง PDF สำเร็จ ({len(pdf_bytes):,} bytes)")
-        except Exception as exc:
-            st.error(f"สร้าง PDF ไม่สำเร็จ: {exc}")
-
-    if st.session_state.get("pdf_ready"):
-        now    = datetime.now(_ICT).strftime("%Y%m%d_%H%M")
-        slug   = _site_slug(st.session_state.get("url", ""))
-        prefix = f"{slug}_" if slug else ""
-        fname  = f"{prefix}VULNEX_Report_{now}.pdf"
-        st.download_button(
-            label="ดาวน์โหลด PDF Report",
-            data=st.session_state["pdf_bytes"],
-            file_name=fname,
-            mime="application/pdf",
-            use_container_width=True,
-        )
+    # ── PDF report — isolated @st.fragment so the multi-second build reruns
+    #    only this section and can't ghost/duplicate the rest of the page ──
+    render_pdf_report_section()
 
 elif not st.session_state.get("scanned"):
     st.markdown("""

@@ -230,15 +230,15 @@ def render_footer() -> None:
         f' rel="noopener noreferrer">คู่มือ{_EXT_SVG}</a>'
         '</div>'
         '</div>'
-        # ── secondary column: references ──
-        '<nav class="ft-refs" aria-labelledby="ft-refs-head">'
-        '<h2 id="ft-refs-head" class="ft-refs-head">อ้างอิง</h2>'
-        f'{refs}'
-        '</nav>'
-        # ── tertiary column: development team ──
+        # ── secondary column: development team ──
         '<nav class="ft-team" aria-labelledby="ft-team-head">'
         '<h2 id="ft-team-head" class="ft-refs-head">Development Team (Name)</h2>'
         f'<ol class="ft-team-list">{team}</ol>'
+        '</nav>'
+        # ── tertiary column: references ──
+        '<nav class="ft-refs" aria-labelledby="ft-refs-head">'
+        '<h2 id="ft-refs-head" class="ft-refs-head">อ้างอิง</h2>'
+        f'{refs}'
         '</nav>'
         '</div>'
         # ── baseline ──

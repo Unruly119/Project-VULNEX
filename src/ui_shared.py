@@ -178,13 +178,11 @@ def render_sidebar_nav(active: str = "scan") -> None:
 
 
 # ── Site footer ──────────────────────────────────────────────────
-# A Fable-style footer (anthropic.com/claude/fable): a quiet parchment
-# panel with a brand block on the left and labelled columns of real,
-# working links on the right. The middle column preserves this footer's
-# original purpose — surfacing the credible public standards each VULNEX
-# module is modelled on (headers → SecurityHeaders, SSL → SSL Labs,
-# server/exposure → Shodan) — alongside in-app navigation and learning
-# resources. Every link goes somewhere real; nothing is decorative.
+# A quiet two-column product footer (Linear / Vercel restraint): a brand block
+# on the left (mark · wordmark · one line · two CTAs) beside a single "อ้างอิง"
+# column listing the public standards VULNEX is modelled on. One warm panel, a
+# hairline rule, then a low-key copyright row. No team list, no marketing
+# paragraph, no balancing filler — every element earns its place.
 _FOOTER_SHIELD_LG = (
     '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"'
     ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
@@ -193,69 +191,47 @@ _FOOTER_SHIELD_LG = (
     '<path d="m9 12 2 2 4-4"/></svg>'
 )
 
-# (heading, ((label, url, external?), ...)). external links open in a new
-# tab and carry the "opens elsewhere" arrow; internal ones navigate in place.
-_FOOTER_COLUMNS = (
-    ("เมนู", (
-        ("หน้าตรวจสอบ", "./", False),
-        ("คู่มือการใช้งาน", MANUAL_URL, True),
-    )),
-    ("มาตรฐานที่อ้างอิง", (
-        ("SecurityHeaders", "https://securityheaders.com/", True),
-        ("SSL Labs", "https://www.ssllabs.com/ssltest/", True),
-        ("Shodan", "https://www.shodan.io/", True),
-    )),
-    ("ทีมพัฒนา", (
-        ("Dev01", None, False),
-        ("Dev02", None, False),
-        ("Dev03", None, False),
-        ("Dev04", None, False),
-    )),
+# The external standards each VULNEX module is benchmarked against. Every link
+# goes somewhere real; nothing is decorative.
+_FOOTER_REFS = (
+    ("SecurityHeaders", "https://securityheaders.com/"),
+    ("SSL Labs", "https://www.ssllabs.com/ssltest/"),
 )
 
 
-def _footer_link(label: str, url: str | None, external: bool) -> str:
-    """One footer item. Renders as a plain span when url is None (e.g. names),
-    an external link (new tab + arrow) when external=True, else same-tab link."""
-    if url is None:
-        return f'<span class="ft-name">{label}</span>'
-    attrs = ' target="_blank" rel="noopener noreferrer"' if external else ""
-    arrow = _EXT_SVG if external else ""
-    return (
-        f'<a class="ft-link" href="{url}"{attrs}>'
-        f'<span>{label}</span>{arrow}</a>'
-    )
-
-
 def render_footer() -> None:
-    """Render the shared Fable-style footer: a parchment panel with a VULNEX
-    brand block beside labelled columns of in-app and reference links."""
-    columns = "".join(
-        '<nav class="ft-col">'
-        f'<h2 class="ft-col-head">{head}</h2>'
-        + "".join(_footer_link(*link) for link in links)
-        + "</nav>"
-        for head, links in _FOOTER_COLUMNS
+    """Render the site footer: a two-column product footer — brand block + CTAs
+    on the left, the 'อ้างอิง' standards column on the right, then a copyright
+    row. All references open in a new tab."""
+    refs = "".join(
+        f'<a class="ft-link" href="{url}" target="_blank" rel="noopener noreferrer">'
+        f'<span>{label}</span>{_EXT_SVG}</a>'
+        for label, url in _FOOTER_REFS
     )
     st.markdown(
         '<footer class="site-footer"><div class="site-footer-inner">'
         '<div class="site-footer-top">'
-        # ── brand block ──
-        '<div class="ft-brand">'
-        f'<span class="ft-brand-ico">{_FOOTER_SHIELD_LG}</span>'
-        '<div class="ft-brand-name">Project-<b>VULNEX</b></div>'
-        '<p class="ft-brand-tag">ระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาแบบ Passive '
-        '— วิเคราะห์ความเสี่ยง ให้คะแนน และสรุปผลเป็นภาษาไทยที่เข้าใจง่าย '
-        'โดยไม่รุกล้ำหรือสร้างความเสียหายต่อระบบเป้าหมาย</p>'
-        '<span class="ft-brand-badge">ตรวจแบบ Passive · ปลอดภัยต่อระบบเป้าหมาย</span>'
+        # ── primary column: brand + one line + CTAs ──
+        '<div class="ft-primary">'
+        f'<span class="ft-mark">{_FOOTER_SHIELD_LG}</span>'
+        '<div class="ft-name">Project-<b>VULNEX</b></div>'
+        '<p class="ft-tagline">ระบบตรวจสอบความปลอดภัยเว็บไซต์แบบ Passive</p>'
+        '<div class="ft-cta">'
+        '<a class="ft-btn ft-btn-primary" href="./">เริ่มตรวจสอบ</a>'
+        f'<a class="ft-btn ft-btn-ghost" href="{MANUAL_URL}" target="_blank"'
+        f' rel="noopener noreferrer">คู่มือ{_EXT_SVG}</a>'
         '</div>'
-        # ── link columns ──
-        f'<div class="ft-cols">{columns}</div>'
+        '</div>'
+        # ── secondary column: references ──
+        '<nav class="ft-refs" aria-labelledby="ft-refs-head">'
+        '<h2 id="ft-refs-head" class="ft-refs-head">อ้างอิง</h2>'
+        f'{refs}'
+        '</nav>'
         '</div>'
         # ── baseline ──
         '<div class="site-footer-base">'
         '<span>© 2026 Project-VULNEX</span>'
-        '<span>PSU Future Tech 2026 · Cybersecurity Track</span>'
+        '<span>PSU Future Tech · Cybersecurity Track</span>'
         '</div>'
         '</div></footer>',
         unsafe_allow_html=True,

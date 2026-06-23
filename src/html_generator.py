@@ -475,6 +475,8 @@ def _stylesheet() -> str:
         .exec-text p{margin-bottom:6px}
         .exec-ai{background:#f5f8fc;border-left:3px solid #67ace1;border-radius:4px;
             padding:7px 10px;color:#334155;font-size:10.5px}
+        .exec-ai-sum{margin-top:6px;padding-top:6px;border-top:1px dashed #c4d8ec;
+            font-size:10px;color:#3f5168}
         .exec-meta{color:#64748b;font-size:10px;margin-top:6px}
         .donut{width:124px;text-align:center;flex-shrink:0}
         .donut .cap{font-size:10px;color:#64748b;margin-top:2px;font-weight:600}
@@ -560,20 +562,31 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     # ในหัวข้อ 1 วางเหนือบรรทัด "สรุปจาก AI" (ไม่มีป้ายชื่อซ้ำซ้อน แสดงเนื้อหาเลย)
     overview = _section_text(ai_data.get("analysis", ""), "สรุปภาพรวม")
     overview = re.sub(r"(?m)^\s*>.*$", "", overview).strip()      # ตัด blockquote banner
-    exec_ai_html = ""
+    overview_html = ""
     if overview:
         para = overview.split("\n\n")[0].replace("\n", " ").strip()
         if para:
-            exec_ai_html = f'<div class="exec-ai">{_md_inline(para)}</div>'
+            overview_html = _md_inline(para)
 
     # บรรทัด "สรุปจาก AI" จากรายการที่ไม่ผ่าน (เหมือนรายงานเดิม)
     failed_preview = [c for c in checklist if c["result"] == "FAILED"]
-    ai_summary_line = ""
+    ai_summary_inner = ""
     if failed_preview:
         topics = " · ".join(_esc(c["topic"], 80) for c in failed_preview[:3])
-        ai_summary_line = (
-            f'<p><b>สรุปจาก AI:</b> พบ {len(failed_preview)} รายการที่ต้องแก้ไข — {topics}</p>'
+        ai_summary_inner = (
+            f'<b>สรุปจาก AI:</b> พบ {len(failed_preview)} รายการที่ต้องแก้ไข — {topics}'
         )
+
+    # กล่องสีฟ้า: บทสรุปภาพรวม + (ใต้ลงมา เว้นช่องเล็กน้อย) บรรทัด "สรุปจาก AI"
+    # ถ้าไม่มีบทสรุปภาพรวม ให้แสดง "สรุปจาก AI" เป็นบรรทัดธรรมดา (fallback เดิม)
+    exec_ai_html = ""
+    ai_summary_line = ""
+    if overview_html:
+        sum_in_box = (f'<div class="exec-ai-sum">{ai_summary_inner}</div>'
+                      if ai_summary_inner else "")
+        exec_ai_html = f'<div class="exec-ai">{overview_html}{sum_in_box}</div>'
+    elif ai_summary_inner:
+        ai_summary_line = f'<p>{ai_summary_inner}</p>'
 
     sec1 = (
         _section_bar("1", "บทสรุปการประเมิน (Executive Summary)")

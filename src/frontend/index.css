@@ -185,7 +185,14 @@ body {
 [data-testid="collapsedControl"] svg { display: none !important; }
 
 [data-testid="stExpandSidebarButton"],
-[data-testid="stSidebarCollapseButton"] { color: var(--ink-2) !important; }
+[data-testid="stSidebarCollapseButton"] {
+  color: var(--ink-2) !important;
+  opacity: 1 !important;                 /* stay visible without needing hover */
+  display: inline-flex !important;       /* centre the bars in the button box so
+                                            the hover highlight aligns with them */
+  align-items: center !important;
+  justify-content: center !important;
+}
 
 [data-testid="stExpandSidebarButton"]::after,
 [data-testid="stSidebarCollapseButton"]::after {
@@ -194,8 +201,10 @@ body {
   width: 17px;
   height: 2px;
   border-radius: 2px;
-  background: currentColor;
-  box-shadow: 0 -5px 0 currentColor, 0 5px 0 currentColor;
+  /* explicit colour (not currentColor) so the bars don't vanish when Streamlit
+     resets the button's text colour between hover states */
+  background: var(--ink-2);
+  box-shadow: 0 -5px 0 var(--ink-2), 0 5px 0 var(--ink-2);
 }
 
 /* ── Thai-font consistency ────────────────────────────────────────

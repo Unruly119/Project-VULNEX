@@ -469,13 +469,6 @@ def _stylesheet() -> str:
             min-width:17px;height:17px;background:rgba(255,255,255,.22);border-radius:3px;
             font-size:10px;margin-right:8px;padding:0 3px}
 
-        /* AI summary — promoted to the very top, above §1 */
-        .ai-top{background:#f5f8fc;border:1px solid #dbe6f3;border-left:4px solid #2563a8;
-            border-radius:5px;padding:9px 13px;margin:10px 0 2px}
-        .ai-top-label{font-size:9.5px;font-weight:700;color:#1e3a5f;text-transform:uppercase;
-            letter-spacing:.5px;margin-bottom:3px}
-        .ai-top-body{font-size:10.5px;color:#334155;line-height:1.55}
-
         /* §1 Executive summary */
         .exec{display:flex;gap:16px;align-items:center}
         .exec-text{flex:1}
@@ -552,7 +545,8 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     month_th = ["", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
                 "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
     date_th  = f"{now_dt.day} {month_th[now_dt.month]} {now_dt.year + 543}"
-    time_th  = f"เวลาที่ตรวจสอบ {now_dt.strftime('%H:%M')} น."
+    # มุมขวาบนของแบนเนอร์: วันที่ก่อนเวลา ไม่มีคำว่า "วันที่/เวลาที่ตรวจสอบ"
+    datetime_th = f"{date_th} {now_dt.strftime('%H:%M')} น."
 
     checklist = _build_checklist(scan_data, server_data, ai_data)
     passed = sum(1 for c in checklist if c["result"] == "PASSED")
@@ -562,20 +556,15 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     # ชื่อหน่วยงานแบบ deterministic (ไม่เอาจากข้อความ AI ที่อาจมโนชื่อ)
     org_display = _institution_name(scan_data, org_name)
 
-    # บทวิเคราะห์ AI (เรียกด้วยคีย์สำรอง) — ใช้ส่วน "สรุปภาพรวม" เป็นบล็อกบนสุด
-    # ของรายงาน (เหนือหัวข้อ 1) เพื่อให้ผู้อ่านเห็นบทสรุปจาก AI ก่อนสิ่งอื่น
+    # บทวิเคราะห์ AI (เรียกด้วยคีย์สำรอง) — ใช้ส่วน "สรุปภาพรวม" เป็นกล่องสีฟ้า
+    # ในหัวข้อ 1 วางเหนือบรรทัด "สรุปจาก AI" (ไม่มีป้ายชื่อซ้ำซ้อน แสดงเนื้อหาเลย)
     overview = _section_text(ai_data.get("analysis", ""), "สรุปภาพรวม")
     overview = re.sub(r"(?m)^\s*>.*$", "", overview).strip()      # ตัด blockquote banner
-    ai_top_html = ""
+    exec_ai_html = ""
     if overview:
         para = overview.split("\n\n")[0].replace("\n", " ").strip()
         if para:
-            ai_top_html = (
-                '<div class="ai-top">'
-                '<div class="ai-top-label">บทสรุปจากการวิเคราะห์ด้วย AI</div>'
-                f'<div class="ai-top-body">{_md_inline(para)}</div>'
-                '</div>'
-            )
+            exec_ai_html = f'<div class="exec-ai">{_md_inline(para)}</div>'
 
     # บรรทัด "สรุปจาก AI" จากรายการที่ไม่ผ่าน (เหมือนรายงานเดิม)
     failed_preview = [c for c in checklist if c["result"] == "FAILED"]
@@ -589,6 +578,7 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
     sec1 = (
         _section_bar("1", "บทสรุปการประเมิน (Executive Summary)")
         + '<div class="exec"><div class="exec-text">'
+        + exec_ai_html
         + ai_summary_line
         + f'<div class="exec-meta"><b>หน่วยงาน:</b> {_esc(org_display, 120)} &nbsp;|&nbsp; '
         + f"<b>วันตรวจ:</b> {date_th}</div>"
@@ -677,7 +667,7 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
         '<h1>รายงานผลกระบบตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาด้วย AI</h1>'
         '<div class="sub">Comprehensive Security Audit Report — Project VULNEX</div>'
         f'<div class="meta"><span>Target: {_esc(url, 200)}</span>'
-        f'<span>{time_th}</span></div>'
+        f'<span>{datetime_th}</span></div>'
         '</div>'
     )
     footer = (
@@ -690,7 +680,7 @@ def build_report_html(scan_data: dict, ai_data: dict, server_data: dict,
         '</div>'
     )
 
-    body = banner + ai_top_html + sec1 + sec2 + sec3 + sec4 + footer
+    body = banner + sec1 + sec2 + sec3 + sec4 + footer
 
     return (
         '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">'

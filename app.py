@@ -127,6 +127,22 @@ def _esc(value, maxlen: int = 256) -> str:
     return _html.escape(str(value).strip()[:maxlen])
 
 
+def _site_slug(url: str) -> str:
+    """Short, filename-safe slug for the scanned site, taken from the same URL
+    the user entered (the report's Target field). Keeps a leading ``www`` plus
+    the main domain label, e.g. ``https://www.technictani.ac.th`` → ``www_technictani``
+    (``www.school.ac.th`` → ``www_school``). Returns "" if no host."""
+    try:
+        host = (urlparse(url).hostname or "").strip().lower()
+    except Exception:
+        host = ""
+    labels = [l for l in host.split(".") if l]
+    if not labels:
+        return ""
+    keep = labels[:2] if labels[0] == "www" and len(labels) > 1 else labels[:1]
+    return re.sub(r"[^A-Za-z0-9_]+", "_", "_".join(keep)).strip("_")
+
+
 def _sev_safe(raw: str) -> str:
     """Allowlist-validate a severity string before CSS/HTML injection."""
     v = raw.upper() if raw else "INFO"
@@ -786,8 +802,10 @@ if st.session_state.get("scanned"):
                 st.error(f"สร้าง PDF ไม่สำเร็จ: {exc}")
 
     if st.session_state.get("pdf_ready"):
-        now   = datetime.now(_ICT).strftime("%Y%m%d_%H%M")
-        fname = f"VULNEX_Report_{now}.pdf"
+        now    = datetime.now(_ICT).strftime("%Y%m%d_%H%M")
+        slug   = _site_slug(st.session_state.get("url", ""))
+        prefix = f"{slug}_" if slug else ""
+        fname  = f"{prefix}VULNEX_Report_{now}.pdf"
         st.download_button(
             label="ดาวน์โหลด PDF Report",
             data=st.session_state["pdf_bytes"],

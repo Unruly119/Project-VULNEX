@@ -937,10 +937,10 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
    the layout's 1200px ceiling. */
 .site-footer-inner { max-width: 1016px; margin: 0 auto; }
 
-/* primary (brand) | secondary (references) — top edges aligned */
+/* primary (brand) | references | dev team — top edges aligned */
 .site-footer-top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: clamp(3rem, 6vw, 4.5rem);          /* 48–72px */
   align-items: start;
 }
@@ -1044,6 +1044,31 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
   color: var(--accent-2);
 }
 
+/* ── Tertiary column: Development Team ── */
+.ft-team { display: flex; flex-direction: column; }
+.ft-team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.ft-team-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-height: 28px;
+  font-size: 0.9375rem;                     /* size 2 */
+  font-weight: 450;
+  line-height: 1.4;
+}
+.ft-team-num {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
 /* ── Streamlit colour-hardening overrides ──
    The global markdown rules paint every <a> / <div> with --accent / --ink-2
    !important, so re-assert the footer's own colours at higher specificity +
@@ -1069,6 +1094,11 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
 [data-testid="stMarkdownContainer"] .site-footer a.ft-btn-primary { color: var(--bg) !important; }
 [data-testid="stMarkdownContainer"] .site-footer a.ft-btn-ghost { color: var(--ink-2) !important; }
 [data-testid="stMarkdownContainer"] .site-footer a.ft-btn-ghost:hover { color: var(--ink) !important; }
+[data-testid="stMarkdownContainer"] .site-footer .ft-team-item,
+[data-testid="stMarkdownContainer"] .site-footer .ft-team-item span {
+  color: var(--ink-2) !important;
+}
+[data-testid="stMarkdownContainer"] .site-footer .ft-team-num { color: var(--muted) !important; }
 
 /* ── Copyright baseline ── */
 .site-footer-base {

@@ -183,47 +183,31 @@ body {
 }
 
 /* ── Sidebar control → hamburger icon ─────────────────────────────
-   Replace Streamlit's default double-chevron on the open/collapse control
-   with a three-bar hamburger. The inner Material glyph (or SVG) is hidden
-   and the bars are drawn with a pseudo-element, so it's font-independent
-   and survives Streamlit version changes. */
+   Replace Streamlit's default double-chevron on the open/collapse control with
+   a three-bar hamburger. Streamlit nests the glyph as a Material-icon <span>
+   inside the button, so we recolour THAT span IN PLACE — a ::after pseudo became
+   a flex sibling of the real button content and got squished to a sliver
+   (4–12px instead of 20), which is what made the icon look distorted.
+   color:transparent hides the original chevron glyph; the SVG mask then clips a
+   solid fill into three crisp, evenly-spaced bars over the icon's own 24px box,
+   so it stays centred in the button with no overflow and no squish. */
 [data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"],
 [data-testid="stSidebarCollapseButton"] [data-testid="stIconMaterial"],
-[data-testid="collapsedControl"] [data-testid="stIconMaterial"],
-[data-testid="stExpandSidebarButton"] svg,
-[data-testid="stSidebarCollapseButton"] svg,
-[data-testid="collapsedControl"] svg { display: none !important; }
-
-[data-testid="stExpandSidebarButton"],
-[data-testid="stSidebarCollapseButton"] {
-  color: var(--ink-2) !important;
-  opacity: 1 !important;                 /* stay visible without needing hover */
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  /* Hiding the inner glyph collapses the button, so the drawn bars spilled
-     outside its clickable area (you had to aim for the exact centre). Pin a real
-     square hitbox so the whole icon sits inside the button. */
-  width: 2.25rem !important;
-  height: 2.25rem !important;
-  min-width: 2.25rem !important;
-  min-height: 2.25rem !important;
-  padding: 0 !important;
+[data-testid="collapsedControl"] [data-testid="stIconMaterial"] {
+  display: inline-block !important;
+  width: 22px !important;
+  height: 22px !important;
+  font-size: 22px !important;
+  line-height: 22px !important;
+  color: transparent !important;
+  background-color: var(--ink-2) !important;
+  -webkit-mask: var(--hamburger-svg) center / 22px 22px no-repeat !important;
+  mask: var(--hamburger-svg) center / 22px 22px no-repeat !important;
 }
 
-[data-testid="stExpandSidebarButton"]::after,
-[data-testid="stSidebarCollapseButton"]::after {
-  content: "";
-  display: block;
-  /* Crisp three-line hamburger drawn from an SVG mask (square 20×20 viewBox) so
-     it scales without distorting, the bars stay evenly spaced and round-capped,
-     and nothing overflows the button's hit area. background-color tints it. */
-  width: 20px;
-  height: 20px;
-  background-color: var(--ink-2);
-  -webkit-mask: var(--hamburger-svg) center / 20px 20px no-repeat;
-  mask: var(--hamburger-svg) center / 20px 20px no-repeat;
-}
+/* Keep the collapsed-state "open sidebar" control visible without a hover
+   (its parent header is hidden for a clean look). */
+[data-testid="stExpandSidebarButton"] { opacity: 1 !important; }
 
 /* ── Thai-font consistency ────────────────────────────────────────
    The Prompt webfont is unicode-range-limited to Thai, so an element only

@@ -914,36 +914,40 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
 .side-nav-link:hover .ext-ico { color: var(--accent); }
 
 /* ════════════════════════════════════════════════════════════════
-   Site footer — Fable-style parchment panel (anthropic.com/claude/fable)
-   A quiet warm panel: brand block on the left, labelled columns of real
-   links on the right, a hairline rule, then a low-key copyright row.
-   Breaks out of the block-container's horizontal padding to reach the
-   content-area edges, and cancels the bottom padding so it sits flush.
-   (A 100vw bleed is avoided on purpose: it misaligns when the sidebar is
-   open, because the content area is offset, not viewport-centred.)
+   Site footer — two-column product footer (Linear / Vercel restraint)
+   Left: brand mark · wordmark · one line · two CTAs. Right: a single
+   "อ้างอิง" column of the public standards VULNEX is modelled on. One warm
+   panel that breaks out to the content-area edges, a hairline rule, then a
+   low-key copyright row. Three type sizes only (17 / 15 / 13px); hierarchy is
+   carried by weight + space, not a ladder of sizes.
+   (A 100vw bleed is avoided on purpose: it misaligns when the sidebar is open,
+   because the content area is offset, not viewport-centred.)
    ════════════════════════════════════════════════════════════════ */
 .site-footer {
-  /* override the base `footer { visibility:hidden }` rule (which exists to
-     hide Streamlit's own footer) — this is our intentional footer. */
+  /* override the base `footer { visibility:hidden }` rule (which hides
+     Streamlit's own footer) — this is our intentional footer. */
   visibility: visible !important;
   margin: 5rem -2rem -4rem;
-  padding: 3.25rem 2rem 2rem;
+  padding: 3rem 2rem 1.75rem;
   background: var(--bg-warm);
   border-top: 1px solid var(--border);
 }
+/* max-width tracks the page content above (block-container inner ≈1016px) so
+   the footer's left edge lines up with the hero and results; it caps well under
+   the layout's 1200px ceiling. */
 .site-footer-inner { max-width: 1016px; margin: 0 auto; }
 
-/* Brand block | three link columns */
+/* primary (brand) | secondary (references) — top edges aligned */
 .site-footer-top {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) repeat(3, minmax(0, 1fr));
-  gap: 2.5rem 3rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: clamp(3rem, 6vw, 4.5rem);          /* 48–72px */
   align-items: start;
 }
 
-/* ── Brand block ── */
-.ft-brand { max-width: 38ch; }
-.ft-brand-ico {
+/* ── Primary column ── */
+.ft-primary { max-width: 46ch; }
+.ft-mark {
   display: inline-grid;
   place-items: center;
   width: 2.5rem;
@@ -951,73 +955,77 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
   border-radius: var(--r-md);
   background: var(--accent-dim);
   color: var(--accent);
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.85rem;
 }
-.ft-brand-name {
+.ft-name {                                  /* size 1 — 17px */
   font-family: var(--font-serif);
-  font-size: 1.25rem;
+  font-size: 1.0625rem;
   font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 }
-.ft-brand-name b { color: var(--accent); font-weight: 600; }
-.ft-brand-tag {
-  margin: 0.55rem 0 1rem;
-  font-size: 0.8125rem;
-  line-height: 1.7;
-  color: var(--ink-2);
+.ft-tagline {                               /* size 2 — 15px */
+  margin: 0.5rem 0 1.25rem;
+  max-width: 42ch;
+  font-size: 0.9375rem;
+  line-height: 1.65;
   text-wrap: pretty;
 }
-.ft-brand-badge {
+
+/* CTAs — the app's own button vocabulary: dark primary, hairline ghost */
+.ft-cta { display: flex; flex-wrap: wrap; gap: 0.625rem; }
+.ft-btn {
   display: inline-flex;
   align-items: center;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--accent-2);
-  background: var(--accent-dim);
-  border: 1px solid var(--accent-glow);
-  border-radius: var(--r-pill);
-  padding: 0.3rem 0.7rem;
-}
-
-/* ── Link columns ── */
-.ft-cols {
-  display: contents;   /* columns become direct grid items of -top */
-}
-.ft-col { display: flex; flex-direction: column; align-items: flex-start; }
-/* High specificity: the project's global h2 rule (heavy serif display)
-   otherwise wins and blows these labels up. Pin every property here. */
-[data-testid="stMarkdownContainer"] .site-footer .ft-col-head {
-  margin: 0.15rem 0 0.95rem;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;                         /* tap target */
+  padding: 0 1.15rem;
   font-family: var(--font-sans);
-  font-size: 0.72rem;
+  font-size: 0.9375rem;                     /* size 2 */
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  text-decoration: none;
+  transition: background   var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color        var(--t-fast) var(--ease);
+}
+.ft-btn-primary { background: var(--ink); }
+.ft-btn-primary:hover { background: var(--ink-2); }
+.ft-btn-ghost { border-color: var(--border-hi); }
+.ft-btn-ghost:hover { background: var(--accent-dim); border-color: var(--accent); }
+.ft-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ft-btn .ext-ico { flex: none; width: 13px; height: 13px; opacity: 0.7; }
+
+/* ── Secondary column: อ้างอิง ── */
+.ft-refs { display: flex; flex-direction: column; }
+/* Beat the project's global h2 (heavy serif display): a quiet sans label that's
+   stronger than the links by weight + colour, not by size. */
+[data-testid="stMarkdownContainer"] .site-footer .ft-refs-head {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-sans) !important;
+  font-size: 0.9375rem;                     /* size 2 */
   font-weight: 600;
   line-height: 1.4;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: #635b50;            /* warm mid-gray, ≥5.4:1 on parchment */
+  letter-spacing: 0;
+  text-transform: none;
 }
-
-/* Beat Streamlit's markdown-link underline (higher-specificity rule). */
-[data-testid="stMarkdownContainer"] a.ft-link,
-[data-testid="stMarkdownContainer"] a.ft-link:hover,
-[data-testid="stMarkdownContainer"] a.ft-link * {
-  text-decoration: none !important;
-}
-.ft-link,
-.ft-name {
+.ft-link {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.32rem 0;
-  font-size: 0.875rem;
+  gap: 0.35rem;
+  min-height: 44px;                         /* tap target */
+  font-size: 0.9375rem;                     /* size 2 */
   font-weight: 450;
-  line-height: 1.5;
-  color: var(--ink-2);
+  line-height: 1.4;
+  transition: color var(--t-fast) var(--ease);
 }
-.ft-link { transition: color var(--t-fast) var(--ease); }
-.ft-link:hover { color: var(--accent-2); }
+.ft-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--r-sm);
+}
 .ft-link .ext-ico {
   flex: none;
   width: 12px;
@@ -1035,11 +1043,32 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
   transform: translate(0, 0);
   color: var(--accent-2);
 }
-.ft-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: var(--r-sm);
+
+/* ── Streamlit colour-hardening overrides ──
+   The global markdown rules paint every <a> / <div> with --accent / --ink-2
+   !important, so re-assert the footer's own colours at higher specificity +
+   !important. All resting colours clear WCAG AA on the parchment panel:
+   ink ≈12:1, ink-2 ≈9:1, the #635b50 baseline ≈5.5:1, bg-on-ink CTA ≈12:1. */
+[data-testid="stMarkdownContainer"] .site-footer .ft-name { color: var(--ink) !important; }
+[data-testid="stMarkdownContainer"] .site-footer .ft-name b { color: var(--accent) !important; }
+[data-testid="stMarkdownContainer"] .site-footer .ft-tagline {
+  color: var(--ink-2) !important;
+  font-size: 0.9375rem !important;          /* beat Streamlit's 1rem <p> rule → keep 3 sizes */
+  line-height: 1.65 !important;
 }
+[data-testid="stMarkdownContainer"] .site-footer .ft-refs-head { color: var(--ink) !important; }
+[data-testid="stMarkdownContainer"] .site-footer a.ft-link,
+[data-testid="stMarkdownContainer"] .site-footer a.ft-link * {
+  color: var(--ink-2) !important;
+  text-decoration: none !important;
+}
+[data-testid="stMarkdownContainer"] .site-footer a.ft-link:hover,
+[data-testid="stMarkdownContainer"] .site-footer a.ft-link:hover span {
+  color: var(--accent-2) !important;
+}
+[data-testid="stMarkdownContainer"] .site-footer a.ft-btn-primary { color: var(--bg) !important; }
+[data-testid="stMarkdownContainer"] .site-footer a.ft-btn-ghost { color: var(--ink-2) !important; }
+[data-testid="stMarkdownContainer"] .site-footer a.ft-btn-ghost:hover { color: var(--ink) !important; }
 
 /* ── Copyright baseline ── */
 .site-footer-base {
@@ -1048,30 +1077,25 @@ section[data-testid="stSidebar"] .side-nav-link:hover {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1rem;
-  margin-top: 3rem;
+  margin-top: 2.5rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--border);
-  color: #635b50;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;                     /* size 3 — 13px */
   letter-spacing: 0.01em;
 }
+[data-testid="stMarkdownContainer"] .site-footer-base,
+[data-testid="stMarkdownContainer"] .site-footer-base span {
+  color: #635b50 !important;                /* warm mid-gray, ≥5.4:1 on parchment */
+}
 
-/* Tablet: brand spans full width, three columns sit below it */
-@media (max-width: 860px) {
-  .site-footer-top {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 2rem 2rem;
-  }
-  .ft-brand { grid-column: 1 / -1; max-width: 52ch; }
-}
-/* Phone: columns stack two-up, then the panel tightens to the edges */
-@media (max-width: 560px) {
-  .site-footer { margin: 4rem -1.1rem -3rem; padding: 2.5rem 1.1rem 1.75rem; }
-  .site-footer-top { grid-template-columns: 1fr 1fr; gap: 1.75rem 1.5rem; }
-  .ft-link .ext-ico { opacity: 1; transform: none; }  /* no hover on touch */
-}
-@media (max-width: 380px) {
-  .site-footer-top { grid-template-columns: 1fr; }
+/* Phone: one column; CTAs grow to fill for larger tap targets */
+@media (max-width: 640px) {
+  .site-footer { margin: 4rem -1.1rem -3rem; padding: 2.5rem 1.1rem 1.5rem; }
+  .site-footer-top { grid-template-columns: 1fr; gap: 2.25rem; }
+  .ft-primary { max-width: none; }
+  .ft-cta { width: 100%; }
+  .ft-btn { flex: 1 1 auto; }
+  .ft-link .ext-ico { opacity: 1; transform: none; }   /* no hover on touch */
 }
 
 /* ════════════════════════════════════════════════════════════════

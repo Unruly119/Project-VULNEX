@@ -368,7 +368,7 @@ def score_ring_html(score: int, color_class: str) -> str:
         "col-crit": "#b91c1c",
     }.get(color_class, "#c4622d")
     return (
-        '<div class="metric-card">'
+        '<div class="metric-card" style="--i:0">'
         f'<svg width="70" height="70" viewBox="0 0 70 70" style="display:block;margin:0 auto 4px">'
         f'<circle cx="{CX}" cy="{CY}" r="{R}" fill="none" stroke="rgba(20,20,19,0.06)" stroke-width="5"/>'
         f'<circle cx="{CX}" cy="{CY}" r="{R}" fill="none" stroke="{c}" stroke-width="5"'
@@ -384,6 +384,62 @@ def score_ring_html(score: int, color_class: str) -> str:
         '</div>'
     )
 
+
+
+def _scan_skeleton_html(stage: str, pct: int, target: str) -> str:
+    """Skeleton loading screen shown live while the scan + AI analysis run.
+
+    Mirrors the eventual results layout (metric row · score breakdown · tabs ·
+    panel) with shimmer placeholders, a rotating radar sweep, and a staged
+    progress bar. It is rendered into an ``st.empty()`` placeholder *before* the
+    blocking scan and cleared once results are ready — Streamlit flushes the
+    delta mid-script (the same reason the old progress bar updated live), so the
+    shimmer animates in-browser during the synchronous scan. This replaces the
+    bare spinner with a structured skeleton (the product-register loading
+    pattern). prefers-reduced-motion freezes the shimmer via the global reduce
+    rule; the layout still communicates "loading". ``target`` is pre-escaped."""
+    cards = "".join(
+        f'<div class="skel-card" style="--i:{i}">'
+        '<div class="skel skel-ring"></div>'
+        '<div class="skel skel-line sm"></div></div>'
+        for i in range(6)
+    )
+    bars = "".join('<div class="skel skel-bar"></div>' for _ in range(7))
+    tabs = "".join('<div class="skel skel-tab"></div>' for _ in range(6))
+    return (
+        '<div class="scan-loading">'
+        '<div class="scan-loading-head">'
+        '<span class="scan-radar">'
+        '<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        '<circle cx="24" cy="24" r="20" stroke="var(--accent-glow)" stroke-width="1.5"/>'
+        '<circle cx="24" cy="24" r="12.5" stroke="var(--accent-glow)" stroke-width="1"/>'
+        '<circle cx="24" cy="24" r="2.6" fill="var(--accent)"/>'
+        '<g class="sweep"><path d="M24 24 L24 4 A20 20 0 0 1 41.3 14 Z" fill="url(#rdr)"/></g>'
+        '<defs><linearGradient id="rdr" x1="24" y1="24" x2="40" y2="9" gradientUnits="userSpaceOnUse">'
+        '<stop stop-color="var(--accent)" stop-opacity="0.5"/>'
+        '<stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>'
+        '</linearGradient></defs></svg></span>'
+        '<div class="scan-loading-meta">'
+        f'<div class="scan-loading-title">กำลังตรวจสอบ <span class="scan-target">{target}</span></div>'
+        f'<div class="scan-loading-stage">{stage}</div>'
+        '</div>'
+        f'<span class="scan-loading-pct">{pct}%</span>'
+        '</div>'
+        f'<div class="scan-progress"><div class="scan-progress-bar" style="--p:{pct/100:.2f}"></div></div>'
+        f'<div class="skel-metrics">{cards}</div>'
+        '<div class="skel-breakdown">'
+        '<div class="skel skel-line" style="width:32%;height:11px"></div>'
+        f'<div class="skel-bars">{bars}</div>'
+        '</div>'
+        f'<div class="skel-tabs">{tabs}</div>'
+        '<div class="skel-panel">'
+        '<div class="skel skel-line" style="width:78%"></div>'
+        '<div class="skel skel-line" style="width:92%"></div>'
+        '<div class="skel skel-line" style="width:64%"></div>'
+        '<div class="skel skel-block"></div>'
+        '</div>'
+        '</div>'
+    )
 
 
 def risk_color_class(risk: str) -> str:
@@ -467,28 +523,41 @@ if scan_btn and url:
     if url_error:
         st.warning(url_error)
     else:
-        prog = st.progress(0, text="เริ่มสแกน...")
+        # Skeleton loading screen (replaces the bare spinner). Rendered into a
+        # placeholder before the blocking work; Streamlit flushes the delta
+        # mid-script, so the shimmer + radar sweep animate in-browser during the
+        # synchronous scan. The placeholder is cleared once results are ready.
+        loading_ph  = st.empty()
+        target_safe = _esc(clean_url, 80)
+        loading_ph.markdown(
+            _scan_skeleton_html(
+                "กำลังเชื่อมต่อและสแกน Passive (Headers · SSL · DNS · CVE)…",
+                18, target_safe),
+            unsafe_allow_html=True,
+        )
 
-        with st.spinner("กำลังสแกนและวิเคราะห์..."):
-            prog.progress(20, text="กำลังสแกน Passive (Headers, SSL, DNS, "
-                                   "Web Server, CVE)...")
-            # run_scan (11 modules) and check_server both spend their time
-            # waiting on the network. Run them concurrently so the server/CVE
-            # probe overlaps the scan instead of adding its round-trip on top.
-            # They stay architecturally separate (check_server is not inside
-            # run_scan) — only their network waits are shared.
-            with ThreadPoolExecutor(max_workers=2) as _ex:
-                _fut_scan   = _ex.submit(run_scan, clean_url)
-                _fut_server = _ex.submit(check_server, clean_url)
-                scan_data   = _fut_scan.result()
-                server_data = _fut_server.result()
+        # run_scan (11 modules) and check_server both spend their time waiting on
+        # the network. Run them concurrently so the server/CVE probe overlaps the
+        # scan instead of adding its round-trip on top. They stay architecturally
+        # separate (check_server is not inside run_scan) — only their waits share.
+        with ThreadPoolExecutor(max_workers=2) as _ex:
+            _fut_scan   = _ex.submit(run_scan, clean_url)
+            _fut_server = _ex.submit(check_server, clean_url)
+            scan_data   = _fut_scan.result()
+            server_data = _fut_server.result()
 
-            prog.progress(70, text="AI กำลังวิเคราะห์ผล Passive Scan...")
-            ai_data = analyze(scan_data, server_data)
+        loading_ph.markdown(
+            _scan_skeleton_html("AI กำลังวิเคราะห์ผลการสแกน…", 72, target_safe),
+            unsafe_allow_html=True,
+        )
+        ai_data = analyze(scan_data, server_data)
 
-            prog.progress(100, text="เสร็จสิ้น")
-            time.sleep(0.3)
-            prog.empty()
+        loading_ph.markdown(
+            _scan_skeleton_html("เสร็จสิ้น — กำลังแสดงผล", 100, target_safe),
+            unsafe_allow_html=True,
+        )
+        time.sleep(0.25)
+        loading_ph.empty()
 
         # Bulk update keeps all keys consistent; resets any stale PDF state
         st.session_state.update({
@@ -552,7 +621,7 @@ if st.session_state.get("scanned"):
         unsafe_allow_html=True
     )
 
-    m2.markdown(f"""<div class="metric-card">
+    m2.markdown(f"""<div class="metric-card" style="--i:1">
         <span class="metric-val metric-val-sm {risk_color_class(risk)}">{risk}</span>
         <span class="metric-lbl">ระดับความเสี่ยง</span>
     </div>""", unsafe_allow_html=True)
@@ -564,7 +633,7 @@ if st.session_state.get("scanned"):
         ssl_cls = "col-good" if ssl_ok else "col-bad"
         ssl_lbl = f"SSL ({days_left} วัน)"
         _ssl_ico = _i(_P_CHECK, 22) if ssl_ok else _i(_P_XCIRC, 22)
-    m3.markdown(f'<div class="metric-card">'
+    m3.markdown(f'<div class="metric-card" style="--i:2">'
                f'<span class="metric-val metric-val-lh {ssl_cls}">{_ssl_ico}</span>'
                f'<span class="metric-lbl">{ssl_lbl}</span>'
                '</div>', unsafe_allow_html=True)
@@ -574,43 +643,58 @@ if st.session_state.get("scanned"):
     else:
         hdr_cls = "col-bad" if n_missing > 2 else ("col-warn" if n_missing > 0 else "col-good")
         hdr_val = str(n_missing)
-    m4.markdown(f"""<div class="metric-card">
+    m4.markdown(f"""<div class="metric-card" style="--i:3">
         <span class="metric-val {hdr_cls}">{hdr_val}</span>
         <span class="metric-lbl">Headers ที่ขาด</span>
     </div>""", unsafe_allow_html=True)
 
     cve_cls = "col-bad" if vulns else "col-good"
-    m5.markdown(f"""<div class="metric-card">
+    m5.markdown(f"""<div class="metric-card" style="--i:4">
         <span class="metric-val {cve_cls}">{len(vulns)}</span>
         <span class="metric-lbl">CVE พบ</span>
     </div>""", unsafe_allow_html=True)
 
     dos_cls = "col-crit" if dos_risk else "col-good"
     _dos_ico = _i(_P_ALERT, 22) if dos_risk else _i(_P_CHECK, 22)
-    m6.markdown(f'<div class="metric-card">'
+    m6.markdown(f'<div class="metric-card" style="--i:5">'
                f'<span class="metric-val metric-val-lh {dos_cls}">{_dos_ico}</span>'
                '<span class="metric-lbl">DoS Risk</span>'
                '</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Score breakdown ────────────────────────────────────────
+    # ── Score breakdown — animated composite-weight meters ──────
+    # Each module's earned weighted points are drawn as a fill bar (scaleX =
+    # earned / max) that grows on reveal; the fill colour signals how well the
+    # module scored (green ≥80% · amber ≥50% · clay below), so the composite is
+    # legible at a glance, not just a row of fractions.
     breakdown = ai_data.get("breakdown", {})
     if breakdown:
-        st.markdown(f"""
-        <div class="sec-card" style="padding:14px 18px">
-            <div class="sec-card-title" style="margin-bottom:10px;padding-bottom:8px">Score Breakdown (Composite Weights)</div>
-            <div style="display:flex;gap:16px;flex-wrap:wrap">
-                <span class="metric-lbl">Headers: <b class="col-info">{breakdown.get('headers', 0)}</b>/25</span>
-                <span class="metric-lbl">SSL: <b class="col-info">{breakdown.get('ssl', 0)}</b>/20</span>
-                <span class="metric-lbl">HTML/JS: <b class="col-info">{breakdown.get('html_js', 0)}</b>/15</span>
-                <span class="metric-lbl">Server/CVE: <b class="col-info">{breakdown.get('server_cve', 0)}</b>/15</span>
-                <span class="metric-lbl">DNS: <b class="col-info">{breakdown.get('dns', 0)}</b>/10</span>
-                <span class="metric-lbl">Cookies: <b class="col-info">{breakdown.get('cookies', 0)}</b>/10</span>
-                <span class="metric-lbl">CMS: <b class="col-info">{breakdown.get('cms', 0)}</b>/5</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        brk_defs = [
+            ("Headers", "headers", 25), ("SSL", "ssl", 20), ("HTML/JS", "html_js", 15),
+            ("Server/CVE", "server_cve", 15), ("DNS", "dns", 10),
+            ("Cookies", "cookies", 10), ("CMS", "cms", 5),
+        ]
+        brk_items = []
+        for idx, (label, key, mx) in enumerate(brk_defs):
+            val   = float(breakdown.get(key, 0) or 0)
+            ratio = max(0.0, min(1.0, val / mx)) if mx else 0.0
+            cls   = "brk-good" if ratio >= 0.8 else ("brk-warn" if ratio >= 0.5 else "brk-bad")
+            disp  = int(round(val)) if abs(val - round(val)) < 0.05 else round(val, 1)
+            brk_items.append(
+                f'<div class="brk-item {cls}" style="--i:{idx}">'
+                f'<div class="brk-row"><span class="brk-label">{label}</span>'
+                f'<span class="brk-val"><b>{disp}</b>/{mx}</span></div>'
+                f'<div class="brk-track"><div class="brk-fill" style="--r:{ratio:.3f}"></div></div>'
+                f'</div>'
+            )
+        st.markdown(
+            '<div class="sec-card brk-card">'
+            '<div class="sec-card-title" style="margin-bottom:14px">Score Breakdown (Composite Weights)</div>'
+            f'<div class="brk-grid">{"".join(brk_items)}</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
     # ── Tabs ────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab_mod, tab5 = st.tabs([

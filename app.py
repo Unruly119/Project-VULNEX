@@ -30,7 +30,6 @@ from urllib.parse import urlparse
 _ICT = timezone(timedelta(hours=7))
 
 import streamlit as st
-import pandas as pd
 
 # ── Page config ──────────────────────────────────────────────────
 st.set_page_config(
@@ -66,13 +65,16 @@ from ui_shared import inject_base_styles, manual_anchor_html, render_footer
 inject_base_styles()
 
 # ── Import scanning / AI modules ─────────────────────────────────
+# Only is_safe_host (the SSRF guard used by normalise_url) is imported up front:
+# it's pure-stdlib and instant. The heavy modules are deferred — scanner pulls in
+# httpx / lxml / cryptography / dnspython (~0.4 s) and ai_engine pulls in
+# google-generativeai (~0.6 s), neither of which is needed until the user
+# actually scans or builds a report. Importing them lazily inside those handlers
+# lets the hero + input paint immediately on first load instead of waiting ~1 s
+# for the whole stack. Python caches modules, so the cost is paid once, on the
+# first scan (where the skeleton is already covering the wait).
 try:
-    from scanner             import run_scan
-    from ai_engine           import analyze, generate_report_analysis
-    from scanner.server_info import check_server
-    from html_generator      import build_report_html
-    from report_generator    import html_to_pdf
-    from utils.network       import is_safe_host
+    from utils.network import is_safe_host
 
     MODULES_OK = True
     MODULE_ERR = ""
@@ -316,6 +318,11 @@ def render_pdf_report_section() -> None:
     # กล่องข้อมูล+ปุ่มแสดงซ้อนกันสองชุดระหว่างรอ
     if pdf_requested:
         try:
+            # Lazy import (deferred from module top). ai_engine is already loaded
+            # post-scan; the html/report modules are cheap.
+            from ai_engine        import generate_report_analysis
+            from html_generator   import build_report_html
+            from report_generator import html_to_pdf
             # 0) เตรียมเอนจิน (ดาวน์โหลด Chromium บนเซิร์ฟเวอร์ครั้งแรกครั้งเดียว)
             with st.spinner("กำลังเตรียมเอนจินสร้างรายงาน "
                             "(ครั้งแรกของเซิร์ฟเวอร์อาจใช้เวลาสักครู่)..."):
@@ -529,6 +536,23 @@ if scan_btn and url:
         # synchronous scan. The placeholder is cleared once results are ready.
         loading_ph  = st.empty()
         target_safe = _esc(clean_url, 80)
+        loading_ph.markdown(
+            _scan_skeleton_html("กำลังเตรียมโมดูลสแกน…", 8, target_safe),
+            unsafe_allow_html=True,
+        )
+
+        # Lazy import (deferred from module top so the hero paints fast). Paid
+        # once, on the first scan — the skeleton above already covers the wait.
+        try:
+            from scanner             import run_scan
+            from scanner.server_info import check_server
+            from ai_engine           import analyze
+        except ImportError as exc:
+            loading_ph.empty()
+            st.error(f"ไม่สามารถโหลดโมดูลสแกนได้: {exc}")
+            st.info("ตรวจสอบว่า venv เปิดอยู่และติดตั้ง requirements.txt แล้ว")
+            st.stop()
+
         loading_ph.markdown(
             _scan_skeleton_html(
                 "กำลังเชื่อมต่อและสแกน Passive (Headers · SSL · DNS · CVE)…",

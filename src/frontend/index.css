@@ -173,41 +173,9 @@ body {
 /* Streamlit base overrides */
 #MainMenu, footer, header { visibility: hidden !important; }
 .stDeployButton { display: none !important; }
-/* The header is hidden for a clean look, but the "expand sidebar" control
-   lives inside it — without this, a collapsed sidebar can never be reopened.
-   visibility:visible on the control itself wins over the hidden ancestor. */
-[data-testid="stExpandSidebarButton"],
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="collapsedControl"] {
-  visibility: visible !important;
-}
-
-/* ── Sidebar control → hamburger icon ─────────────────────────────
-   Replace Streamlit's default double-chevron on the open/collapse control with
-   a three-bar hamburger. Streamlit nests the glyph as a Material-icon <span>
-   inside the button, so we recolour THAT span IN PLACE — a ::after pseudo became
-   a flex sibling of the real button content and got squished to a sliver
-   (4–12px instead of 20), which is what made the icon look distorted.
-   color:transparent hides the original chevron glyph; the SVG mask then clips a
-   solid fill into three crisp, evenly-spaced bars over the icon's own 24px box,
-   so it stays centred in the button with no overflow and no squish. */
-[data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"],
-[data-testid="stSidebarCollapseButton"] [data-testid="stIconMaterial"],
-[data-testid="collapsedControl"] [data-testid="stIconMaterial"] {
-  display: inline-block !important;
-  width: 22px !important;
-  height: 22px !important;
-  font-size: 22px !important;
-  line-height: 22px !important;
-  color: transparent !important;
-  background-color: var(--ink-2) !important;
-  -webkit-mask: var(--hamburger-svg) center / 22px 22px no-repeat !important;
-  mask: var(--hamburger-svg) center / 22px 22px no-repeat !important;
-}
-
-/* Keep the collapsed-state "open sidebar" control visible without a hover
-   (its parent header is hidden for a clean look). */
-[data-testid="stExpandSidebarButton"] { opacity: 1 !important; }
+/* The sidebar and all its open/collapse controls (the hamburger) are hidden
+   outright in the "Sidebar fully removed" block below — no need to restyle the
+   hamburger here anymore. */
 
 /* ── Thai-font consistency ────────────────────────────────────────
    The Prompt webfont is unicode-range-limited to Thai, so an element only
@@ -785,74 +753,22 @@ hr { border-color: var(--border) !important; opacity: 0.6 !important; }
   color: var(--accent);
 }
 
-/* ── Sidebar navigation ───────────────────────────────────────── */
-/* Hide Streamlit's auto-generated multipage list; ui_shared renders a
-   deliberate branded nav in its place. */
-[data-testid="stSidebarNav"] { display: none !important; }
-
-section[data-testid="stSidebar"] {
-  background: var(--bg-warm) !important;
-  border-right: 1px solid var(--border) !important;
-}
-section[data-testid="stSidebar"] .block-container { padding-top: 1.5rem !important; }
-
-.side-nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: var(--font-serif);
-  font-size: 1rem;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-  padding: 0 0.25rem 0.9rem;
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border);
-}
-.side-nav-brand b { color: var(--accent); font-weight: 600; }
-
-/* Current page — a non-clickable highlighted indicator */
-.side-nav-current {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  border-radius: var(--r-md);
-  padding: 0.55rem 0.7rem;
-  margin: 0.15rem 0;
-  background: var(--accent-dim);
-  color: var(--accent);
-  font-family: var(--font-sans);
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-.side-nav-current svg { flex: none; }
-
-/* Other pages — switch_page buttons styled as quiet nav links */
-section[data-testid="stSidebar"] [class*="st-key-sidenav_"] button {
-  background: transparent !important;
-  border: none !important;
-  border-radius: var(--r-md) !important;
-  padding: 0.55rem 0.7rem !important;
-  margin: 0.15rem 0 !important;
-  justify-content: flex-start !important;
-  color: var(--ink-2) !important;
-  font-family: var(--font-sans) !important;
-  font-size: 0.875rem !important;
-  font-weight: 500 !important;
-  transition: background var(--t-fast) var(--ease),
-              color      var(--t-fast) var(--ease) !important;
-}
-section[data-testid="stSidebar"] [class*="st-key-sidenav_"] button:hover {
-  background: var(--accent-dim) !important;
-  color: var(--accent) !important;
-  transform: none !important;
-}
-section[data-testid="stSidebar"] [class*="st-key-sidenav_"] button p {
-  font-weight: 500 !important;
+/* ── Sidebar fully removed ────────────────────────────────────────
+   The branded sidebar nav was retired: the scan page has no left nav and the
+   manual page carries its own back button. Hide the sidebar, its auto-generated
+   page list, and every open/collapse control (the hamburger) outright. */
+[data-testid="stSidebarNav"],
+section[data-testid="stSidebar"],
+[data-testid="stExpandSidebarButton"],
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+[data-testid="collapsedControl"] {
+  display: none !important;
 }
 
 /* ── Manual link, beside the primary scan CTA ─────────────────────
-   An <a target="_blank"> (opens the manual in a new tab), styled to read
-   as a secondary control next to the dark "เริ่มตรวจสอบ" button. */
+   An <a> that opens the manual in the same tab (Streamlit page routing),
+   styled to read as a secondary control next to the dark "เริ่มตรวจสอบ" button. */
 .manual-link-btn {
   display: flex;
   align-items: center;
@@ -886,32 +802,6 @@ section[data-testid="stSidebar"] [class*="st-key-sidenav_"] button p {
   outline-offset: 2px;
 }
 .manual-link-btn svg { flex: none; }
-.manual-link-btn .ext-ico { color: var(--muted); }
-.manual-link-btn:hover .ext-ico { color: var(--accent); }
-
-/* Manual link inside the sidebar nav (also opens a new tab) */
-section[data-testid="stSidebar"] .side-nav-link {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  border-radius: var(--r-md);
-  padding: 0.55rem 0.7rem;
-  margin: 0.15rem 0;
-  color: var(--ink-2);
-  font-family: var(--font-sans);
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-decoration: none;
-  transition: background var(--t-fast) var(--ease),
-              color      var(--t-fast) var(--ease);
-}
-section[data-testid="stSidebar"] .side-nav-link:hover {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-.side-nav-link svg { flex: none; }
-.side-nav-link .ext-ico { margin-left: auto; color: var(--muted); }
-.side-nav-link:hover .ext-ico { color: var(--accent); }
 
 /* ════════════════════════════════════════════════════════════════
    Site footer — two-column product footer (Linear / Vercel restraint)

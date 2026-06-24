@@ -37,7 +37,7 @@ st.set_page_config(
     page_title="Project-VULNEX",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="auto",   # expanded on desktop, collapsed on phones
+    initial_sidebar_state="collapsed",   # sidebar removed — keep it shut
 )
 
 # ── Custom CSS ───────────────────────────────────────────────────
@@ -57,15 +57,15 @@ def _img_data_uri(path: str) -> str:
     return f"data:image/{mime};base64,{b64}"
 
 
-# Inject the base64-embedded Thai @font-face + the main stylesheet, then the
-# shared branded sidebar navigation. Both live in ui_shared so the scan page
-# and the user-manual page can never drift apart visually.
+# Inject the base64-embedded Thai @font-face + the main stylesheet. Both live in
+# ui_shared so the scan page and the user-manual page can never drift apart
+# visually. The sidebar navigation has been removed — the scan page has no
+# top-left nav; the manual page carries its own "back" button instead.
 from ui_shared import (
-    inject_base_styles, render_sidebar_nav, manual_anchor_html, render_footer,
+    inject_base_styles, manual_anchor_html, render_footer,
 )
 
 inject_base_styles()
-render_sidebar_nav("scan")
 
 # ── Import scanning / AI modules ─────────────────────────────────
 try:
@@ -439,9 +439,9 @@ if not MODULES_OK:
 # ── Input section ─────────────────────────────────────────────────
 # The institution name is no longer typed in here — the PDF report
 # auto-derives it from the site <title>/domain (org="" → html_generator
-# fallback). That slot now links to the step-by-step user manual, which
-# opens in a NEW browser tab (target="_blank") so the scan page and any
-# results on it are never replaced. Bottom-aligned to share the URL baseline.
+# fallback). That slot now links to the step-by-step user manual, which opens
+# IN PLACE (same tab) — the manual page has its own back button to return.
+# Bottom-aligned to share the URL baseline.
 col_url, col_manual = st.columns([3, 1], vertical_alignment="bottom")
 with col_url:
     url = st.text_input(

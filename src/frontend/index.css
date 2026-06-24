@@ -1370,3 +1370,159 @@ section[data-testid="stSidebar"],
   .manual-step:not(:last-child)::before { left: 1rem; }
   .manual-step-num { width: 2rem; height: 2rem; font-size: 1rem; }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   Motion system v2 — skeleton loading + choreographed reveals
+   ────────────────────────────────────────────────────────────────
+   Adds the scan-time skeleton screen and layers purposeful entrance /
+   feedback motion onto the existing components. Every rule here only
+   ADDS a longhand (e.g. animation-delay) or targets a NEW class, so it
+   never clobbers the opacity-only `fade-up` entrances already in use —
+   the no-translateY convention that prevents Streamlit rerun "ghosting"
+   stays intact. All motion is auto-disabled by the global
+   prefers-reduced-motion rule at the top of this file (it zeroes every
+   animation/transition duration), so loops freeze and reveals become
+   instant for motion-sensitive users — the layouts still read correctly.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── New keyframes ── */
+@keyframes panel-in    { from { opacity: 0; filter: blur(6px); } to { opacity: 1; filter: blur(0); } }
+@keyframes brk-grow    { from { transform: scaleX(0); } to { transform: scaleX(var(--r, 0)); } }
+@keyframes radar-sweep { to { transform: rotate(360deg); } }
+@keyframes halo-pulse  { 0%, 100% { opacity: 0.40; transform: scale(0.92); } 50% { opacity: 0.85; transform: scale(1.06); } }
+@keyframes float-soft  { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes connector-draw { from { transform: translateX(-50%) scaleY(0); } to { transform: translateX(-50%) scaleY(1); } }
+
+/* ── 1 · Skeleton loading screen (rendered live while the scan runs) ──
+   Mirrors the results layout — metric row · score breakdown · tabs · panel
+   — with shimmer placeholders and a rotating radar sweep, so the wait reads
+   as structured progress instead of a blank spinner. */
+.scan-loading { animation: fade-in var(--t-base) var(--ease) both; margin-bottom: 1.25rem; }
+.scan-loading-head { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 0.9rem; }
+.scan-radar { width: 44px; height: 44px; flex: none; }
+.scan-radar svg { display: block; width: 100%; height: 100%; }
+.scan-radar .sweep { transform-origin: 50% 50%; animation: radar-sweep 1.8s linear infinite; }
+.scan-loading-meta { flex: 1 1 auto; min-width: 0; }
+.scan-loading-title {
+  font-family: var(--font-serif); font-weight: 600; color: var(--ink);
+  font-size: 1.05rem; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.scan-loading-title .scan-target { font-family: var(--font-mono); font-size: 0.85em; color: var(--accent); }
+.scan-loading-stage { font-size: 0.8125rem; color: var(--muted); margin-top: 2px; }
+.scan-loading-pct {
+  flex: none; font-family: var(--font-mono); font-weight: 600;
+  font-size: 0.95rem; color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.scan-progress { height: 5px; background: var(--bg-warm); border-radius: var(--r-pill); overflow: hidden; margin-bottom: 1.4rem; }
+/* Fill scales on the X axis (transform, not width) so the staged advance is
+   GPU-composited with no layout thrash. --p is the 0–1 progress, set inline. */
+.scan-progress-bar {
+  height: 100%; width: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform-origin: left; transform: scaleX(var(--p, 0));
+  transition: transform 0.5s var(--ease);
+}
+.skel {
+  position: relative; overflow: hidden; border-radius: var(--r-sm);
+  background: linear-gradient(90deg, var(--bg-warm) 25%, var(--surface-hi) 50%, var(--bg-warm) 75%);
+  background-size: 200% 100%; animation: shimmer 1.45s linear infinite;
+}
+.skel-metrics { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.75rem; margin-bottom: 1.1rem; }
+.skel-card {
+  background: var(--surface-hi); border: 1px solid var(--border); border-radius: var(--r-lg);
+  min-height: 8rem; padding: 1.1rem; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 0.65rem;
+  animation: fade-in var(--t-base) var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms);
+}
+.skel-ring { width: 52px; height: 52px; border-radius: 50%; }
+.skel-line { height: 10px; width: 72%; border-radius: var(--r-pill); }
+.skel-line.sm { width: 52%; height: 8px; }
+.skel-breakdown {
+  background: var(--surface-hi); border: 1px solid var(--border); border-radius: var(--r-lg);
+  padding: 1rem 1.2rem; margin-bottom: 1.1rem;
+  animation: fade-in var(--t-base) var(--ease) both; animation-delay: 0.1s;
+}
+.skel-bars { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.85rem; }
+.skel-bar { height: 8px; width: 92px; border-radius: var(--r-pill); }
+.skel-tabs { display: flex; gap: 1.2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.65rem; margin-bottom: 1.2rem; }
+.skel-tab { height: 12px; width: 82px; border-radius: var(--r-pill); }
+.skel-panel { display: flex; flex-direction: column; gap: 0.85rem; }
+.skel-panel .skel-line { height: 12px; }
+.skel-block { height: 116px; width: 100%; border-radius: var(--r-md); margin-top: 0.3rem; }
+@media (max-width: 900px) { .skel-metrics { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 560px) { .skel-metrics { grid-template-columns: repeat(2, 1fr); } }
+
+/* ── 2 · Metric row — staggered cascade (the results payoff moment) ── */
+.metric-card { animation-delay: calc(var(--i, 0) * 60ms); }
+
+/* ── 3 · Score breakdown — animated composite-weight meters ── */
+.brk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.85rem 1.5rem; }
+.brk-item { animation: fade-in var(--t-base) var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms + 0.4s); }
+.brk-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
+.brk-label { font-size: 0.75rem; font-weight: 500; color: var(--ink-2); letter-spacing: 0.01em; }
+.brk-val { font-size: 0.7rem; color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.brk-val b { color: var(--ink); font-weight: 600; }
+.brk-track { height: 6px; background: var(--bg-warm); border-radius: var(--r-pill); overflow: hidden; }
+.brk-fill {
+  height: 100%; border-radius: inherit; transform-origin: left;
+  transform: scaleX(var(--r, 0));
+  animation: brk-grow 0.9s var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms + 0.5s);
+}
+.brk-good .brk-fill { background: var(--c-low); }
+.brk-warn .brk-fill { background: var(--c-med); }
+.brk-bad  .brk-fill { background: var(--c-high); }
+
+/* ── 4 · Tab content — crossfade + soft blur view-transition on switch ── */
+.stTabs [role="tabpanel"] { animation: panel-in var(--t-base) var(--ease); }
+.stTabs [role="tab"] {
+  transition: color var(--t-fast) var(--ease),
+              border-bottom-color var(--t-base) var(--ease) !important;
+}
+
+/* ── 5 · Hero — gentle child stagger (kicker → wordmark → tagline) ── */
+.hero-eyebrow { animation: fade-in var(--t-slow) var(--ease) both; animation-delay: 0.06s; }
+.hero-title   { animation: fade-in var(--t-slow) var(--ease) both; animation-delay: 0.14s; }
+.hero-sub     { animation: fade-in var(--t-slow) var(--ease) both; animation-delay: 0.22s; }
+
+/* ── 6 · Empty state — calm idle delight (breathing halo + soft float) ── */
+.empty-icon { display: inline-block; position: relative; }
+.empty-icon::before {
+  content: ''; position: absolute; inset: -38%; z-index: -1; border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-glow), transparent 68%);
+  animation: halo-pulse 3.8s ease-in-out infinite;
+}
+.empty-icon svg { animation: float-soft 3.8s ease-in-out infinite; }
+
+/* ── 7 · Primary / download buttons — hover glow (box-shadow only: the
+   transform lift is intentionally avoided so a button press that triggers a
+   long rerun can't freeze a lifted ghost frame, per the convention above) ── */
+div.stButton > button {
+  transition: background var(--t-fast) var(--ease),
+              box-shadow var(--t-base) var(--ease) !important;
+}
+div.stButton > button:hover { box-shadow: 0 6px 20px rgba(20, 20, 19, 0.16) !important; }
+div[data-testid="stDownloadButton"] > button {
+  transition: background var(--t-fast) var(--ease),
+              box-shadow var(--t-base) var(--ease) !important;
+}
+div[data-testid="stDownloadButton"] > button:hover { box-shadow: 0 6px 22px var(--accent-glow) !important; }
+
+/* ── 8 · Finding rows — softer hover lift (shadow, no transform) ── */
+.finding-row {
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              box-shadow var(--t-base) var(--ease);
+}
+.finding-row:hover { box-shadow: 0 4px 14px rgba(20, 20, 19, 0.05); }
+
+/* ── 9 · Manual page — lead/tip fade, stepper draw + stagger, card stagger ── */
+.manual-lead { animation: fade-in var(--t-base) var(--ease) both; animation-delay: 0.06s; }
+.manual-tip  { animation: fade-in var(--t-base) var(--ease) both; }
+.manual-step { animation: fade-in var(--t-slow) var(--ease) both; animation-delay: calc(var(--i, 0) * 0.1s); }
+.manual-step:not(:last-child)::before {
+  transform-origin: top;
+  animation: connector-draw 0.8s var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 0.1s + 0.2s);
+}
+.btn-ref { animation: fade-in var(--t-base) var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms); }

@@ -90,7 +90,7 @@ st.markdown('<h2 class="manual-h2">ทำตามทีละขั้นตอ
 
 # Step 1 — enter URL
 st.markdown(f"""
-<div class="manual-step">
+<div class="manual-step" style="--i:0">
   <div class="manual-step-num">1</div>
   <div class="manual-step-body">
     <div class="manual-step-title">ใส่ URL ของเว็บไซต์ที่ต้องการตรวจสอบ</div>
@@ -110,7 +110,7 @@ st.markdown(f"""
 
 # Step 2 — start scan
 st.markdown(f"""
-<div class="manual-step">
+<div class="manual-step" style="--i:1">
   <div class="manual-step-num">2</div>
   <div class="manual-step-body">
     <div class="manual-step-title">กดปุ่ม “เริ่มตรวจสอบ”</div>
@@ -131,7 +131,7 @@ st.markdown(f"""
 
 # Step 3 — read the score
 st.markdown(f"""
-<div class="manual-step">
+<div class="manual-step" style="--i:2">
   <div class="manual-step-num">3</div>
   <div class="manual-step-body">
     <div class="manual-step-title">อ่านคะแนนและระดับความเสี่ยง</div>
@@ -158,7 +158,7 @@ st.markdown(f"""
 
 # Step 4 — explore tabs
 st.markdown(f"""
-<div class="manual-step">
+<div class="manual-step" style="--i:3">
   <div class="manual-step-num">4</div>
   <div class="manual-step-body">
     <div class="manual-step-title">เจาะลึกผลแต่ละด้านในแท็บ</div>
@@ -184,7 +184,7 @@ st.markdown(f"""
 
 # Step 5 — generate & download PDF
 st.markdown(f"""
-<div class="manual-step">
+<div class="manual-step" style="--i:4">
   <div class="manual-step-num">5</div>
   <div class="manual-step-body">
     <div class="manual-step-title">สร้างและดาวน์โหลดรายงาน PDF</div>
@@ -243,14 +243,14 @@ _REFS = [
 
 _cards = "".join(
     f"""
-  <div class="btn-ref">
+  <div class="btn-ref" style="--i:{idx}">
     <div class="btn-ref-head">
       <span class="btn-ref-chip">{_icon(icon, 17)}</span>
       <span class="btn-ref-name">{name}</span>
     </div>
     <div class="btn-ref-desc">{desc}<span class="where">{_icon(I_MONITOR, 11)} {where}</span></div>
   </div>"""
-    for icon, name, desc, where in _REFS
+    for idx, (icon, name, desc, where) in enumerate(_REFS)
 )
 st.markdown(f'<div class="btn-ref-grid">{_cards}</div>', unsafe_allow_html=True)
 

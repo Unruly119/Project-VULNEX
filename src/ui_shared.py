@@ -135,7 +135,7 @@ _FOOTER_REFS = (
 )
 
 # The development team — rendered as a numbered roster column in the footer.
-_FOOTER_TEAM = ("Faris", "Wanfilastin ", "Nasrul", "Tanabodee")
+_FOOTER_TEAM = ("Faris Biltohlaeh", "Wanfilastin Weamama", "Nasrul Arayasan")
 
 
 def render_footer() -> None:

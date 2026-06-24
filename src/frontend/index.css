@@ -766,38 +766,43 @@ section[data-testid="stSidebar"],
   display: none !important;
 }
 
-/* ── Manual button, beside the primary scan CTA ───────────────────
-   A real st.button (key="manual_link_btn" → .st-key-manual_link_btn) that
-   navigates in the SAME tab via st.switch_page, styled to read as a quiet
-   secondary control next to the dark "เริ่มตรวจสอบ" button. */
-.st-key-manual_link_btn button {
+/* ── Manual link, beside the primary scan CTA ─────────────────────
+   The styled <a> (.manual-link-btn) that opens the manual in the same tab
+   (target="_self"), reading as a secondary control next to the dark
+   "เริ่มตรวจสอบ" button. */
+.manual-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   width: 100%;
   box-sizing: border-box;
   min-height: 2.625rem;          /* match the adjacent text input's height */
-  padding: 0.55rem 1rem !important;
-  background: transparent !important;
-  color: var(--accent) !important;
-  border: 1px solid var(--border-hi) !important;
-  border-radius: var(--r-md) !important;
-  font-family: var(--font-sans) !important;
-  font-size: 0.9375rem !important;
-  font-weight: 500 !important;
+  padding: 0.55rem 1rem;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r-md);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
   transition: background   var(--t-fast) var(--ease),
               border-color var(--t-fast) var(--ease),
               color        var(--t-fast) var(--ease),
-              transform    var(--t-fast) var(--ease) !important;
+              transform    var(--t-fast) var(--ease);
 }
-.st-key-manual_link_btn button p { font-weight: 500 !important; }
-.st-key-manual_link_btn button:hover {
-  background: var(--accent-dim) !important;
-  border-color: var(--accent) !important;
-  color: var(--accent-2) !important;
-  transform: translateY(-1px) !important;
+.manual-link-btn:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent-2);
+  transform: translateY(-1px);
 }
-.st-key-manual_link_btn button:focus-visible {
-  outline: 2px solid var(--accent) !important;
-  outline-offset: 2px !important;
+.manual-link-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
+.manual-link-btn svg { flex: none; }
 
 /* ════════════════════════════════════════════════════════════════
    Site footer — two-column product footer (Linear / Vercel restraint)

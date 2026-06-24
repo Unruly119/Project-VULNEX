@@ -79,6 +79,14 @@ def inject_base_styles() -> None:
     st.markdown(_base_styles_html(), unsafe_allow_html=True)
 
 
+_BOOK_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17"'
+    ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+    ' stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>'
+    '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>'
+)
+
 # Small "opens in a new tab" arrow — appended to external reference links in
 # the footer (those, and only those, still open in a NEW browser tab).
 _EXT_SVG = (
@@ -89,10 +97,20 @@ _EXT_SVG = (
     '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>'
 )
 
-# URL slug of pages/user_manual.py (filename without extension). Manual links
-# point here WITHOUT target="_blank" so the manual opens IN PLACE (same tab) via
-# Streamlit's multi-page routing — the manual page carries its own back button.
+# URL slug of pages/user_manual.py (filename without extension).
 MANUAL_URL = "user_manual"
+
+
+def manual_anchor_html(css_class: str, label: str) -> str:
+    """Return the styled <a> manual button that opens the manual IN THE SAME
+    TAB. target="_self" is REQUIRED: Streamlit defaults links inside st.markdown
+    to target="_blank" (a new tab), so we must override it explicitly. No ↗ arrow
+    here — that icon is reserved for genuinely external (new-tab) links."""
+    return (
+        f'<a class="{css_class}" href="{MANUAL_URL}" target="_self"'
+        ' title="เปิดคู่มือการใช้งาน">'
+        f'{_BOOK_SVG}<span>{label}</span></a>'
+    )
 
 
 # ── Site footer ──────────────────────────────────────────────────
@@ -143,8 +161,10 @@ def render_footer() -> None:
         '<div class="ft-name">Project-<b>VULNEX</b></div>'
         '<p class="ft-tagline">ระบบตรวจสอบความปลอดภัยเว็บไซต์แบบ Passive</p>'
         '<div class="ft-cta">'
-        '<a class="ft-btn ft-btn-primary" href="./">เริ่มตรวจสอบ</a>'
-        f'<a class="ft-btn ft-btn-ghost" href="{MANUAL_URL}">คู่มือ</a>'
+        # target="_self" overrides Streamlit's default-new-tab on markdown links
+        # so these internal links open in the SAME tab.
+        '<a class="ft-btn ft-btn-primary" href="./" target="_self">เริ่มตรวจสอบ</a>'
+        f'<a class="ft-btn ft-btn-ghost" href="{MANUAL_URL}" target="_self">คู่มือ</a>'
         '</div>'
         '</div>'
         # ── secondary column: development team ──

@@ -61,7 +61,7 @@ def _img_data_uri(path: str) -> str:
 # ui_shared so the scan page and the user-manual page can never drift apart
 # visually. The sidebar navigation has been removed — the scan page has no
 # top-left nav; the manual page carries its own "back" button instead.
-from ui_shared import inject_base_styles, render_footer
+from ui_shared import inject_base_styles, manual_anchor_html, render_footer
 
 inject_base_styles()
 
@@ -447,16 +447,13 @@ with col_url:
         placeholder="https://www.school.ac.th",
     )
 with col_manual:
-    # A real st.button + st.switch_page (not an <a>) guarantees the manual
-    # opens IN THE SAME TAB via Streamlit's in-app routing — a raw HTML anchor
-    # could be intercepted into a new tab. Styled as a quiet secondary control
-    # (.st-key-manual_link_btn) to sit beside the dark "เริ่มตรวจสอบ" button.
-    if st.button(
-        ":material/menu_book: คู่มือการใช้งาน",
-        key="manual_link_btn",
-        use_container_width=True,
-    ):
-        st.switch_page("pages/user_manual.py")
+    # The original styled anchor button (.manual-link-btn), restored. It opens
+    # the manual in the SAME tab via target="_self" inside manual_anchor_html
+    # (Streamlit would otherwise default the link to a new tab).
+    st.markdown(
+        manual_anchor_html("manual-link-btn", "คู่มือการใช้งาน"),
+        unsafe_allow_html=True,
+    )
 
 org = ""  # institution name auto-derived in the report (no manual input)
 

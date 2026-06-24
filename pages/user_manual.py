@@ -27,17 +27,17 @@ from ui_shared import inject_base_styles, render_footer
 inject_base_styles()
 
 # ── Top-left back button ─────────────────────────────────────────
-# The sidebar nav is gone; this is the only way back to the scan page from
-# here. Same-tab st.switch_page replaces the manual with the scan page in
-# place (no new browser tab).
-_back_col, _ = st.columns([1, 5])
-with _back_col:
-    if st.button(
-        ":material/arrow_back: กลับ",
-        key="manual_back_top",
-        use_container_width=True,
-    ):
-        st.switch_page("app.py")
+# The sidebar nav is gone; this quiet ghost button (top-left, above the hero)
+# is the way back to the scan page. Same-tab st.switch_page replaces the manual
+# with the scan page in place — no new browser tab. Styled in index.css under
+# .st-key-manual_back_top: it hugs its content, washes accent-dim on hover, and
+# nudges the arrow left to signal "go back".
+if st.button(
+    ":material/arrow_back: ย้อนกลับ",
+    key="manual_back_top",
+    help="กลับไปหน้าตรวจสอบ",
+):
+    st.switch_page("app.py")
 
 
 # ── Inline icon helpers (lucide-style, matching app.py's icon language) ──

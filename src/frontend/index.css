@@ -195,6 +195,20 @@ body {
 .stTabs [role="tab"] {
   font-family: var(--font-sans) !important;
 }
+/* …but NOT Streamlit's Material-icon spans. The broad rule above also lands on
+   [data-testid="stIconMaterial"] (it carries an st-emotion-cache class and sits
+   inside the expander summary), swapping the icon font for Prompt/AnthropicSans
+   so the icon ligature — e.g. "keyboard_arrow_down" — rendered as raw text
+   overlapping the expander/Raw-Data labels (and the metric delta + back-button
+   arrows). Re-assert the Material Symbols font so the glyph resolves. Streamlit
+   1.58 ships "Material Symbols Outlined"; legacy "Material Icons" is kept as a
+   fallback. Only font-family is restored — Streamlit's own ligature
+   font-feature-settings still apply. This rule comes after the override above,
+   so at equal specificity it wins. */
+[data-testid="stIconMaterial"] {
+  font-family: 'Material Symbols Outlined', 'Material Symbols Rounded',
+               'Material Icons' !important;
+}
 
 .stApp { background: var(--bg) !important; }
 .block-container {

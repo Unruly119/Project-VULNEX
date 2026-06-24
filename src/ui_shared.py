@@ -2,7 +2,6 @@
 # ────────────────────────────────────────────────────────────────
 #   One place that owns the things every page needs to look identical:
 #     · inject_base_styles()  — base64 Thai @font-face + index.css
-#     · manual_anchor_html()  — same-tab link to the user manual
 #     · render_footer()       — shared product footer
 #   Both app.py (the scan page) and pages/*.py import from here so the
 #   parchment/terracotta design system and fonts never drift apart.
@@ -80,38 +79,20 @@ def inject_base_styles() -> None:
     st.markdown(_base_styles_html(), unsafe_allow_html=True)
 
 
-# ── Branded side navigation ──────────────────────────────────────
-# Streamlit's auto-generated page list (`[data-testid="stSidebarNav"]`) is
-# hidden in index.css; this renders an intentional two-item nav in its
-# place. We deliberately AVOID st.page_link here: on some Streamlit
-# versions (e.g. Streamlit Community Cloud) its internal page lookup reads a
-# `url_pathname` key that isn't present in every page record, raising a
-# KeyError. st.switch_page only touches `script_path` / `page_script_hash`,
-# so it navigates reliably everywhere — the active page is rendered as a
-# non-clickable "current" indicator instead of a button.
-_BOOK_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17"'
+# Small "opens in a new tab" arrow — appended to external reference links in
+# the footer (those, and only those, still open in a NEW browser tab).
+_EXT_SVG = (
+    '<svg class="ext-ico" xmlns="http://www.w3.org/2000/svg" width="13" height="13"'
     ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
     ' stroke-linecap="round" stroke-linejoin="round">'
-    '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>'
-    '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>'
+    '<path d="M15 3h6v6"/><path d="M10 14 21 3"/>'
+    '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>'
 )
 
 # URL slug of pages/user_manual.py (filename without extension). Manual links
 # point here WITHOUT target="_blank" so the manual opens IN PLACE (same tab) via
 # Streamlit's multi-page routing — the manual page carries its own back button.
 MANUAL_URL = "user_manual"
-
-
-def manual_anchor_html(css_class: str, label: str) -> str:
-    """Return an <a> that opens the user manual in the same tab, styled by
-    `css_class`. Same-tab navigation works because MANUAL_URL is a Streamlit
-    page slug, so the framework routes to it without a full reload."""
-    return (
-        f'<a class="{css_class}" href="{MANUAL_URL}"'
-        ' title="เปิดคู่มือการใช้งาน">'
-        f'{_BOOK_SVG}<span>{label}</span></a>'
-    )
 
 
 # ── Site footer ──────────────────────────────────────────────────
@@ -144,7 +125,8 @@ def render_footer() -> None:
     on the left, the 'อ้างอิง' standards column on the right, then a copyright
     row. All references open in a new tab."""
     refs = "".join(
-        f'<a class="ft-link" href="{url}"><span>{label}</span></a>'
+        f'<a class="ft-link" href="{url}" target="_blank" rel="noopener noreferrer">'
+        f'<span>{label}</span>{_EXT_SVG}</a>'
         for label, url in _FOOTER_REFS
     )
     team = "".join(

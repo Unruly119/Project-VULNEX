@@ -766,42 +766,38 @@ section[data-testid="stSidebar"],
   display: none !important;
 }
 
-/* ── Manual link, beside the primary scan CTA ─────────────────────
-   An <a> that opens the manual in the same tab (Streamlit page routing),
-   styled to read as a secondary control next to the dark "เริ่มตรวจสอบ" button. */
-.manual-link-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+/* ── Manual button, beside the primary scan CTA ───────────────────
+   A real st.button (key="manual_link_btn" → .st-key-manual_link_btn) that
+   navigates in the SAME tab via st.switch_page, styled to read as a quiet
+   secondary control next to the dark "เริ่มตรวจสอบ" button. */
+.st-key-manual_link_btn button {
   width: 100%;
   box-sizing: border-box;
   min-height: 2.625rem;          /* match the adjacent text input's height */
-  padding: 0.55rem 1rem;
-  background: transparent;
-  color: var(--accent);
-  border: 1px solid var(--border-hi);
-  border-radius: var(--r-md);
-  font-family: var(--font-sans);
-  font-size: 0.9375rem;
-  font-weight: 500;
-  text-decoration: none;
+  padding: 0.55rem 1rem !important;
+  background: transparent !important;
+  color: var(--accent) !important;
+  border: 1px solid var(--border-hi) !important;
+  border-radius: var(--r-md) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.9375rem !important;
+  font-weight: 500 !important;
   transition: background   var(--t-fast) var(--ease),
               border-color var(--t-fast) var(--ease),
               color        var(--t-fast) var(--ease),
-              transform    var(--t-fast) var(--ease);
+              transform    var(--t-fast) var(--ease) !important;
 }
-.manual-link-btn:hover {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent-2);
-  transform: translateY(-1px);
+.st-key-manual_link_btn button p { font-weight: 500 !important; }
+.st-key-manual_link_btn button:hover {
+  background: var(--accent-dim) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-2) !important;
+  transform: translateY(-1px) !important;
 }
-.manual-link-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.st-key-manual_link_btn button:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px !important;
 }
-.manual-link-btn svg { flex: none; }
 
 /* ════════════════════════════════════════════════════════════════
    Site footer — two-column product footer (Linear / Vercel restraint)
@@ -1291,6 +1287,57 @@ section[data-testid="stSidebar"],
   font-size: 0.6875rem;
   letter-spacing: 0.03em;
   color: var(--muted);
+}
+
+/* ── Top-left "ย้อนกลับ" button (manual → scan) ──────────────────
+   A quiet ghost control that hugs its content and recedes beneath the hero —
+   a tertiary nav action, not a CTA (the dark primary lives at the foot). It
+   washes accent-dim on hover and slides its arrow left to signal "go back".
+   Targets the st.button keyed "manual_back_top" → .st-key-manual_back_top. */
+.st-key-manual_back_top { margin: 0.25rem 0 1.25rem; }
+.st-key-manual_back_top button {
+  width: auto !important;            /* hug content, never full-width */
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem 0.4rem 0.6rem !important;
+  background: transparent !important;
+  color: var(--ink-2) !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--r-md) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  transition: background var(--t-fast) var(--ease),
+              color      var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease) !important;
+}
+.st-key-manual_back_top button p { font-weight: 500 !important; }
+/* The leading arrow glyph — nudges left on hover to read as "back". */
+.st-key-manual_back_top button [data-testid="stIconMaterial"] {
+  color: var(--muted);
+  transition: transform 160ms var(--ease), color var(--t-fast) var(--ease);
+}
+.st-key-manual_back_top button:hover {
+  background: var(--accent-dim) !important;
+  color: var(--accent-2) !important;
+  border-color: var(--border-hi) !important;
+  transform: none !important;        /* override the global button lift */
+}
+.st-key-manual_back_top button:hover [data-testid="stIconMaterial"] {
+  color: var(--accent);
+  transform: translateX(-2px);
+}
+.st-key-manual_back_top button:active { background: var(--accent-glow) !important; }
+.st-key-manual_back_top button:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-key-manual_back_top button:hover [data-testid="stIconMaterial"] {
+    transform: none;
+  }
 }
 
 /* ── Back-to-scan CTA at the foot of the manual ───────────────── */

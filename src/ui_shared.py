@@ -135,7 +135,7 @@ _FOOTER_REFS = (
 )
 
 # The development team — rendered as a numbered roster column in the footer.
-_FOOTER_TEAM = ("Dev01", "Dev02", "Dev03", "Dev04")
+_FOOTER_TEAM = ("Faris", "Wanfilastin ", "Nasrul", "Tanabodee")
 
 
 def render_footer() -> None:
@@ -169,7 +169,7 @@ def render_footer() -> None:
         '</div>'
         # ── secondary column: development team ──
         '<nav class="ft-team" aria-labelledby="ft-team-head">'
-        '<h2 id="ft-team-head" class="ft-refs-head">Development Team (Name)</h2>'
+        '<h2 id="ft-team-head" class="ft-refs-head">Development Team (ChaSha)</h2>'
         f'<ol class="ft-team-list">{team}</ol>'
         '</nav>'
         # ── tertiary column: references ──

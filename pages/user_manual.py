@@ -19,13 +19,25 @@ st.set_page_config(
     page_title="คู่มือการใช้งาน · Project-VULNEX",
     page_icon="📖",
     layout="wide",
-    initial_sidebar_state="auto",   # expanded on desktop, collapsed on phones
+    initial_sidebar_state="collapsed",   # sidebar removed — keep it shut
 )
 
-from ui_shared import inject_base_styles, render_sidebar_nav, render_footer
+from ui_shared import inject_base_styles, render_footer
 
 inject_base_styles()
-render_sidebar_nav("manual")
+
+# ── Top-left back button ─────────────────────────────────────────
+# The sidebar nav is gone; this is the only way back to the scan page from
+# here. Same-tab st.switch_page replaces the manual with the scan page in
+# place (no new browser tab).
+_back_col, _ = st.columns([1, 5])
+with _back_col:
+    if st.button(
+        ":material/arrow_back: กลับ",
+        key="manual_back_top",
+        use_container_width=True,
+    ):
+        st.switch_page("app.py")
 
 
 # ── Inline icon helpers (lucide-style, matching app.py's icon language) ──

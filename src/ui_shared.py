@@ -2,9 +2,10 @@
 # ────────────────────────────────────────────────────────────────
 #   One place that owns the things every page needs to look identical:
 #     · inject_base_styles()  — base64 Thai @font-face + index.css
-#     · render_sidebar_nav()  — branded two-item side navigation
+#     · manual_anchor_html()  — same-tab link to the user manual
+#     · render_footer()       — shared product footer
 #   Both app.py (the scan page) and pages/*.py import from here so the
-#   parchment/terracotta design system, fonts, and nav never drift apart.
+#   parchment/terracotta design system and fonts never drift apart.
 #
 #   Paths are resolved relative to the repo root (Streamlit keeps the CWD
 #   at the main script's directory for every page), matching how app.py
@@ -88,13 +89,6 @@ def inject_base_styles() -> None:
 # KeyError. st.switch_page only touches `script_path` / `page_script_hash`,
 # so it navigates reliably everywhere — the active page is rendered as a
 # non-clickable "current" indicator instead of a button.
-_SHIELD_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17"'
-    ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
-    ' stroke-linecap="round" stroke-linejoin="round">'
-    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
-    '<path d="m9 12 2 2 4-4"/></svg>'
-)
 _BOOK_SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17"'
     ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
@@ -103,78 +97,21 @@ _BOOK_SVG = (
     '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>'
 )
 
-# Small "opens in a new tab" arrow appended to manual links.
-_EXT_SVG = (
-    '<svg class="ext-ico" xmlns="http://www.w3.org/2000/svg" width="13" height="13"'
-    ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
-    ' stroke-linecap="round" stroke-linejoin="round">'
-    '<path d="M15 3h6v6"/><path d="M10 14 21 3"/>'
-    '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>'
-)
-
 # URL slug of pages/user_manual.py (filename without extension). Manual links
-# point here with target="_blank" so the manual pops into a NEW browser tab
-# and the scan page — including any scan results on it — is never replaced.
+# point here WITHOUT target="_blank" so the manual opens IN PLACE (same tab) via
+# Streamlit's multi-page routing — the manual page carries its own back button.
 MANUAL_URL = "user_manual"
 
 
 def manual_anchor_html(css_class: str, label: str) -> str:
-    """Return an <a> that opens the user manual in a new browser tab, styled
-    by `css_class`. Centralised so the scan page's manual button and the
-    sidebar nav share one piece of markup."""
+    """Return an <a> that opens the user manual in the same tab, styled by
+    `css_class`. Same-tab navigation works because MANUAL_URL is a Streamlit
+    page slug, so the framework routes to it without a full reload."""
     return (
-        f'<a class="{css_class}" href="{MANUAL_URL}" target="_blank"'
-        ' rel="noopener noreferrer" title="เปิดคู่มือการใช้งานในแท็บใหม่">'
-        f'{_BOOK_SVG}<span>{label}</span>{_EXT_SVG}</a>'
+        f'<a class="{css_class}" href="{MANUAL_URL}"'
+        ' title="เปิดคู่มือการใช้งาน">'
+        f'{_BOOK_SVG}<span>{label}</span></a>'
     )
-
-
-def render_sidebar_nav(active: str = "scan") -> None:
-    """Render the shared branded sidebar navigation.
-
-    `active` is the key of the current page ("scan" or "manual"); that item
-    is shown as a highlighted current-page indicator. The scan link uses
-    same-tab st.switch_page (it is the primary "home"); the manual link opens
-    in a new tab so it never replaces the scan page.
-    """
-    with st.sidebar:
-        st.markdown(
-            '<div class="side-nav-brand">'
-            '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"'
-            ' viewBox="0 0 24 24" fill="none" stroke="var(--accent)"'
-            ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-            '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
-            '<path d="m9 12 2 2 4-4"/></svg>'
-            '<span>Project-<b>VULNEX</b></span></div>',
-            unsafe_allow_html=True,
-        )
-
-        # Scan page — same-tab navigation
-        if active == "scan":
-            st.markdown(
-                f'<div class="side-nav-current">{_SHIELD_SVG}'
-                '<span>หน้าตรวจสอบ</span></div>',
-                unsafe_allow_html=True,
-            )
-        elif st.button(
-            ":material/security: หน้าตรวจสอบ",
-            key="sidenav_scan",
-            use_container_width=True,
-        ):
-            st.switch_page("app.py")
-
-        # Manual page — pops out into a new tab
-        if active == "manual":
-            st.markdown(
-                f'<div class="side-nav-current">{_BOOK_SVG}'
-                '<span>คู่มือการใช้งาน</span></div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                manual_anchor_html("side-nav-link", "คู่มือการใช้งาน"),
-                unsafe_allow_html=True,
-            )
 
 
 # ── Site footer ──────────────────────────────────────────────────
@@ -207,8 +144,7 @@ def render_footer() -> None:
     on the left, the 'อ้างอิง' standards column on the right, then a copyright
     row. All references open in a new tab."""
     refs = "".join(
-        f'<a class="ft-link" href="{url}" target="_blank" rel="noopener noreferrer">'
-        f'<span>{label}</span>{_EXT_SVG}</a>'
+        f'<a class="ft-link" href="{url}"><span>{label}</span></a>'
         for label, url in _FOOTER_REFS
     )
     team = "".join(
@@ -226,8 +162,7 @@ def render_footer() -> None:
         '<p class="ft-tagline">ระบบตรวจสอบความปลอดภัยเว็บไซต์แบบ Passive</p>'
         '<div class="ft-cta">'
         '<a class="ft-btn ft-btn-primary" href="./">เริ่มตรวจสอบ</a>'
-        f'<a class="ft-btn ft-btn-ghost" href="{MANUAL_URL}" target="_blank"'
-        f' rel="noopener noreferrer">คู่มือ{_EXT_SVG}</a>'
+        f'<a class="ft-btn ft-btn-ghost" href="{MANUAL_URL}">คู่มือ</a>'
         '</div>'
         '</div>'
         # ── secondary column: development team ──

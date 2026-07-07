@@ -8,12 +8,30 @@ from scanner.html_parser      import parse_html
 from scanner.dns_security     import check_dns
 from scanner.cookie_security  import check_cookies
 from scanner.cors_policy      import check_cors
-from scanner.http_methods     import check_http_methods
+from scanner.http_methods     import check_http_methods  # noqa: F401 — kept; suspended (see _SUSPENDED_MODULES)
 from scanner.js_exposure      import check_js_exposure
 from scanner.subdomain_recon  import check_subdomains
 from scanner.open_files       import check_open_files
-from scanner.cms_fingerprint  import check_cms
+from scanner.cms_fingerprint  import check_cms            # noqa: F401 — kept; suspended (see _SUSPENDED_MODULES)
 from utils.network            import is_safe_host
+
+
+# ── Suspended modules ────────────────────────────────────────────────────────
+# SECURITY / PASSIVE-SCAN: http_methods and cms_fingerprint issue non-passive
+# (write / active-POST) requests, contradicting the "Passive Scan Only" claim
+# (SECURITY-AUDIT.md finding A1). They are DISABLED at this call site only — the
+# module files and their imports above are intentionally kept so a future update
+# can re-enable them by moving the key back into `modules` inside run_scan(). A
+# suspended module reports {"suspended": True}, so the UI can show a notice and the
+# score engine treats it as neutral (no penalty).
+_SUSPENDED_MODULES = ("http_methods", "cms")
+
+
+def _with_suspended(result: dict) -> dict:
+    """Attach a neutral 'suspended' sentinel for every disabled module."""
+    for key in _SUSPENDED_MODULES:
+        result[key] = {"suspended": True, "error": None}
+    return result
 
 
 def run_scan(url: str) -> dict:
@@ -22,24 +40,9 @@ def run_scan(url: str) -> dict:
     if not url.startswith("http"):
         url = "https://" + url
 
-    parsed = urlparse(url)
-    if parsed.hostname and not is_safe_host(parsed.hostname):
-        blocked = {"error": "SSRF blocked: private/loopback address"}
-        return {
-            "url":      url,
-            "headers":  blocked,
-            "ssl":      {"error": "SSRF blocked"},
-            "html":     {"error": "SSRF blocked"},
-            "dns":      blocked,
-            "cookies":  blocked,
-            "cors":     blocked,
-            "http_methods": blocked,
-            "js_exposure": blocked,
-            "subdomains": blocked,
-            "open_files": blocked,
-            "cms":      blocked,
-        }
-
+    # Active modules — passive only. NOTE: "http_methods" and "cms" are intentionally
+    # absent here; they are suspended at this call site (see _SUSPENDED_MODULES) and
+    # attached as neutral sentinels via _with_suspended() below.
     modules = {
         "headers":      check_headers,
         "ssl":          check_ssl,
@@ -47,12 +50,15 @@ def run_scan(url: str) -> dict:
         "dns":          check_dns,
         "cookies":      check_cookies,
         "cors":         check_cors,
-        "http_methods": check_http_methods,
         "js_exposure":  check_js_exposure,
         "subdomains":   check_subdomains,
         "open_files":   check_open_files,
-        "cms":          check_cms,
     }
+
+    parsed = urlparse(url)
+    if parsed.hostname and not is_safe_host(parsed.hostname):
+        blocked = {"error": "SSRF blocked: private/loopback address"}
+        return _with_suspended({"url": url, **{k: dict(blocked) for k in modules}})
 
     # All modules are I/O-bound (network waits), so give each its own worker —
     # capping below len(modules) only forces the slowest few to queue and adds
@@ -67,4 +73,4 @@ def run_scan(url: str) -> dict:
             except Exception as exc:
                 results[key] = {"error": str(exc)}
 
-    return {"url": url, **{k: results.get(k, {}) for k in modules}}
+    return _with_suspended({"url": url, **{k: results.get(k, {}) for k in modules}})

@@ -897,11 +897,14 @@ if st.session_state.get("scanned"):
             for f in cors.get("findings", []):
                 st.error(f"**{f.get('title')}**: {f.get('detail')}")
 
-        with st.expander("⚙️ HTTP Methods"):
-            st.metric("Methods Score", f"{http_m.get('score', 'N/A')}/100")
-            st.write(f"Allowed: {http_m.get('allowed_methods', [])}")
-            if http_m.get("dangerous_enabled"):
-                st.error(f"Dangerous methods: {http_m['dangerous_enabled']}")
+        with st.expander("⚙️ HTTP Methods — ระงับชั่วคราว"):
+            if http_m.get("suspended"):
+                st.info("**ระงับชั่วคราว — รอการอัปเดตในอนาคต**")
+            else:
+                st.metric("Methods Score", f"{http_m.get('score', 'N/A')}/100")
+                st.write(f"Allowed: {http_m.get('allowed_methods', [])}")
+                if http_m.get("dangerous_enabled"):
+                    st.error(f"Dangerous methods: {http_m['dangerous_enabled']}")
 
         with st.expander("📜 JavaScript Exposure"):
             st.metric("JS Score", f"{js_exp.get('score', 'N/A')}/100")
@@ -920,13 +923,16 @@ if st.session_state.get("scanned"):
             if open_f.get("robots_disallow"):
                 st.write("robots.txt Disallow paths:", open_f["robots_disallow"][:10])
 
-        with st.expander("🏷️ CMS Fingerprint"):
-            st.metric("CMS Score", f"{cms.get('score', 'N/A')}/100")
-            st.write(f"Detected: **{cms.get('detected_cms') or 'Unknown'}** v{cms.get('version') or '?'}")
-            if cms.get("xmlrpc_enabled"):
-                st.warning("WordPress XML-RPC enabled")
-            for p in cms.get("default_paths_accessible", []):
-                st.write(f"`{p.get('path')}` → HTTP {p.get('status')}")
+        with st.expander("🏷️ CMS Fingerprint — ระงับชั่วคราว"):
+            if cms.get("suspended"):
+                st.info("**ระงับชั่วคราว — รอการอัปเดตในอนาคต**")
+            else:
+                st.metric("CMS Score", f"{cms.get('score', 'N/A')}/100")
+                st.write(f"Detected: **{cms.get('detected_cms') or 'Unknown'}** v{cms.get('version') or '?'}")
+                if cms.get("xmlrpc_enabled"):
+                    st.warning("WordPress XML-RPC enabled")
+                for p in cms.get("default_paths_accessible", []):
+                    st.write(f"`{p.get('path')}` → HTTP {p.get('status')}")
 
         with st.expander("🔍 Subdomain Recon"):
             st.write(f"**{subs.get('count', 0)} subdomains** discovered (passive)")

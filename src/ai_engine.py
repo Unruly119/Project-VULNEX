@@ -203,9 +203,16 @@ def _make_cache_key(scan_data: dict, server_data: dict) -> str:
 # ─────────────────────────────────────────────────────────────────
 
 def _module_score(scan_data: dict, key: str, default: int = 50) -> int:
-    """Get 0-100 score from a scan module, or default if missing/errored."""
+    """Get 0-100 score from a scan module, or ``default`` if missing / errored /
+    suspended.
+
+    PASSIVE-SCAN: a module disabled at the call site (scanner._SUSPENDED_MODULES)
+    returns {"suspended": True}. It is scored at the neutral ``default`` — exactly as
+    an unavailable/errored module always has been — so suspending a module does NOT
+    lower or otherwise distort the composite score (only CMS carries weight among the
+    suspended set; http_methods was never part of the composite)."""
     mod = scan_data.get(key, {}) or {}
-    if mod.get("error"):
+    if mod.get("suspended") or mod.get("error"):
         return default
     return int(mod.get("score", default) or default)
 

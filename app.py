@@ -694,13 +694,24 @@ if st.session_state.get("scanned"):
     # legible at a glance, not just a row of fractions.
     breakdown = ai_data.get("breakdown", {})
     if breakdown:
-        brk_defs = [
-            ("Headers", "headers", 25), ("SSL", "ssl", 20), ("HTML/JS", "html_js", 15),
-            ("Server/CVE", "server_cve", 15), ("DNS", "dns", 10),
-            ("Cookies", "cookies", 10), ("CMS", "cms", 5),
-        ]
+        # Render only ACTIVE composite components with their effective (renormalized)
+        # weights. Suspended modules are omitted from `_weights`, so they no longer
+        # appear here at full marks; weights are scaled to still sum to 100.
+        _brk_w = breakdown.get("_weights") or {
+            "headers": 25, "ssl": 20, "html_js": 15, "server_cve": 15,
+            "dns": 10, "cookies": 10, "cms": 5,
+        }
+        _brk_lbl = {
+            "headers": "Headers", "ssl": "SSL", "html_js": "HTML/JS",
+            "server_cve": "Server/CVE", "dns": "DNS", "cookies": "Cookies", "cms": "CMS",
+        }
         brk_items = []
-        for idx, (label, key, mx) in enumerate(brk_defs):
+        idx = 0
+        for key in ("headers", "ssl", "html_js", "server_cve", "dns", "cookies", "cms"):
+            if key not in _brk_w:          # suspended / absent module — not shown
+                continue
+            mx    = _brk_w[key]
+            label = _brk_lbl[key]
             val   = float(breakdown.get(key, 0) or 0)
             ratio = max(0.0, min(1.0, val / mx)) if mx else 0.0
             cls   = "brk-good" if ratio >= 0.8 else ("brk-warn" if ratio >= 0.5 else "brk-bad")
@@ -712,6 +723,7 @@ if st.session_state.get("scanned"):
                 f'<div class="brk-track"><div class="brk-fill" style="--r:{ratio:.3f}"></div></div>'
                 f'</div>'
             )
+            idx += 1
         st.markdown(
             '<div class="sec-card brk-card">'
             '<div class="sec-card-title" style="margin-bottom:14px">Score Breakdown (Composite Weights)</div>'
@@ -860,6 +872,7 @@ if st.session_state.get("scanned"):
 
         st.markdown(f"**HTML Analysis Score: {html_info.get('score', 'N/A')}/100**")
 
+        # ── Active scan modules (passive) ───────────────────────
         with st.expander("🌐 DNS & Email Security", expanded=True):
             if dns.get("error"):
                 st.error(dns["error"])
@@ -889,26 +902,6 @@ if st.session_state.get("scanned"):
                     if issues:
                         st.caption("⚠️ " + "; ".join(issues))
 
-        with st.expander("🔗 CORS Policy — ระงับชั่วคราว"):
-            if cors.get("suspended"):
-                st.info("**ระงับชั่วคราว — รอการอัปเดตในอนาคต**")
-            else:
-                st.metric("CORS Score", f"{cors.get('score', 'N/A')}/100")
-                for t in cors.get("tests", []):
-                    if t.get("tested"):
-                        st.write(f"`{t.get('path')}` → Allow-Origin: `{t.get('allow_origin') or 'none'}`")
-                for f in cors.get("findings", []):
-                    st.error(f"**{f.get('title')}**: {f.get('detail')}")
-
-        with st.expander("⚙️ HTTP Methods — ระงับชั่วคราว"):
-            if http_m.get("suspended"):
-                st.info("**ระงับชั่วคราว — รอการอัปเดตในอนาคต**")
-            else:
-                st.metric("Methods Score", f"{http_m.get('score', 'N/A')}/100")
-                st.write(f"Allowed: {http_m.get('allowed_methods', [])}")
-                if http_m.get("dangerous_enabled"):
-                    st.error(f"Dangerous methods: {http_m['dangerous_enabled']}")
-
         with st.expander("📜 JavaScript Exposure"):
             st.metric("JS Score", f"{js_exp.get('score', 'N/A')}/100")
             st.write(f"Scripts analyzed: {js_exp.get('scripts_analyzed', 0)}")
@@ -917,10 +910,34 @@ if st.session_state.get("scanned"):
             for s in js_exp.get("secrets_found", []):
                 st.error(f"**{s.get('type')}** in {s.get('source')}")
 
-        with st.expander("📁 Open Files & Directories — ระงับชั่วคราว"):
-            if open_f.get("suspended"):
-                st.info("**ระงับชั่วคราว — รอการอัปเดตในอนาคต**")
-            else:
+        with st.expander("🔍 Subdomain Recon"):
+            st.write(f"**{subs.get('count', 0)} subdomains** discovered (passive)")
+            if subs.get("all_subdomains"):
+                st.code("\n".join(subs["all_subdomains"][:30]))
+            for w in subs.get("warnings", []):
+                st.caption(w)
+
+        # These probes are non-passive and are suspended (see scanner._SUSPENDED_MODULES).
+        # They render here ONLY if re-enabled; while suspended they appear in the grouped
+        # "ระงับชั่วคราว" section below with a plain-language reason instead.
+        if not cors.get("suspended"):
+            with st.expander("🔗 CORS Policy"):
+                st.metric("CORS Score", f"{cors.get('score', 'N/A')}/100")
+                for t in cors.get("tests", []):
+                    if t.get("tested"):
+                        st.write(f"`{t.get('path')}` → Allow-Origin: `{t.get('allow_origin') or 'none'}`")
+                for f in cors.get("findings", []):
+                    st.error(f"**{f.get('title')}**: {f.get('detail')}")
+
+        if not http_m.get("suspended"):
+            with st.expander("⚙️ HTTP Methods"):
+                st.metric("Methods Score", f"{http_m.get('score', 'N/A')}/100")
+                st.write(f"Allowed: {http_m.get('allowed_methods', [])}")
+                if http_m.get("dangerous_enabled"):
+                    st.error(f"Dangerous methods: {http_m['dangerous_enabled']}")
+
+        if not open_f.get("suspended"):
+            with st.expander("📁 Open Files & Directories"):
                 st.metric("Open Files Score", f"{open_f.get('score', 'N/A')}/100")
                 if open_f.get("directory_listings"):
                     st.warning("Directory listing: " + ", ".join(open_f["directory_listings"]))
@@ -929,10 +946,8 @@ if st.session_state.get("scanned"):
                 if open_f.get("robots_disallow"):
                     st.write("robots.txt Disallow paths:", open_f["robots_disallow"][:10])
 
-        with st.expander("🏷️ CMS Fingerprint — ระงับชั่วคราว"):
-            if cms.get("suspended"):
-                st.info("**ระงับชั่วคราว — รอการอัปเดตในอนาคต**")
-            else:
+        if not cms.get("suspended"):
+            with st.expander("🏷️ CMS Fingerprint"):
                 st.metric("CMS Score", f"{cms.get('score', 'N/A')}/100")
                 st.write(f"Detected: **{cms.get('detected_cms') or 'Unknown'}** v{cms.get('version') or '?'}")
                 if cms.get("xmlrpc_enabled"):
@@ -940,12 +955,55 @@ if st.session_state.get("scanned"):
                 for p in cms.get("default_paths_accessible", []):
                     st.write(f"`{p.get('path')}` → HTTP {p.get('status')}")
 
-        with st.expander("🔍 Subdomain Recon"):
-            st.write(f"**{subs.get('count', 0)} subdomains** discovered (passive)")
-            if subs.get("all_subdomains"):
-                st.code("\n".join(subs["all_subdomains"][:30]))
-            for w in subs.get("warnings", []):
-                st.caption(w)
+        # ── Temporarily suspended modules (grouped, each with a friendly “why”) ──
+        _susp_why = {
+            "cors": (
+                "🔗 CORS Policy",
+                "หัวข้อนี้ต้อง “แกล้ง” ส่งคำขอโดยสวมรอยเป็นเว็บไซต์แปลกหน้า เพื่อทดสอบว่าเซิร์ฟเวอร์เผลอ "
+                "เปิดให้เว็บอื่นดึงข้อมูลข้ามไปได้ไหม เท่ากับเป็นการ “ลองยิงทดสอบ” มากกว่าการอ่านข้อมูล "
+                "เฉย ๆ เพื่อให้ VULNEX ยังเป็นเครื่องมือแบบ “ดูอย่างเดียว ไม่แตะต้อง” อย่างแท้จริง เราจึง "
+                "พักไว้ก่อน แล้วจะพากลับมาในโหมดที่ปลอดภัยและเลือกเปิดใช้เองได้ 🔧",
+            ),
+            "http_methods": (
+                "⚙️ HTTP Methods",
+                "การตรวจนี้ต้องลองส่งคำสั่งจริงอย่าง PUT และ DELETE ไปยังเว็บ เพื่อดูว่าเซิร์ฟเวอร์เผลอเปิด "
+                "ช่องให้ใครมา “เพิ่มหรือลบ” ข้อมูลได้ไหม ถึงจะทำอย่างระมัดระวัง แต่ก็นับเป็นการ “แตะ” "
+                "ระบบจริง ไม่ใช่แค่การดู เราจึงขอพักไว้ก่อนเพื่อความปลอดภัยของเว็บไซต์ที่ถูกตรวจ แล้วจะปรับ "
+                "ให้รัดกุมขึ้นในอัปเดตถัดไป ✨",
+            ),
+            "open_files": (
+                "📁 Open Files & Directories",
+                "หัวข้อนี้จะ “เดา” ชื่อไฟล์และโฟลเดอร์ที่มักถูกลืมเปิดทิ้งไว้ (เช่นไฟล์ตั้งค่า .env หรือไฟล์สำรอง "
+                "ข้อมูล) แล้วไล่ “เคาะประตู” ทีละอันว่าเข้าถึงได้ไหม การไล่เดา–ลองเปิดแบบนี้ออกแนวค้นหา "
+                "เชิงรุก มากกว่าการเปิดดูหน้าเว็บตามปกติ เราจึงพักไว้ให้ตรงกับหลักการ Passive แล้วจะพากลับมา "
+                "แบบปลอดภัยยิ่งขึ้น 🔒",
+            ),
+            "cms": (
+                "🏷️ CMS Fingerprint",
+                "ส่วนที่เดาว่าเว็บใช้ระบบอะไร (เช่น WordPress) จากหน้าเว็บทำได้แบบดู ๆ ก็จริง แต่โมดูลนี้ยัง "
+                "แอบ “ลองเรียก” ไฟล์ระบบอย่าง xmlrpc.php และเคาะหน้า /wp-admin/ เพิ่มด้วย ซึ่งเลยเส้น "
+                "“ดูอย่างเดียว” ไปนิดหนึ่ง เราจึงพักทั้งหัวข้อไว้ก่อนเพื่อคงความเป็น Passive ให้ครบถ้วน แล้วค่อย "
+                "เปิดเฉพาะส่วนที่ปลอดภัยในภายหลัง 🧩",
+            ),
+        }
+        _susp_now = [
+            (k, m) for k, m in
+            (("cors", cors), ("http_methods", http_m), ("open_files", open_f), ("cms", cms))
+            if m.get("suspended")
+        ]
+        if _susp_now:
+            st.markdown("---")
+            st.markdown("#### ⏸ โมดูลที่ระงับชั่วคราว (Temporarily Suspended)")
+            st.caption(
+                "โมดูลกลุ่มนี้จำเป็นต้อง “ลองแตะ” หรือ “ลองเดา” กับเว็บไซต์เป้าหมาย ซึ่งเกินขอบเขตการสแกน "
+                "แบบ Passive (ดูอย่างเดียว ไม่รบกวนระบบ) ของ VULNEX จึงพักไว้ชั่วคราว — กดเปิดแต่ละหัวข้อ "
+                "เพื่อดูเหตุผลแบบเข้าใจง่าย แล้วเราจะพากลับมาในเวอร์ชันที่ปลอดภัยและเลือกเปิดใช้ได้เอง"
+            )
+            for _key, _mod in _susp_now:
+                _label, _why = _susp_why[_key]
+                with st.expander(_label):
+                    st.info("**ระงับชั่วคราว — รอการอัปเดตในอนาคต**")
+                    st.markdown(_why)
 
     with tab5:
         col_r1, col_r2 = st.columns(2)

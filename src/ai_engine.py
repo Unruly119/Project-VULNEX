@@ -251,43 +251,64 @@ def _server_subscore(server_data: dict) -> int:
 
 
 def _html_js_subscore(scan_data: dict) -> int:
-    """Combine HTML parser + JS exposure scores."""
-    html_s = _module_score(scan_data, "html", 80)
-    js_s = _module_score(scan_data, "js_exposure", 90)
-    open_s = _module_score(scan_data, "open_files", 90)
-    return round(html_s * 0.5 + js_s * 0.35 + open_s * 0.15)
+    """Combine HTML parser + JS exposure + open-files scores.
+
+    PASSIVE-SCAN: a suspended sub-module (e.g. open_files) is dropped and the
+    remaining sub-weights are renormalized, so a paused check adds no phantom score."""
+    parts = (("html", 0.50, 80), ("js_exposure", 0.35, 90), ("open_files", 0.15, 90))
+    active = [(k, w, d) for k, w, d in parts
+              if not (scan_data.get(k, {}) or {}).get("suspended")]
+    total_w = sum(w for _, w, _ in active) or 1.0
+    return round(sum(_module_score(scan_data, k, d) * w for k, w, d in active) / total_w)
+
+
+def _renormalize_weights(weights: dict) -> dict:
+    """Scale integer weights so they sum back to 100 (largest-remainder rounding).
+
+    Used when a weighted module is suspended: its weight is removed and the rest are
+    scaled up, so the composite still spans 0–100 (a perfect active scan can reach 100)
+    without crediting the paused module any phantom points."""
+    total = sum(weights.values())
+    if total in (0, 100):
+        return dict(weights)
+    scaled = {k: v * 100 / total for k, v in weights.items()}
+    out = {k: int(v) for k, v in scaled.items()}
+    for k in sorted(scaled, key=lambda x: scaled[x] - out[x], reverse=True)[:100 - sum(out.values())]:
+        out[k] += 1
+    return out
 
 
 def _compute_score(scan_data: dict, server_data: dict) -> tuple[int, str, dict]:
     """
     Composite security score (0–100) จากทุก signal
 
-    Weights:
-      Headers   25%
-      SSL/TLS   20%
-      HTML/JS   15%
-      Server/CVE 15%
-      DNS       10%
-      Cookies   10%
-      CMS       5%
+    Base weights (sum 100): Headers 25, SSL/TLS 20, HTML/JS 15, Server/CVE 15,
+    DNS 10, Cookies 10, CMS 5. A module SUSPENDED at the call site
+    (scanner._SUSPENDED_MODULES) is dropped from the weighted average and the
+    remaining weights are renormalized to 100 — so a paused module scores no phantom
+    points and never appears in the breakdown at full marks.
     """
-    hdr_raw = _module_score(scan_data, "headers", 0)
-    ssl_raw = _ssl_subscore(scan_data.get("ssl", {}) or {})
-    html_js = _html_js_subscore(scan_data)
-    srv_raw = _server_subscore(server_data)
-    dns_raw = _module_score(scan_data, "dns", 70)
-    cookie_raw = _module_score(scan_data, "cookies", 100)
-    cms_raw = _module_score(scan_data, "cms", 90)
+    raws = {
+        "headers":    _module_score(scan_data, "headers", 0),
+        "ssl":        _ssl_subscore(scan_data.get("ssl", {}) or {}),
+        "html_js":    _html_js_subscore(scan_data),
+        "server_cve": _server_subscore(server_data),
+        "dns":        _module_score(scan_data, "dns", 70),
+        "cookies":    _module_score(scan_data, "cookies", 100),
+        "cms":        _module_score(scan_data, "cms", 90),
+    }
+    base_weights = {
+        "headers": 25, "ssl": 20, "html_js": 15, "server_cve": 15,
+        "dns": 10, "cookies": 10, "cms": 5,
+    }
+    # Drop any weighted component whose scan module is suspended, then renormalize.
+    # (html_js/server_cve have no scan_data key → .get(...) is falsy → always kept.)
+    active = {k: w for k, w in base_weights.items()
+              if not (scan_data.get(k, {}) or {}).get("suspended")}
+    weights = _renormalize_weights(active)
 
-    hdr_pts = round(hdr_raw * 0.25)
-    ssl_pts = round(ssl_raw * 0.20)
-    html_pts = round(html_js * 0.15)
-    srv_pts = round(srv_raw * 0.15)
-    dns_pts = round(dns_raw * 0.10)
-    cookie_pts = round(cookie_raw * 0.10)
-    cms_pts = round(cms_raw * 0.05)
-
-    total = min(100, hdr_pts + ssl_pts + html_pts + srv_pts + dns_pts + cookie_pts + cms_pts)
+    pts = {k: round(raws[k] * weights[k] / 100) for k in weights}
+    total = min(100, sum(pts.values()))
 
     vulns = server_data.get("vulnerabilities", []) or []
     dos_risk = bool(server_data.get("dos_risk", False))
@@ -305,23 +326,13 @@ def _compute_score(scan_data: dict, server_data: dict) -> tuple[int, str, dict]:
     else:
         risk = "LOW"
 
-    breakdown = {
-        "headers": hdr_pts,
-        "ssl": ssl_pts,
-        "html_js": html_pts,
-        "server_cve": srv_pts,
-        "dns": dns_pts,
-        "cookies": cookie_pts,
-        "cms": cms_pts,
-        # raw sub-scores for UI
-        "headers_raw": hdr_raw,
-        "ssl_raw": ssl_raw,
-        "html_js_raw": html_js,
-        "server_raw": srv_raw,
-        "dns_raw": dns_raw,
-        "cookies_raw": cookie_raw,
-        "cms_raw": cms_raw,
-    }
+    # breakdown: earned weighted points per ACTIVE component + the effective max
+    # weights (_weights, consumed by the UI) + raw sub-scores. Suspended modules are
+    # omitted entirely, so the breakdown never lists a paused module at full marks.
+    breakdown = {k: pts[k] for k in weights}
+    breakdown["_weights"] = dict(weights)
+    for k in weights:
+        breakdown[f"{k}_raw"] = raws[k]
 
     return total, risk, breakdown
 
@@ -370,13 +381,17 @@ def _build_offline_analysis(
     scripts_no_sri = int(html.get("scripts_missing_sri", 0) or 0)
 
     # ── สรุปภาพรวม ──────────────────────────────────────────────
+    _brk_lbl = {"headers": "Headers", "ssl": "SSL", "html_js": "HTML/JS",
+                "server_cve": "Server", "dns": "DNS", "cookies": "Cookies", "cms": "CMS"}
+    _brk_w = breakdown.get("_weights") or {}
+    brk_str = ", ".join(
+        f"{_brk_lbl[k]} {breakdown.get(k, 0)}/{_brk_w[k]}"
+        for k in ("headers", "ssl", "html_js", "server_cve", "dns", "cookies", "cms")
+        if k in _brk_w
+    )
     overview = (
         f"เว็บไซต์ {url} ได้คะแนนความปลอดภัยรวม **{score}/100** "
-        f"ระดับความเสี่ยง **{risk}** — {_risk_summary_th(risk, score)} "
-        f"(Headers {breakdown.get('headers', 0)}/25, SSL {breakdown.get('ssl', 0)}/20, "
-        f"HTML/JS {breakdown.get('html_js', 0)}/15, Server {breakdown.get('server_cve', 0)}/15, "
-        f"DNS {breakdown.get('dns', 0)}/10, Cookies {breakdown.get('cookies', 0)}/10, "
-        f"CMS {breakdown.get('cms', 0)}/5)"
+        f"ระดับความเสี่ยง **{risk}** — {_risk_summary_th(risk, score)} ({brk_str})"
     )
 
     # ── ปัญหาเร่งด่วน ────────────────────────────────────────────

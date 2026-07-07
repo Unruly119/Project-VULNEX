@@ -6,6 +6,8 @@ import urllib3
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 
+from utils.network import SSRF_EVENT_HOOKS
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
@@ -39,7 +41,8 @@ def parse_html(url: str) -> dict:
     }
 
     try:
-        with httpx.Client(timeout=15, follow_redirects=True, verify=False) as client:
+        with httpx.Client(timeout=15, follow_redirects=True, verify=False,
+                          event_hooks=SSRF_EVENT_HOOKS) as client:  # SECURITY: SSRF redirect guard
             # Stream response to enforce size cap
             with client.stream("GET", url) as resp:
                 chunks = []

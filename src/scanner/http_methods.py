@@ -5,6 +5,8 @@ from typing import Dict, List
 import httpx
 import urllib3
 
+from utils.network import SSRF_EVENT_HOOKS
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
@@ -13,7 +15,19 @@ _OVERRIDE_HEADERS = ("X-HTTP-Method-Override", "X-Method-Override")
 
 
 def check_http_methods(url: str) -> Dict:
-    """ตรวจ OPTIONS Allow header และ dangerous HTTP methods — passive only"""
+    """ตรวจ OPTIONS Allow header และ dangerous HTTP methods.
+
+    SECURITY / PRODUCT DISCREPANCY (flag — decision required, do not silently change):
+    Despite the app-wide "Passive Scan Only" claim, this module ACTIVELY sends
+    PUT / DELETE / PROPFIND / MKCOL / COPY and TRACE/TRACK requests, plus a POST
+    carrying `X-HTTP-Method-Override: DELETE`, to the target. On a misconfigured
+    server these verbs are state-changing (create/delete/move a resource) — i.e.
+    NOT passive. Options for the maintainers:
+      (a) restrict probing to OPTIONS + the Allow header only (fully passive), or
+      (b) gate the active verb probes behind an explicit, documented opt-in and
+          update the "Passive Scan Only" wording site-wide.
+    Left unchanged here on purpose — see SECURITY-AUDIT.md, finding A1.
+    """
     result: Dict = {
         "allowed_methods": [],
         "dangerous_enabled": [],
@@ -29,6 +43,7 @@ def check_http_methods(url: str) -> Dict:
             follow_redirects=True,
             verify=False,
             headers={"User-Agent": "VulnexScanner/1.0 (+https://vulnex.example.com/scanner-info)"},
+            event_hooks=SSRF_EVENT_HOOKS,  # SECURITY: block redirects to internal hosts (SSRF)
         ) as client:
             # OPTIONS
             opt = client.options(url)

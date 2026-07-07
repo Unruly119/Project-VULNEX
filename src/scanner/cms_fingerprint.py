@@ -8,6 +8,8 @@ import httpx
 import urllib3
 from bs4 import BeautifulSoup
 
+from utils.network import SSRF_EVENT_HOOKS
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
@@ -68,6 +70,7 @@ def check_cms(url: str) -> Dict:
             follow_redirects=True,
             verify=False,
             headers={"User-Agent": "VulnexScanner/1.0 (+https://vulnex.example.com/scanner-info)"},
+            event_hooks=SSRF_EVENT_HOOKS,  # SECURITY: block redirects to internal hosts (SSRF)
         ) as client:
             resp = client.get(url)
             html = resp.text
@@ -141,6 +144,11 @@ def check_cms(url: str) -> Dict:
                     pass
 
             # WordPress XML-RPC
+            # SECURITY / PRODUCT DISCREPANCY (flag — see SECURITY-AUDIT.md A1):
+            # this issues an active POST to xmlrpc.php, which is not strictly a
+            # "passive" read. It is a benign empty body (no method call / no auth
+            # attempt), but it still contradicts the "Passive Scan Only" claim and
+            # is a product decision to keep or gate behind an opt-in.
             if result["detected_cms"] == "WordPress" or "/wp-content/" in html:
                 xmlrpc = urljoin(url.rstrip("/") + "/", "xmlrpc.php")
                 try:

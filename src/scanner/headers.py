@@ -6,6 +6,8 @@ import httpx
 import urllib3
 from typing import Dict
 
+from utils.network import SSRF_EVENT_HOOKS
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
@@ -106,6 +108,7 @@ def check_headers(url: str) -> Dict:
             timeout=10,
             follow_redirects=True,
             verify=False,  # ยอมรับ expired cert — เพื่อยังสแกนได้
+            event_hooks=SSRF_EVENT_HOOKS,  # SECURITY: block redirects to internal hosts (SSRF)
         ) as client:
             response = client.get(url, headers={"Accept": "text/html"})
 

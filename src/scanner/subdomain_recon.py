@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 import httpx
 import urllib3
 
+from utils.network import is_safe_host
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
@@ -26,6 +28,9 @@ def _san_from_cert(hostname: str) -> List[str]:
     """Parse Subject Alternative Names from SSL certificate."""
     names: Set[str] = set()
     try:
+        # SECURITY: don't open a raw socket to a non-public host (SSRF).
+        if not is_safe_host(hostname):
+            return []
         ctx = ssl.create_default_context()
         with socket.create_connection((hostname, 443), timeout=5) as sock:
             with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:

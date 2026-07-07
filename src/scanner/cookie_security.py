@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 import httpx
 import urllib3
 
+from utils.network import SSRF_EVENT_HOOKS
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
@@ -65,6 +67,7 @@ def check_cookies(url: str) -> Dict:
             follow_redirects=True,
             verify=False,
             headers={"User-Agent": "VulnexScanner/1.0 (+https://vulnex.example.com/scanner-info)"},
+            event_hooks=SSRF_EVENT_HOOKS,  # SECURITY: block redirects to internal hosts (SSRF)
         ) as client:
             response = client.get(url)
 

@@ -3,6 +3,8 @@ import httpx
 import re
 from urllib.parse import urlparse
 
+from utils.network import SSRF_EVENT_HOOKS
+
 # ── Known vulnerable versions database ─────────────────────────────────────
 VULN_DB = {
     "nginx": [
@@ -84,7 +86,8 @@ def check_server(url: str) -> dict:
 
     try:
         with httpx.Client(timeout=10, follow_redirects=True, verify=False,
-                          http2=True) as client:
+                          http2=True,
+                          event_hooks=SSRF_EVENT_HOOKS) as client:  # SECURITY: SSRF redirect guard
             # SECURITY: GET instead of HEAD — some WAF/CDN don't inject headers on HEAD
             resp = client.get(url, headers={"Accept": "text/html"})
 

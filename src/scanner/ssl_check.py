@@ -4,6 +4,8 @@ import socket
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+from utils.network import is_safe_host
+
 # Weak cipher patterns
 _WEAK_CIPHERS = ("RC4", "3DES", "DES", "NULL", "EXPORT", "anon")
 
@@ -31,6 +33,13 @@ def check_ssl(url: str) -> dict:
 
     result["has_ssl"] = True
     hostname = urlparse(url).hostname
+
+    # SECURITY: re-validate the (resolved) host before opening a raw TLS socket —
+    # is_safe_host() blocks loopback/private/link-local and DNS-based SSRF.
+    if not is_safe_host(hostname or ""):
+        result["error"] = "SSRF blocked: non-public host"
+        result["error_type"] = "blocked"
+        return result
 
     try:
         ctx = ssl.create_default_context()

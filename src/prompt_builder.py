@@ -70,6 +70,18 @@ def _format_module_summary(scan_result: dict, server_data: dict) -> str:
             f"DNSSEC={'✓' if dns.get('dnssec', {}).get('signed') else '✗'}"
         )
 
+    # PASSIVE-SCAN: suspended modules are not scanned this round — don't feed the AI
+    # empty/zero values that could read as "checked and found clean" (false assurance).
+    _SUSP = "ระงับชั่วคราว (ไม่ได้ตรวจในรอบนี้)"
+    cors_line = (f"CORS: {_SUSP}" if cors.get("suspended")
+                 else f"CORS Score: {cors.get('score', 'N/A')}/100 | Findings: {len(cors.get('findings') or [])}")
+    http_line = (f"HTTP Methods: {_SUSP}" if http_m.get("suspended")
+                 else f"HTTP Methods Score: {http_m.get('score', 'N/A')}/100 | Dangerous: {http_m.get('dangerous_enabled', [])}")
+    openf_line = (f"Open Files: {_SUSP}" if open_f.get("suspended")
+                  else f"Open Files Score: {open_f.get('score', 'N/A')}/100 | Sensitive: {len(open_f.get('sensitive_files') or [])}")
+    cms_line = (f"CMS: {_SUSP}" if cms.get("suspended")
+                else f"CMS: {cms.get('detected_cms') or 'unknown'} v{cms.get('version') or '?'} ({cms.get('score', 'N/A')}/100)")
+
     return f"""
 ผลการตรวจสอบเว็บไซต์: {url}
 ชื่อหน้าเว็บ (HTML title): {site_title}
@@ -85,12 +97,12 @@ External Scripts: {len(ext_sc)} | ไม่มี SRI: {scripts_no_sri} | Insecu
 DNS Security ({dns.get('score', 'N/A')}/100): {dns_txt}
 Cookie Security ({cookies.get('score', 'N/A')}/100): {len(cookies.get('cookies') or [])} cookies
 {chr(10).join(cookie_lines) if cookie_lines else '  ไม่มี cookies'}
-CORS Score: {cors.get('score', 'N/A')}/100 | Findings: {len(cors.get('findings') or [])}
-HTTP Methods Score: {http_m.get('score', 'N/A')}/100 | Dangerous: {http_m.get('dangerous_enabled', [])}
+{cors_line}
+{http_line}
 JS Exposure Score: {js_exp.get('score', 'N/A')}/100 | Secrets: {len(js_exp.get('secrets_found') or [])}
 Subdomains: {subs.get('count', 0)} found
-Open Files Score: {open_f.get('score', 'N/A')}/100 | Sensitive: {len(open_f.get('sensitive_files') or [])}
-CMS: {cms.get('detected_cms') or 'unknown'} v{cms.get('version') or '?'} ({cms.get('score', 'N/A')}/100)
+{openf_line}
+{cms_line}
 
 Web Server: {stype} {sver} | Version Exposed: {ver_exposed}
 HTTP Version: {http_ver} | DoS Risk: {dos_risk}

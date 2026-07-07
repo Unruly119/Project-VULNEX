@@ -889,13 +889,16 @@ if st.session_state.get("scanned"):
                     if issues:
                         st.caption("⚠️ " + "; ".join(issues))
 
-        with st.expander("🔗 CORS Policy"):
-            st.metric("CORS Score", f"{cors.get('score', 'N/A')}/100")
-            for t in cors.get("tests", []):
-                if t.get("tested"):
-                    st.write(f"`{t.get('path')}` → Allow-Origin: `{t.get('allow_origin') or 'none'}`")
-            for f in cors.get("findings", []):
-                st.error(f"**{f.get('title')}**: {f.get('detail')}")
+        with st.expander("🔗 CORS Policy — ระงับชั่วคราว"):
+            if cors.get("suspended"):
+                st.info("**ระงับชั่วคราว — รอการอัปเดตในอนาคต**")
+            else:
+                st.metric("CORS Score", f"{cors.get('score', 'N/A')}/100")
+                for t in cors.get("tests", []):
+                    if t.get("tested"):
+                        st.write(f"`{t.get('path')}` → Allow-Origin: `{t.get('allow_origin') or 'none'}`")
+                for f in cors.get("findings", []):
+                    st.error(f"**{f.get('title')}**: {f.get('detail')}")
 
         with st.expander("⚙️ HTTP Methods — ระงับชั่วคราว"):
             if http_m.get("suspended"):
@@ -914,14 +917,17 @@ if st.session_state.get("scanned"):
             for s in js_exp.get("secrets_found", []):
                 st.error(f"**{s.get('type')}** in {s.get('source')}")
 
-        with st.expander("📁 Open Files & Directories"):
-            st.metric("Open Files Score", f"{open_f.get('score', 'N/A')}/100")
-            if open_f.get("directory_listings"):
-                st.warning("Directory listing: " + ", ".join(open_f["directory_listings"]))
-            for sf in open_f.get("sensitive_files", []):
-                st.error(f"Accessible: `{sf.get('path')}` (HTTP {sf.get('status')})")
-            if open_f.get("robots_disallow"):
-                st.write("robots.txt Disallow paths:", open_f["robots_disallow"][:10])
+        with st.expander("📁 Open Files & Directories — ระงับชั่วคราว"):
+            if open_f.get("suspended"):
+                st.info("**ระงับชั่วคราว — รอการอัปเดตในอนาคต**")
+            else:
+                st.metric("Open Files Score", f"{open_f.get('score', 'N/A')}/100")
+                if open_f.get("directory_listings"):
+                    st.warning("Directory listing: " + ", ".join(open_f["directory_listings"]))
+                for sf in open_f.get("sensitive_files", []):
+                    st.error(f"Accessible: `{sf.get('path')}` (HTTP {sf.get('status')})")
+                if open_f.get("robots_disallow"):
+                    st.write("robots.txt Disallow paths:", open_f["robots_disallow"][:10])
 
         with st.expander("🏷️ CMS Fingerprint — ระงับชั่วคราว"):
             if cms.get("suspended"):

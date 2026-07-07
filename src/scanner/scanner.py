@@ -7,24 +7,27 @@ from scanner.ssl_check        import check_ssl
 from scanner.html_parser      import parse_html
 from scanner.dns_security     import check_dns
 from scanner.cookie_security  import check_cookies
-from scanner.cors_policy      import check_cors
+from scanner.cors_policy      import check_cors            # noqa: F401 — kept; suspended (see _SUSPENDED_MODULES)
 from scanner.http_methods     import check_http_methods  # noqa: F401 — kept; suspended (see _SUSPENDED_MODULES)
 from scanner.js_exposure      import check_js_exposure
 from scanner.subdomain_recon  import check_subdomains
-from scanner.open_files       import check_open_files
+from scanner.open_files       import check_open_files       # noqa: F401 — kept; suspended (see _SUSPENDED_MODULES)
 from scanner.cms_fingerprint  import check_cms            # noqa: F401 — kept; suspended (see _SUSPENDED_MODULES)
 from utils.network            import is_safe_host
 
 
 # ── Suspended modules ────────────────────────────────────────────────────────
-# SECURITY / PASSIVE-SCAN: http_methods and cms_fingerprint issue non-passive
-# (write / active-POST) requests, contradicting the "Passive Scan Only" claim
-# (SECURITY-AUDIT.md finding A1). They are DISABLED at this call site only — the
-# module files and their imports above are intentionally kept so a future update
-# can re-enable them by moving the key back into `modules` inside run_scan(). A
-# suspended module reports {"suspended": True}, so the UI can show a notice and the
+# PASSIVE-SCAN: these modules are disabled at this call site to keep the scan strictly
+# passive (SECURITY-AUDIT.md finding A1).
+#   · http_methods — sends PUT/DELETE/PROPFIND/… + a method-override POST (writes)
+#   · cms          — sends an active POST to xmlrpc.php
+#   · cors         — sends OPTIONS with a spoofed evil Origin to guessed paths
+#   · open_files   — forced-browsing GET/HEAD probes for unlinked sensitive paths
+# The module files and their imports above are intentionally KEPT so a future update
+# can re-enable any of them by moving its key back into `modules` inside run_scan().
+# A suspended module reports {"suspended": True}, so the UI can show a notice and the
 # score engine treats it as neutral (no penalty).
-_SUSPENDED_MODULES = ("http_methods", "cms")
+_SUSPENDED_MODULES = ("http_methods", "cms", "cors", "open_files")
 
 
 def _with_suspended(result: dict) -> dict:
@@ -40,19 +43,18 @@ def run_scan(url: str) -> dict:
     if not url.startswith("http"):
         url = "https://" + url
 
-    # Active modules — passive only. NOTE: "http_methods" and "cms" are intentionally
-    # absent here; they are suspended at this call site (see _SUSPENDED_MODULES) and
-    # attached as neutral sentinels via _with_suspended() below.
+    # Active modules — passive only. NOTE: the non-passive modules (http_methods, cms,
+    # cors, open_files) are intentionally absent here; they are suspended at this call
+    # site (see _SUSPENDED_MODULES) and attached as neutral sentinels via
+    # _with_suspended() below.
     modules = {
         "headers":      check_headers,
         "ssl":          check_ssl,
         "html":         parse_html,
         "dns":          check_dns,
         "cookies":      check_cookies,
-        "cors":         check_cors,
         "js_exposure":  check_js_exposure,
         "subdomains":   check_subdomains,
-        "open_files":   check_open_files,
     }
 
     parsed = urlparse(url)

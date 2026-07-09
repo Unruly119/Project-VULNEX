@@ -1,8 +1,9 @@
-# src/ai_engine.py — เชื่อมต่อ Gemini API
+# src/ai_engine.py — เชื่อมต่อ Gemini API (+ OpenRouter fallback)
 import hashlib
 import json
 import os
 import re
+import threading
 import time
 import warnings
 from dotenv import load_dotenv
@@ -10,28 +11,77 @@ from dotenv import load_dotenv
 warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 import google.generativeai as genai
 import google.api_core.exceptions
+import httpx
 from cachetools import TTLCache
 from prompt_builder import build_prompt, build_chat_prompt
 
 load_dotenv()
 
-# ── Configure API Key ─────────────────────────────────────────────
-API_KEY = os.getenv("GEMINI_API_KEY")
-# คีย์สำรอง — ใช้เฉพาะตอนสร้างรายงาน PDF/HTML (แยกโควต้าจากการวิเคราะห์บนหน้าจอ)
+# ── API Key pool ──────────────────────────────────────────────────
+# เก็บคีย์ Gemini ทุกตัวจาก .env เข้าพูลเดียว (เรียงตามความสำคัญ, ตัดซ้ำ)
+# รองรับ: GEMINI_API_KEY, GEMINI_API_KEY_Backup, GEMINI_API_KEY_2.._5
+_GEMINI_KEY_ENV_NAMES = [
+    "GEMINI_API_KEY",
+    "GEMINI_API_KEY_Backup",
+    "GEMINI_API_KEY_2",
+    "GEMINI_API_KEY_3",
+    "GEMINI_API_KEY_4",
+    "GEMINI_API_KEY_5",
+]
+
+
+def _load_gemini_keys() -> list[str]:
+    keys: list[str] = []
+    for name in _GEMINI_KEY_ENV_NAMES:
+        val = (os.getenv(name) or "").strip()
+        if val and val not in keys:
+            keys.append(val)
+    return keys
+
+
+GEMINI_KEYS = _load_gemini_keys()
+# alias เดิม (backward-compat) — โค้ดเก่าบางจุดยังอ้าง API_KEY / API_KEY_BACKUP
+API_KEY = GEMINI_KEYS[0] if GEMINI_KEYS else None
 API_KEY_BACKUP = os.getenv("GEMINI_API_KEY_Backup")
+
+# ── OpenRouter (ชั้น fallback ถัดจาก Gemini — คีย์ที่ 3) ──────────
+OPENROUTER_API_KEY = (os.getenv("OPENROUTER_API_KEY") or "").strip() or None
+_OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# ฟรีโมเดลที่ทดสอบแล้วตอบไทยได้ — เรียงฉลาด/เสถียรมากไปน้อย
+_OPENROUTER_MODELS = [
+    "openai/gpt-oss-120b:free",
+    "openai/gpt-oss-20b:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+]
+_OPENROUTER_SYSTEM = (
+    "You are a Thai cybersecurity expert writing for non-expert school IT staff. "
+    "Always respond in Thai. Follow the exact section headings and Markdown format "
+    "requested in the user's message. Do not use emoji."
+)
+
 if API_KEY:
     genai.configure(api_key=API_KEY)
 
-# ── Model list — fallback จากเบา/เร็วไปหนัก ──────────────────────
+
+def _has_any_provider() -> bool:
+    """มี AI provider อย่างน้อยหนึ่งตัวพร้อมใช้งานไหม (Gemini คีย์ใดก็ได้ หรือ OpenRouter)"""
+    return bool(GEMINI_KEYS or OPENROUTER_API_KEY)
+
+
+# ── Model list — ฉลาดสุดก่อน แล้วไล่ลงมา ─────────────────────────
+# ผู้ใช้ต้องการ "ตัวที่ฉลาดที่สุดก่อน": 2.5-flash (ฉลาดสุดที่ free tier เสถียร)
+# → 2.5-flash-lite (เร็ว) → 1.5-flash (สำรอง). ตั้ง GEMINI_MODEL=gemini-2.5-pro
+# ใน .env เพื่อดันตัวฉลาดสุดขึ้นหัวแถวได้ (โควต้า free tier น้อย เหมาะงาน traffic ต่ำ)
 # gemini-2.0-flash / 2.0-flash-lite ปิด free tier แล้ว (quota limit: 0)
-# ใช้ 2.5 Flash-Lite / 2.5 Flash / 1.5 Flash บน free tier แทน
 _DEFAULT_MODELS = [
-    "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
     "gemini-1.5-flash",
 ]
 
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+MODEL_NAME = (os.getenv("GEMINI_MODEL") or "").strip()
 
 _MAX_RETRIES_PER_MODEL = 3
 _BASE_BACKOFF_SEC = 2.0
@@ -128,49 +178,165 @@ def _backoff_seconds(attempt: int, exc: Exception | None = None) -> float:
     return min(_BASE_BACKOFF_SEC * (2 ** attempt), _MAX_BACKOFF_SEC)
 
 
-def generate_with_fallback(prompt: str) -> str:
-    """
-    ลอง model ทีละตัว พร้อม retry + backoff สำหรับ 429/quota
-    คืน text string โดยตรง
-    """
+# ── Key cooldown — กันยิงคีย์ที่โควต้าหมดซ้ำ (สำคัญตอนผู้ใช้เยอะ) ──
+# เมื่อคีย์ได้ 429/quota จะถูก "พัก" ชั่วคราว เพื่อให้ระบบสลับไปคีย์อื่นทันที
+# ไม่เสียเวลา retry คีย์ที่เต็มอยู่แล้ว
+_KEY_COOLDOWN_SEC = 45.0
+_key_cooldowns: dict[str, float] = {}
+_cooldown_lock = threading.Lock()
+
+# google-generativeai ใช้ global config (genai.configure) — ไม่ thread-safe
+# ถ้าผู้ใช้สแกนพร้อมกันหลายคน คีย์อาจถูกเขียนทับกลางคัน ⇒ ล็อกช่วง configure+generate
+_genai_lock = threading.Lock()
+
+
+def _available_keys(keys: list[str]) -> list[str]:
+    """คีย์ที่พร้อมใช้ (ไม่อยู่ใน cooldown) — เรียงเดิม; ถ้าเต็มหมดคืนตัวที่จะว่างเร็วสุด"""
+    now = time.time()
+    with _cooldown_lock:
+        ready = [k for k in keys if _key_cooldowns.get(k, 0.0) <= now]
+        if ready:
+            return ready
+        return sorted(keys, key=lambda k: _key_cooldowns.get(k, 0.0))
+
+
+def _mark_cooldown(key: str, seconds: float = _KEY_COOLDOWN_SEC) -> None:
+    with _cooldown_lock:
+        _key_cooldowns[key] = time.time() + seconds
+
+
+def _gemini_generate_once(model_name: str, key: str, prompt: str, gen_config: dict) -> str:
+    """เรียก Gemini หนึ่งครั้ง — ล็อก global config ไว้ตลอดช่วง configure+generate
+    เพื่อกันคีย์ของผู้ใช้คนอื่นเขียนทับ (concurrency-safe)."""
+    with _genai_lock:
+        genai.configure(api_key=key)
+        m = genai.GenerativeModel(model_name, generation_config=gen_config)
+        response = m.generate_content(prompt)
+    return response.text
+
+
+def _generate_gemini(prompt: str, gen_config: dict, keys: list[str]) -> str:
+    """วนทุกโมเดล (ฉลาดสุดก่อน) × ทุกคีย์ในพูล พร้อม cooldown + retry/backoff.
+
+    ลำดับ: model ฉลาดสุด → ลองทุกคีย์ที่ว่าง → โควต้าหมดก็ cooldown แล้วสลับคีย์ →
+    หมดทุกคีย์ค่อยลง model ถัดไป."""
     models = _build_fallback_models()
     last_exc: Exception | None = None
     quota_hits = 0
 
     for model_name in models:
-        for attempt in range(_MAX_RETRIES_PER_MODEL):
-            try:
-                m = genai.GenerativeModel(model_name, generation_config=_GEN_CONFIG)
-                response = m.generate_content(prompt)
-                return response.text
-            except google.api_core.exceptions.ResourceExhausted as exc:
-                last_exc = exc
-                if _is_quota_error(exc):
+        model_dead = False
+        for key in _available_keys(keys):
+            for attempt in range(_MAX_RETRIES_PER_MODEL):
+                try:
+                    return _gemini_generate_once(model_name, key, prompt, gen_config)
+                except google.api_core.exceptions.NotFound as exc:
+                    # โมเดลนี้ไม่มี/ถูกปิด → เลิกทั้งลูปคีย์ ไปโมเดลถัดไป
+                    last_exc = exc
+                    model_dead = True
+                    break
+                except (google.api_core.exceptions.ResourceExhausted,
+                        google.api_core.exceptions.TooManyRequests) as exc:
+                    last_exc = exc
                     quota_hits += 1
-                if attempt < _MAX_RETRIES_PER_MODEL - 1:
-                    time.sleep(_backoff_seconds(attempt, exc))
-                    continue
-                break
-            except google.api_core.exceptions.NotFound as exc:
-                last_exc = exc
-                break
-            except google.api_core.exceptions.TooManyRequests as exc:
-                last_exc = exc
-                quota_hits += 1
-                if attempt < _MAX_RETRIES_PER_MODEL - 1:
-                    time.sleep(_backoff_seconds(attempt, exc))
-                    continue
-                break
-            except Exception as exc:
-                last_exc = exc
+                    _mark_cooldown(key)          # พักคีย์นี้ แล้วสลับไปคีย์ถัดไปทันที
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    if _is_quota_error(exc):
+                        quota_hits += 1
+                        _mark_cooldown(key)
+                        break
+                    # error ชั่วคราวอื่น → retry คีย์เดิมด้วย backoff
+                    if attempt < _MAX_RETRIES_PER_MODEL - 1:
+                        time.sleep(_backoff_seconds(attempt, exc))
+                        continue
+                    break
+            if model_dead:
                 break
 
     if quota_hits and last_exc and _is_quota_error(last_exc):
         raise RuntimeError(
-            f"โควต้า Gemini API หมดแล้ว (ลอง {len(models)} โมเดล) — "
+            f"โควต้า Gemini API หมดทุกคีย์ ({len(keys)} คีย์ / {len(models)} โมเดล) — "
             f"{_format_ai_error(last_exc)}"
         )
-    raise RuntimeError(f"ทุก model ล้มเหลว: {_format_ai_error(last_exc)}")
+    raise RuntimeError(f"ทุก model/คีย์ ล้มเหลว: {_format_ai_error(last_exc)}")
+
+
+def _generate_openrouter(prompt: str, gen_config: dict | None = None) -> str:
+    """ชั้น fallback ถัดจาก Gemini — เรียก OpenRouter (OpenAI-compatible) ผ่าน httpx.
+    คีย์ส่งต่อคำขอโดยตรง (ไม่มี global state) ⇒ ปลอดภัยกับ concurrency โดยธรรมชาติ."""
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("ไม่พบ OPENROUTER_API_KEY")
+
+    gen_config = gen_config or _GEN_CONFIG
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/Project-VULNEX",
+        "X-Title": "Project-VULNEX",
+    }
+    last_err: str = "unknown"
+    with httpx.Client(timeout=45.0) as client:
+        for model in _OPENROUTER_MODELS:
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": _OPENROUTER_SYSTEM},
+                    {"role": "user",   "content": prompt},
+                ],
+                "max_tokens":  gen_config.get("max_output_tokens", 2048),
+                "temperature": gen_config.get("temperature", 0.15),
+            }
+            try:
+                r = client.post(_OPENROUTER_URL, headers=headers, json=payload)
+                if r.status_code in (429, 402, 502, 503):
+                    last_err = f"{model}: HTTP {r.status_code}"
+                    continue
+                r.raise_for_status()
+                data = r.json()
+                choices = data.get("choices") or []
+                if choices:
+                    text = ((choices[0].get("message") or {}).get("content") or "").strip()
+                    if text:
+                        return text
+                last_err = f"{model}: {data.get('error', 'empty response')}"
+            except Exception as exc:                     # noqa: BLE001
+                last_err = f"{model}: {exc}"
+    raise RuntimeError(f"OpenRouter ทุกโมเดลล้มเหลว — {last_err}")
+
+
+def generate_smart(
+    prompt: str,
+    gen_config: dict | None = None,
+    keys: list[str] | None = None,
+) -> tuple[str, str]:
+    """Cascade อัจฉริยะ: Gemini (ทุกคีย์/โมเดล) → OpenRouter → ยกข้อผิดพลาด (ให้ผู้เรียกไป offline).
+
+    คืน (text, provider) โดย provider ∈ {"gemini", "openrouter"}."""
+    gen_config = gen_config or _GEN_CONFIG
+    keys = GEMINI_KEYS if keys is None else keys
+    errors: list[str] = []
+
+    if keys:
+        try:
+            return _generate_gemini(prompt, gen_config, keys), "gemini"
+        except Exception as exc:                         # noqa: BLE001
+            errors.append(str(exc))
+
+    if OPENROUTER_API_KEY:
+        try:
+            return _generate_openrouter(prompt, gen_config), "openrouter"
+        except Exception as exc:                         # noqa: BLE001
+            errors.append(str(exc))
+
+    raise RuntimeError(" | ".join(errors) or "ไม่มี AI provider ที่พร้อมใช้งาน")
+
+
+def generate_with_fallback(prompt: str) -> str:
+    """(คงไว้เพื่อ backward-compat) เรียก cascade แล้วคืนเฉพาะ text."""
+    text, _ = generate_smart(prompt)
+    return text
 
 
 # ── Cache AI text เท่านั้น (score คำนวณใหม่ทุกครั้ง) ──────────────
@@ -584,16 +750,18 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
         "breakdown":        breakdown,
         "error":            None,
         "offline_fallback": False,
+        "provider":         None,
     }
 
     # AI text — cached by scan fingerprint (หมดอายุ 1 ชั่วโมง)
     cache_key = _make_cache_key(scan_data, server_data)
     if cache_key in _analysis_cache:
         result["analysis"] = _analysis_cache[cache_key]
+        result["provider"] = "cache"
         return result
 
-    if not API_KEY:
-        err_msg = "ไม่พบ GEMINI_API_KEY — ใช้การวิเคราะห์อัตโนมัติแทน"
+    if not _has_any_provider():
+        err_msg = "ไม่พบ API key (Gemini/OpenRouter) — ใช้การวิเคราะห์อัตโนมัติแทน"
         result["error"] = err_msg
         result["offline_fallback"] = True
         result["analysis"] = (
@@ -603,9 +771,10 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
         return result
 
     try:
-        prompt             = build_prompt(scan_data, server_data, composite_score=score)
-        text               = generate_with_fallback(prompt)
-        result["analysis"] = text
+        prompt               = build_prompt(scan_data, server_data, composite_score=score)
+        text, provider       = generate_smart(prompt)
+        result["analysis"]   = text
+        result["provider"]   = provider
         _analysis_cache[cache_key] = text
     except Exception as exc:
         err_msg = _format_ai_error(exc)
@@ -623,18 +792,13 @@ def analyze(scan_data: dict, server_data: dict | None = None) -> dict:
     return result
 
 
-def _generate_with_key(prompt: str, api_key: str) -> str:
-    """
-    เรียก generate_with_fallback ด้วย API key ที่ระบุ (เช่นคีย์สำรอง)
-    แล้วคืนค่าการตั้งค่า genai กลับเป็นคีย์หลักเสมอ — กันไม่ให้คีย์สำรอง
-    ค้างไปใช้กับการเรียกครั้งถัดไปบนหน้าจอ
-    """
-    genai.configure(api_key=api_key)
-    try:
-        return generate_with_fallback(prompt)
-    finally:
-        if API_KEY:
-            genai.configure(api_key=API_KEY)
+def _pdf_key_order() -> list[str]:
+    """ลำดับคีย์สำหรับสร้าง PDF — เอา 'คีย์ที่ว่างอยู่' ตัวไหนก็ได้ แต่จัดคีย์สำรอง
+    (และคีย์เสริมอื่น) ขึ้นก่อนคีย์หลัก เพื่อไม่แย่งโควต้าการวิเคราะห์บนหน้าจอ
+    — คีย์หลักถูกเลื่อนไปท้ายสุดเป็นทางเลือกสำรอง."""
+    if len(GEMINI_KEYS) > 1:
+        return GEMINI_KEYS[1:] + GEMINI_KEYS[:1]
+    return list(GEMINI_KEYS)
 
 
 def generate_report_analysis(
@@ -643,17 +807,17 @@ def generate_report_analysis(
     screen_ai_data: dict | None = None,
 ) -> dict:
     """
-    สร้างบทวิเคราะห์สำหรับ "รายงาน" (HTML→PDF) โดยเรียก Gemini ด้วย
-    คีย์สำรอง GEMINI_API_KEY_Backup โดยเฉพาะ — แยกโควต้าจากการวิเคราะห์
-    บนหน้าจอที่ใช้คีย์หลัก (เรียกก่อนสร้าง HTML เสมอ)
+    สร้างบทวิเคราะห์สำหรับ "รายงาน" (HTML→PDF) — ใช้ cascade อัจฉริยะเต็มรูปแบบ
+    โดยเลือก "คีย์ไหนก็ได้ที่ว่างอยู่" (cooldown-aware) เรียงคีย์สำรองก่อนคีย์หลัก
+    เพื่อไม่แย่งโควต้าหน้าจอ แล้วต่อด้วย OpenRouter จนถึง offline
 
     ลำดับ fallback:
-        1) เรียก Gemini ใหม่ด้วยคีย์สำรอง
-        2) ถ้าล้มเหลว/ไม่มีคีย์สำรอง → ใช้บทวิเคราะห์บนหน้าจอ (ถ้ามีและไม่ใช่ offline)
+        1) Gemini — คีย์ที่ว่าง (สำรองก่อน) × โมเดลฉลาดสุดก่อน → OpenRouter (ผ่าน generate_smart)
+        2) ถ้าล้มเหลว → ใช้บทวิเคราะห์บนหน้าจอ (ถ้ามีและเป็น AI จริง ไม่ใช่ offline)
         3) ถ้ายังไม่ได้ → offline rule-based analysis
 
     คืน dict โครงสร้างเดียวกับ analyze():
-        analysis, risk_level, score, breakdown, error, offline_fallback
+        analysis, risk_level, score, breakdown, error, offline_fallback, provider
     """
     server_data = server_data or {}
 
@@ -666,18 +830,21 @@ def generate_report_analysis(
         "breakdown":        breakdown,
         "error":            None,
         "offline_fallback": False,
+        "provider":         None,
     }
 
-    # 1) คีย์สำรองก่อน
-    if API_KEY_BACKUP:
+    # 1) คีย์ที่ว่าง (สำรองก่อน) + OpenRouter ผ่าน cascade เดียวกัน
+    if _has_any_provider():
         try:
             prompt = build_prompt(scan_data, server_data, composite_score=score)
-            result["analysis"] = _generate_with_key(prompt, API_KEY_BACKUP)
+            text, provider = generate_smart(prompt, keys=_pdf_key_order())
+            result["analysis"] = text
+            result["provider"] = provider
             return result
         except Exception as exc:           # noqa: BLE001 — เก็บ error ไว้แล้วไป fallback
             result["error"] = _format_ai_error(exc)
 
-    # 2) บทวิเคราะห์บนหน้าจอ (ที่เรียกด้วยคีย์หลักไปแล้ว) ถ้าใช้งานได้จริง
+    # 2) บทวิเคราะห์บนหน้าจอ (ที่เรียกไปแล้ว) ถ้าใช้งานได้จริง
     if (
         screen_ai_data
         and screen_ai_data.get("analysis")
@@ -687,10 +854,11 @@ def generate_report_analysis(
         result["risk_level"] = screen_ai_data.get("risk_level", risk)
         result["score"]      = screen_ai_data.get("score", score)
         result["breakdown"]  = screen_ai_data.get("breakdown", breakdown)
+        result["provider"]   = screen_ai_data.get("provider", "screen-reuse")
         return result
 
     # 3) offline rule-based
-    note = result["error"] or "ไม่พบ GEMINI_API_KEY_Backup ในไฟล์ .env"
+    note = result["error"] or "ไม่พบ API key (Gemini/OpenRouter) ในไฟล์ .env"
     result["offline_fallback"] = True
     result["analysis"] = (
         f"> **โหมดวิเคราะห์อัตโนมัติ (Offline)** — {note}\n\n"
@@ -774,34 +942,57 @@ def chat_stream(
     ai_data: dict,
     chat_history: list | None = None,
 ):
-    """Generator yielding text chunks from Gemini streaming."""
-    if not API_KEY:
+    """Generator yielding text chunks — Gemini (ทุกคีย์) → OpenRouter → offline."""
+    if not _has_any_provider():
         yield _offline_chat_reply(user_message, scan_data, ai_data)
         return
 
     prompt = build_chat_prompt(
         scan_data, server_data, ai_data, user_message, chat_history
     )
-    models = _build_fallback_models()
-    last_exc = None
+    last_exc: Exception | None = None
 
-    for model_name in models:
+    # 1) Gemini streaming — วนโมเดล (ฉลาดสุดก่อน) × ทุกคีย์ที่ว่าง (cooldown-aware)
+    for model_name in _build_fallback_models():
+        model_dead = False
+        for key in _available_keys(GEMINI_KEYS):
+            try:
+                with _genai_lock:
+                    genai.configure(api_key=key)
+                    m = genai.GenerativeModel(model_name, generation_config=_CHAT_CONFIG)
+                    stream = m.generate_content(prompt, stream=True)
+                    got_any = False
+                    for chunk in stream:
+                        if chunk.text:
+                            got_any = True
+                            yield chunk.text
+                if got_any:
+                    return
+            except google.api_core.exceptions.NotFound as exc:
+                last_exc = exc
+                model_dead = True
+                break
+            except Exception as exc:                     # noqa: BLE001
+                last_exc = exc
+                if _is_quota_error(exc):
+                    _mark_cooldown(key)
+                    continue                             # สลับคีย์
+                break
+        if model_dead:
+            continue
+
+    # 2) OpenRouter (ไม่ stream — ส่งเป็นก้อนเดียว)
+    if OPENROUTER_API_KEY:
         try:
-            m = genai.GenerativeModel(model_name, generation_config=_CHAT_CONFIG)
-            response = m.generate_content(prompt, stream=True)
-            for chunk in response:
-                if chunk.text:
-                    yield chunk.text
+            yield _generate_openrouter(prompt, _CHAT_CONFIG)
             return
-        except Exception as exc:
+        except Exception as exc:                         # noqa: BLE001
             last_exc = exc
-            if _is_quota_error(exc):
-                continue
-            break
 
+    # 3) offline
     yield _offline_chat_reply(user_message, scan_data, ai_data)
     if last_exc:
-        yield f"\n\n_(Gemini ไม่พร้อม: {_format_ai_error(last_exc)})_"
+        yield f"\n\n_(AI ไม่พร้อม: {_format_ai_error(last_exc)})_"
 
 
 def chat(
@@ -813,4 +1004,4 @@ def chat(
 ) -> dict:
     """Non-streaming chat — collects full response."""
     parts = list(chat_stream(user_message, scan_data, server_data, ai_data, chat_history))
-    return {"reply": "".join(parts), "offline": not API_KEY}
+    return {"reply": "".join(parts), "offline": not _has_any_provider()}

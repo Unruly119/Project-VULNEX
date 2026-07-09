@@ -233,6 +233,11 @@ def _gemini_generate_once(model_name: str, key: str, prompt: str, gen_config: di
         genai.configure(api_key=key)
         m = genai.GenerativeModel(model_name, generation_config=gen_config)
         response = m.generate_content(prompt)
+        # ตรวจสอบการตัดทอนของผลลัพธ์ (Finish reason: 1 = STOP)
+        if len(response.candidates) > 0:
+            finish_reason = response.candidates[0].finish_reason
+            if int(finish_reason) != 1:
+                raise RuntimeError(f"การสร้างเนื้อหาถูกขัดจังหวะ (Finish reason: {finish_reason})")
     return response.text
 
 

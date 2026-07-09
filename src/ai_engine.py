@@ -21,7 +21,7 @@ load_dotenv(override=True)
 
 # ── API Key pool ──────────────────────────────────────────────────
 # เก็บคีย์ Gemini ทุกตัวจาก .env เข้าพูลเดียว (เรียงตามความสำคัญ, ตัดซ้ำ)
-# รองรับ: GEMINI_API_KEY, GEMINI_API_KEY_Backup, GEMINI_API_KEY_2.._5
+# รองรับ: GEMINI_API_KEY, GEMINI_API_KEY_Backup, GEMINI_API_KEY_2.._8
 _GEMINI_KEY_ENV_NAMES = [
     "GEMINI_API_KEY",
     "GEMINI_API_KEY_Backup",
@@ -29,6 +29,9 @@ _GEMINI_KEY_ENV_NAMES = [
     "GEMINI_API_KEY_3",
     "GEMINI_API_KEY_4",
     "GEMINI_API_KEY_5",
+    "GEMINI_API_KEY_6",
+    "GEMINI_API_KEY_7",
+    "GEMINI_API_KEY_8",
 ]
 
 

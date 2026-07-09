@@ -533,36 +533,6 @@ if not MODULES_OK:
     st.info("ตรวจสอบว่า venv เปิดอยู่และติดตั้ง requirements.txt แล้ว")
     st.stop()
 
-# ── AI / key diagnostic (TEMPORARY — remove after deploy is confirmed) ──────────
-# Self-reports the exact provider state ON THE DEPLOYED HOST so we can see why AI is
-# offline there. Shows counts only (never key values); the button does one live call
-# and prints the real exception. Safe to leave collapsed for users.
-with st.expander("🔧 สถานะ AI / คีย์ (debug)"):
-    _gem_env = sorted(k for k in os.environ if k.upper().startswith("GEMINI_API_KEY"))
-    _or_env = any(k.upper() == "OPENROUTER_API_KEY" for k in os.environ)
-    try:
-        _sec_keys = sorted(st.secrets.keys())
-        _sec_ok = True
-    except Exception as _e:
-        _sec_keys, _sec_ok = [], f"อ่านไม่ได้: {_e}"
-    st.write(f"**GEMINI_* ใน os.environ:** {len(_gem_env)} → {_gem_env}")
-    st.write(f"**OPENROUTER_API_KEY ใน os.environ:** {_or_env}")
-    st.write(f"**st.secrets อ่านได้:** {_sec_ok} → keys: {_sec_keys}")
-    try:
-        from ai_engine import GEMINI_KEYS as _GK, OPENROUTER_API_KEY as _ORK
-        st.write(f"**ai_engine โหลด GEMINI_KEYS:** {len(_GK)} คีย์  ·  **OpenRouter:** {bool(_ORK)}")
-    except Exception as _e:
-        st.error(f"ai_engine import error: {_e}")
-    if st.button("▶ ทดสอบเรียก AI ตอนนี้"):
-        try:
-            from ai_engine import generate_smart
-            _t, _p = generate_smart("ตอบสั้นๆ ว่า OK")
-            st.success(f"AI OK — provider={_p} · ตอบ: {_t[:80]}")
-        except Exception as _e:
-            import traceback as _tb
-            st.error(f"AI FAILED: {type(_e).__name__}: {_e}")
-            st.code(_tb.format_exc())
-
 # ── Input section ─────────────────────────────────────────────────
 # The institution name is no longer typed in here — the PDF report
 # auto-derives it from the site <title>/domain (org="" → html_generator

@@ -777,10 +777,7 @@ if st.session_state.get("scanned"):
             idx += 1
         st.markdown(
             '<div class="sec-card brk-card">'
-            '<div class="sec-card-title" style="margin-bottom:6px">Score Breakdown — คะแนนรายด้าน (เต็ม 100)</div>'
-            '<div style="font-size:0.8rem;opacity:0.6;margin-bottom:14px">'
-            'แต่ละด้านให้คะแนน 0–100 เท่ากันหมด · ตัวเลข "น้ำหนัก %" คือสัดส่วนที่นำไปคิดคะแนนรวม'
-            '</div>'
+            '<div class="sec-card-title" style="margin-bottom:14px">Score Breakdown — คะแนนรายด้าน (เต็ม 100)</div>'
             f'<div class="brk-grid">{"".join(brk_items)}</div>'
             '</div>',
             unsafe_allow_html=True,

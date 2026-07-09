@@ -8,13 +8,14 @@ import httpx
 import urllib3
 from bs4 import BeautifulSoup
 
-from utils.network import SSRF_EVENT_HOOKS
+from utils.network import SSRF_EVENT_HOOKS, is_safe_host
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
 _MAX_BYTES = 3 * 1024 * 1024
 _MAX_SCRIPTS = 15
+_SCRIPT_FETCH_TIMEOUT = 8    # per external-script fetch — bounds a slow CDN
 
 _SECRET_PATTERNS = [
     (r"AIza[0-9A-Za-z\-_]{35}", "Google API Key", "HIGH"),
@@ -37,7 +38,7 @@ _SOURCE_MAP_RE = re.compile(r"//#\s*sourceMappingURL=(.+)|/\*\s*#\s*sourceMappin
 
 def _fetch_text(client: httpx.Client, url: str, max_bytes: int = 512_000) -> str:
     try:
-        with client.stream("GET", url) as resp:
+        with client.stream("GET", url, timeout=_SCRIPT_FETCH_TIMEOUT) as resp:
             chunks, total = [], 0
             for chunk in resp.iter_bytes(8192):
                 total += len(chunk)
@@ -111,6 +112,14 @@ def check_js_exposure(url: str) -> Dict:
                     src = "https:" + src
                 if not src.startswith(("http://", "https://")):
                     src = urljoin(url, src)
+
+                # SECURITY: the scanned page controls these src URLs — a hostile page
+                # could point one at an internal host (169.254.169.254 / 192.168.x) to
+                # turn the scanner into an SSRF proxy. The client's redirect hook only
+                # guards 3xx hops, not this initial connect, so validate the host here.
+                # It also stops the fetch from hanging on unreachable internal IPs.
+                if not is_safe_host(urlparse(src).hostname or ""):
+                    continue
 
                 scripts_checked += 1
                 js_text = _fetch_text(client, src)

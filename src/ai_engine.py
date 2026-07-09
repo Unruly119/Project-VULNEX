@@ -416,13 +416,19 @@ def _module_score(scan_data: dict, key: str, default: int = 50) -> int:
 
 
 def _ssl_subscore(ssl: dict) -> int:
-    """Convert SSL data to 0-100 sub-score."""
-    if ssl.get("error"):
-        return 50
+    """Convert SSL data to 0-100 sub-score.
+
+    A *couldn't-measure* failure (connection/other/blocked) stays NEUTRAL (50) — we
+    don't punish a site for a network blip. A cert that is present but *invalid*
+    (expired / self-signed / untrusted) scores LOW (15); previously any error returned
+    50, so expired certs were scored too generously."""
     if not ssl.get("has_ssl"):
         return 0
+    # Couldn't establish/verify TLS for a non-cert reason → neutral, not a penalty.
+    if not ssl.get("valid") and ssl.get("error_type") in ("connection", "other", "blocked"):
+        return 50
     if not ssl.get("valid"):
-        return 15
+        return 15   # cert present but expired / self-signed / untrusted
     score = 70
     days = int(ssl.get("days_left", 0) or 0)
     if days > 60:

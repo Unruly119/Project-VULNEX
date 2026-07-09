@@ -1,6 +1,7 @@
 # src/scanner/dns_security.py — DNS Security Scanner (SPF, DMARC, DKIM, DNSSEC, CAA, MX)
 import re
-from typing import Dict, List
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 try:
@@ -13,6 +14,42 @@ except ImportError:
 _DKIM_SELECTORS = ("default", "google", "mail", "k1", "selector1", "selector2", "s1", "s2")
 _SPF_LOOKUP_RE = re.compile(r"include:|a:|mx:|ptr:|exists:|redirect=", re.I)
 
+# RELIABILITY: bound every DNS query so a slow/unreachable resolver can't stall the
+# whole scan. A missing record (NXDOMAIN) still returns fast; these caps only bite when
+# a nameserver goes silent. lifetime = total wall-clock budget per resolve() call.
+_DNS_TIMEOUT = 2.0     # per-nameserver
+_DNS_LIFETIME = 6.0    # total per resolve() across all nameservers
+
+# Some hosts' default/primary nameserver is slow or silent, costing ~timeout seconds on
+# EVERY query (observed: ~3 s/query → a 21 s DNS scan). Query fast public resolvers
+# first and keep the system nameservers as fallback, in case outbound 53 to public
+# resolvers is filtered on the deploy host.
+_PUBLIC_NS = ["8.8.8.8", "1.1.1.1", "8.8.4.4"]
+_RESOLVER = None
+
+
+def _resolver() -> "dns.resolver.Resolver":
+    """Shared, lazily-built resolver (built once, reused for every query). Concurrent
+    resolve() calls (parallel DKIM) are read-only on its config, so sharing is safe."""
+    global _RESOLVER
+    if _RESOLVER is None:
+        try:
+            r = dns.resolver.Resolver()
+            system_ns = list(r.nameservers or [])
+        except Exception:
+            r = dns.resolver.Resolver(configure=False)
+            system_ns = []
+        seen, merged = set(), []
+        for ns in _PUBLIC_NS + system_ns:
+            if ns not in seen:
+                seen.add(ns)
+                merged.append(ns)
+        r.nameservers = merged or list(_PUBLIC_NS)
+        r.timeout = _DNS_TIMEOUT
+        r.lifetime = _DNS_LIFETIME
+        _RESOLVER = r
+    return _RESOLVER
+
 
 def _extract_domain(url: str) -> str:
     host = urlparse(url).hostname or ""
@@ -22,11 +59,11 @@ def _extract_domain(url: str) -> str:
     return ".".join(parts[-2:]) if len(parts) >= 2 else host
 
 
-def _txt_records(domain: str) -> List[str]:
+def _txt_records(domain: str, resolver: Optional["dns.resolver.Resolver"] = None) -> List[str]:
     if not _DNS_AVAILABLE:
         return []
     try:
-        answers = dns.resolver.resolve(domain, "TXT")
+        answers = (resolver or _resolver()).resolve(domain, "TXT")
         return [b"".join(r.strings).decode("utf-8", errors="replace") for r in answers]
     except Exception:
         return []
@@ -36,7 +73,7 @@ def _has_record(domain: str, rtype: str) -> bool:
     if not _DNS_AVAILABLE:
         return False
     try:
-        dns.resolver.resolve(domain, rtype)
+        _resolver().resolve(domain, rtype)
         return True
     except Exception:
         return False
@@ -124,21 +161,24 @@ def check_dns(url: str) -> Dict:
         result["findings"].append({"severity": "HIGH", "title": "DMARC ขาด", "detail": "ไม่มี _dmarc TXT record"})
         score -= 25
 
-    # ── DKIM ──────────────────────────────────────────────────────
-    found_selectors = []
-    for sel in _DKIM_SELECTORS:
-        dkim_txts = _txt_records(f"{sel}._domainkey.{domain}")
-        if dkim_txts:
-            found_selectors.append(sel)
+    # ── DKIM (parallel: 8 selector lookups at once — was ~8× sequential DNS waits) ──
+    shared = _resolver()
+    def _dkim_probe(sel: str):
+        return sel if _txt_records(f"{sel}._domainkey.{domain}", shared) else None
+    with ThreadPoolExecutor(max_workers=len(_DKIM_SELECTORS)) as _dkim_pool:
+        found_selectors = [s for s in _dkim_pool.map(_dkim_probe, _DKIM_SELECTORS) if s]
     result["dkim"]["selectors_found"] = found_selectors
     result["dkim"]["present"] = bool(found_selectors)
     if not found_selectors:
         result["findings"].append({"severity": "MEDIUM", "title": "DKIM ไม่พบ", "detail": "ไม่พบ common DKIM selectors"})
         score -= 15
 
+    # Remaining record types reuse the same shared short-timeout resolver
+    resolver = _resolver()
+
     # ── DNSSEC ────────────────────────────────────────────────────
     try:
-        dns.resolver.resolve(domain, "DNSKEY")
+        resolver.resolve(domain, "DNSKEY")
         result["dnssec"]["signed"] = True
     except Exception:
         result["dnssec"]["signed"] = False
@@ -148,7 +188,7 @@ def check_dns(url: str) -> Dict:
     # ── CAA ───────────────────────────────────────────────────────
     caa_recs = []
     try:
-        answers = dns.resolver.resolve(domain, "CAA")
+        answers = resolver.resolve(domain, "CAA")
         for r in answers:
             caa_recs.append(str(r))
         result["caa"] = {"present": True, "records": caa_recs[:5]}
@@ -158,7 +198,7 @@ def check_dns(url: str) -> Dict:
 
     # ── MX ────────────────────────────────────────────────────────
     try:
-        mx_answers = dns.resolver.resolve(domain, "MX")
+        mx_answers = resolver.resolve(domain, "MX")
         mx_list = sorted([(r.preference, str(r.exchange).rstrip(".")) for r in mx_answers])
         result["mx"] = {"records": [{"priority": p, "host": h} for p, h in mx_list], "count": len(mx_list)}
     except Exception:
@@ -166,7 +206,7 @@ def check_dns(url: str) -> Dict:
 
     # ── NS diversity ──────────────────────────────────────────────
     try:
-        ns_answers = dns.resolver.resolve(domain, "NS")
+        ns_answers = resolver.resolve(domain, "NS")
         ns_hosts = [str(r).rstrip(".").lower() for r in ns_answers]
         result["ns"]["count"] = len(ns_hosts)
         # diverse if nameservers on different base domains

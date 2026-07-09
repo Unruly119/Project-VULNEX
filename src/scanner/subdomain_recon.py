@@ -47,8 +47,12 @@ def _crtsh_subdomains(domain: str) -> List[str]:
     """Query crt.sh Certificate Transparency logs — passive."""
     subs: Set[str] = set()
     try:
+        # crt.sh is often slow/flaky — cap it (10s connect+read) so this passive
+        # recon module never becomes the scan's long pole. On failure we still return
+        # whatever the SSL SAN gave us. follow_redirects: crt.sh occasionally 30x.
         url = f"https://crt.sh/?q=%.{domain}&output=json"
-        with httpx.Client(timeout=15, verify=True) as client:
+        with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0),
+                          verify=True, follow_redirects=True) as client:
             resp = client.get(
                 url,
                 headers={"User-Agent": "VulnexScanner/1.0 (+https://vulnex.example.com/scanner-info)"},

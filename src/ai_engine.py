@@ -15,7 +15,9 @@ import httpx
 from cachetools import TTLCache
 from prompt_builder import build_prompt, build_chat_prompt
 
-load_dotenv()
+# override=True: ให้ .env เป็นแหล่งความจริงเสมอ — กัน environment variable เก่า
+# ที่ค้างในระบบ (เช่น GEMINI_API_KEY เดิม) มาบดบังคีย์ใหม่ใน .env
+load_dotenv(override=True)
 
 # ── API Key pool ──────────────────────────────────────────────────
 # เก็บคีย์ Gemini ทุกตัวจาก .env เข้าพูลเดียว (เรียงตามความสำคัญ, ตัดซ้ำ)

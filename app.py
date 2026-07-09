@@ -31,6 +31,21 @@ _ICT = timezone(timedelta(hours=7))
 
 import streamlit as st
 
+# ── Secrets → env bridge (Streamlit Cloud fix) ───────────────────
+# Streamlit Cloud supplies API keys via st.secrets (secrets.toml), NOT a .env file.
+# ai_engine reads keys with os.getenv(), so on deploy — where there is no .env —
+# GEMINI_KEYS/OPENROUTER end up empty and the app silently falls to OFFLINE (no AI at
+# all). This copies every top-level string secret into os.environ BEFORE ai_engine is
+# imported (it's imported lazily further down), so the key pool is populated on deploy.
+# setdefault → never clobber a real env var; try/except → no secrets.toml locally is fine
+# (there .env drives everything). This must run before the first `from ai_engine import`.
+try:
+    for _sk, _sv in st.secrets.items():
+        if isinstance(_sv, str):
+            os.environ.setdefault(_sk, _sv)
+except Exception:
+    pass  # no secrets.toml (local dev) — rely on .env / real environment variables
+
 # ── Page config ──────────────────────────────────────────────────
 st.set_page_config(
     page_title="Project-VULNEX",

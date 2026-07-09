@@ -32,10 +32,27 @@ _GEMINI_KEY_ENV_NAMES = [
 ]
 
 
+def _env_ci(name: str) -> str:
+    """Case-insensitive environment lookup.
+
+    Streamlit Cloud runs on Linux where os.environ is CASE-SENSITIVE, while Windows
+    (dev) is case-insensitive. A secret typed as GEMINI_API_KEY_BACKUP would then miss
+    an exact os.getenv('GEMINI_API_KEY_Backup') on deploy and silently drop that key —
+    the kind of env-only bug that never shows up locally. Match by lowercase to be safe."""
+    val = os.getenv(name)
+    if val is not None:
+        return val
+    low = name.lower()
+    for k, v in os.environ.items():
+        if k.lower() == low:
+            return v
+    return ""
+
+
 def _load_gemini_keys() -> list[str]:
     keys: list[str] = []
     for name in _GEMINI_KEY_ENV_NAMES:
-        val = (os.getenv(name) or "").strip()
+        val = _env_ci(name).strip()
         if val and val not in keys:
             keys.append(val)
     return keys
@@ -44,10 +61,10 @@ def _load_gemini_keys() -> list[str]:
 GEMINI_KEYS = _load_gemini_keys()
 # alias เดิม (backward-compat) — โค้ดเก่าบางจุดยังอ้าง API_KEY / API_KEY_BACKUP
 API_KEY = GEMINI_KEYS[0] if GEMINI_KEYS else None
-API_KEY_BACKUP = os.getenv("GEMINI_API_KEY_Backup")
+API_KEY_BACKUP = _env_ci("GEMINI_API_KEY_Backup") or None
 
 # ── OpenRouter (ชั้น fallback ถัดจาก Gemini — คีย์ที่ 3) ──────────
-OPENROUTER_API_KEY = (os.getenv("OPENROUTER_API_KEY") or "").strip() or None
+OPENROUTER_API_KEY = _env_ci("OPENROUTER_API_KEY").strip() or None
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # ฟรีโมเดลที่ทดสอบแล้วตอบไทยได้ — เรียงฉลาด/เสถียรมากไปน้อย
 _OPENROUTER_MODELS = [

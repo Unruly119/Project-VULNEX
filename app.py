@@ -874,7 +874,6 @@ if st.session_state.get("scanned"):
             "Permissions-Policy":        ("LOW",    "จำกัด Browser API"),
         }
         st.markdown(f"**Headers Score: {headers_score}/100**")
-        _render_module_insight("headers")
         for h, (sev, desc) in hdr_defs.items():
             present  = h in found
             icon = _i(_P_CHECK, 16) if present else _i(_P_XCIRC, 16)

@@ -18,10 +18,10 @@ from typing import Dict, List, Tuple
 
 from cachetools import TTLCache
 
-# Modules that get an AI summary card. "headers" has its own tab; the other four are
-# dropdowns in the "Scan Modules" tab. The suspended modules (http_methods, cms, cors,
-# open_files) are intentionally NOT here — left untouched.
-ACTIVE_MODULES: Tuple[str, ...] = ("headers", "dns", "cookies", "js_exposure", "subdomains")
+# Modules that get an AI summary card — the four dropdowns in the "Scan Modules" tab.
+# (HTTP Headers no longer gets an AI card; its extractor below is kept but unused.)
+# The suspended modules (http_methods, cms, cors, open_files) are intentionally NOT here.
+ACTIVE_MODULES: Tuple[str, ...] = ("dns", "cookies", "js_exposure", "subdomains")
 
 _MODULE_NAME: Dict[str, str] = {
     "headers":      "HTTP Security Headers",

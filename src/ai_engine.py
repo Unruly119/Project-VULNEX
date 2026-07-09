@@ -180,11 +180,12 @@ def _backoff_seconds(attempt: int, exc: Exception | None = None) -> float:
     return min(_BASE_BACKOFF_SEC * (2 ** attempt), _MAX_BACKOFF_SEC)
 
 
-# ── Key cooldown — กันยิงคีย์ที่โควต้าหมดซ้ำ (สำคัญตอนผู้ใช้เยอะ) ──
-# เมื่อคีย์ได้ 429/quota จะถูก "พัก" ชั่วคราว เพื่อให้ระบบสลับไปคีย์อื่นทันที
-# ไม่เสียเวลา retry คีย์ที่เต็มอยู่แล้ว
+# ── Cooldown ราย (คีย์, โมเดล) — กันยิงคู่ที่โควต้าหมดซ้ำ (สำคัญตอนผู้ใช้เยอะ) ──
+# โควต้า Gemini free tier แยกตามโมเดล → flash ของคีย์หนึ่งหมด ไม่ได้แปลว่า
+# flash-lite ของคีย์เดียวกันหมด. cooldown จึง key ด้วย (api_key, model_name)
+# เพื่อให้ cascade ลดชั้นโมเดลบนคีย์เดิมได้ และคำขอถัดไปข้ามคู่ที่รู้ว่าเต็มทันที
 _KEY_COOLDOWN_SEC = 45.0
-_key_cooldowns: dict[str, float] = {}
+_key_cooldowns: dict[tuple[str, str], float] = {}
 _cooldown_lock = threading.Lock()
 
 # google-generativeai ใช้ global config (genai.configure) — ไม่ thread-safe
@@ -192,19 +193,20 @@ _cooldown_lock = threading.Lock()
 _genai_lock = threading.Lock()
 
 
-def _available_keys(keys: list[str]) -> list[str]:
-    """คีย์ที่พร้อมใช้ (ไม่อยู่ใน cooldown) — เรียงเดิม; ถ้าเต็มหมดคืนตัวที่จะว่างเร็วสุด"""
+def _available_keys(keys: list[str], model: str) -> list[str]:
+    """คีย์ที่พร้อมใช้กับ 'โมเดลนี้' (คู่ (key,model) ไม่ติด cooldown) — เรียงเดิม;
+    ถ้าเต็มหมดคืนตัวที่จะว่างเร็วสุด (เผื่อ cooldown หมดอายุพอดี)"""
     now = time.time()
     with _cooldown_lock:
-        ready = [k for k in keys if _key_cooldowns.get(k, 0.0) <= now]
+        ready = [k for k in keys if _key_cooldowns.get((k, model), 0.0) <= now]
         if ready:
             return ready
-        return sorted(keys, key=lambda k: _key_cooldowns.get(k, 0.0))
+        return sorted(keys, key=lambda k: _key_cooldowns.get((k, model), 0.0))
 
 
-def _mark_cooldown(key: str, seconds: float = _KEY_COOLDOWN_SEC) -> None:
+def _mark_cooldown(key: str, model: str, seconds: float = _KEY_COOLDOWN_SEC) -> None:
     with _cooldown_lock:
-        _key_cooldowns[key] = time.time() + seconds
+        _key_cooldowns[(key, model)] = time.time() + seconds
 
 
 def _gemini_generate_once(model_name: str, key: str, prompt: str, gen_config: dict) -> str:
@@ -218,57 +220,58 @@ def _gemini_generate_once(model_name: str, key: str, prompt: str, gen_config: di
 
 
 def _generate_gemini(prompt: str, gen_config: dict, keys: list[str]) -> str:
-    """วนทุกโมเดล (ฉลาดสุดก่อน) × ทุกคีย์ในพูล — สลับคีย์ "ทันที ไม่มี sleep" เมื่อคีย์ใดล้มเหลว.
+    """Cascade: โมเดลฉลาดสุด "กวาดทุกคีย์" ก่อน แล้วค่อยลดชั้นโมเดล — สลับ "ทันที ไม่มี sleep".
 
-    ออกแบบให้ fallback เร็วที่สุด (ตอบโจทย์ "คีย์หมดต้องสลับโดยไม่เสียเวลารอ"):
-    - โควต้าหมด/429/error ชั่วคราว → cooldown + ข้ามไปคีย์ถัดไป *ทันที* (การสลับคีย์
-      เร็วกว่าการนั่ง retry คีย์เดิม เพราะเรามีหลายคีย์ที่ปกติอยู่)
-    - `dead_keys`: คีย์ที่ล้มเหลวแล้วในรอบเรียกนี้จะไม่ถูกลองซ้ำข้ามโมเดล (กันเสีย
-      round-trip 429 ซ้ำ ๆ)
-    - พอทุกคีย์ตายก็ `break` เลิก Gemini ทันที เพื่อเด้งไป OpenRouter — ไม่วนโมเดลต่อ
-    ทั้งเส้นทางนี้ไม่มี `time.sleep` เลย ⇒ เวลาที่ใช้ = เฉพาะ network round-trip เท่านั้น."""
+    ลำดับ (โมเดล-นอก / คีย์-ใน):
+        flash    → key0,key1,…,keyN      (ฉลาดสุด ลองทุกคีย์ก่อน)
+        flash-lite → key0,key1,…,keyN    (ถ้า flash หมดทุกคีย์)
+        1.5-flash → key0,key1,…,keyN
+    เหตุผล: คีย์แต่ละตัวคือถังโควต้าแยกกัน — ถ้า flash ของ key0 หมด ก็ยังอยากได้
+    flash ของ key1 (ฉลาดสุด) ก่อนจะยอมลดชั้น ⇒ ได้ "โมเดลฉลาดสุดที่คีย์ไหนสักตัวยังให้ได้"
+
+    ความเร็ว/ความครบ:
+    - โควต้าหมด/429/error ชั่วคราว → cooldown คู่ (key,model) + สลับคีย์ถัดไป *ทันที* (ไม่มี sleep)
+    - `dead`: คู่ (key,model) ที่ล้มเหลวในรอบนี้ ไม่ถูกลองซ้ำ
+    - โควต้าแยกตามโมเดล ⇒ flash ของ key0 หมด ไม่ปิด flash-lite ของ key0 (ยังไล่ต่อได้)
+    - ไล่จนหมด "ทุกโมเดล × ทุกคีย์" จริง ๆ ค่อย raise → ให้ generate_smart เด้งไป OpenRouter
+    ทั้งเส้นทางนี้ไม่มี `time.sleep` ⇒ เวลาที่ใช้ = เฉพาะ network round-trip เท่านั้น."""
     models = _build_fallback_models()
     last_exc: Exception | None = None
     quota_hits = 0
-    dead_keys: set[str] = set()      # คีย์ที่ตายในรอบเรียกนี้ — ไม่ลองซ้ำอีก
 
-    for model_name in models:
-        model_dead = False
-        for key in _available_keys(keys):
-            if key in dead_keys:
+    for model_name in models:                    # วงนอก: ฉลาดสุดก่อน (กวาดทุกคีย์)
+        dead: set[str] = set()                   # คีย์ที่ตายสำหรับ "โมเดลนี้" ในรอบนี้
+        for key in _available_keys(keys, model_name):
+            if key in dead:
                 continue
             try:
                 return _gemini_generate_once(model_name, key, prompt, gen_config)
             except google.api_core.exceptions.NotFound as exc:
-                # โมเดลนี้ไม่มี/ถูกปิด → เลิกลูปคีย์ ไปโมเดลถัดไป (คีย์ยังดีอยู่)
+                # โมเดลนี้ไม่มี/ถูกปิด → เลิกลูปคีย์ ลดชั้นไปโมเดลถัดไป (คีย์ยังดี)
                 last_exc = exc
-                model_dead = True
                 break
             except (google.api_core.exceptions.ResourceExhausted,
                     google.api_core.exceptions.TooManyRequests) as exc:
                 last_exc = exc
                 quota_hits += 1
-                _mark_cooldown(key)              # พัก 45 วิ (ข้ามในคำขอถัดไปด้วย)
-                dead_keys.add(key)               # ข้ามทันทีในรอบนี้
+                _mark_cooldown(key, model_name)  # พักเฉพาะคู่ (คีย์นี้, โมเดลนี้)
+                dead.add(key)
                 continue                         # → คีย์ถัดไปทันที ไม่มี sleep
             except Exception as exc:
                 last_exc = exc
                 if _is_quota_error(exc):
                     quota_hits += 1
-                    _mark_cooldown(key)
-                    dead_keys.add(key)
+                    _mark_cooldown(key, model_name)
+                    dead.add(key)
                     continue
                 # error ชั่วคราวอื่น (500 / timeout) → สลับคีย์ถัดไปทันที ไม่หน่วง
-                dead_keys.add(key)
+                dead.add(key)
                 continue
-        if model_dead:
-            continue
-        if len(dead_keys) >= len(keys):
-            break                                # ทุกคีย์ตาย → เลิก Gemini เร็ว ไป OpenRouter
+        # จบโมเดลนี้ (ยังไม่สำเร็จ) → ลดชั้นไปโมเดลถัดไปบนทุกคีย์
 
     if quota_hits and last_exc and _is_quota_error(last_exc):
         raise RuntimeError(
-            f"โควต้า Gemini API หมดทุกคีย์ ({len(keys)} คีย์ / {len(models)} โมเดล) — "
+            f"โควต้า Gemini API หมดทุกคีย์/ทุกโมเดล ({len(keys)} คีย์ × {len(models)} โมเดล) — "
             f"{_format_ai_error(last_exc)}"
         )
     raise RuntimeError(f"ทุก model/คีย์ ล้มเหลว: {_format_ai_error(last_exc)}")
@@ -967,7 +970,7 @@ def chat_stream(
     # 1) Gemini streaming — วนโมเดล (ฉลาดสุดก่อน) × ทุกคีย์ที่ว่าง (cooldown-aware)
     for model_name in _build_fallback_models():
         model_dead = False
-        for key in _available_keys(GEMINI_KEYS):
+        for key in _available_keys(GEMINI_KEYS, model_name):
             try:
                 with _genai_lock:
                     genai.configure(api_key=key)
@@ -987,7 +990,7 @@ def chat_stream(
             except Exception as exc:                     # noqa: BLE001
                 last_exc = exc
                 if _is_quota_error(exc):
-                    _mark_cooldown(key)
+                    _mark_cooldown(key, model_name)
                     continue                             # สลับคีย์
                 break
         if model_dead:

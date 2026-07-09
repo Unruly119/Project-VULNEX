@@ -752,26 +752,35 @@ if st.session_state.get("scanned"):
         }
         brk_items = []
         idx = 0
+        # Standardized view: every module graded on the SAME 0–100 scale (its raw
+        # sub-score), with its weight shown as a % tag — instead of mixed
+        # earned/weight fractions (22/26, x/21, x/11…) that looked inconsistent.
         for key in ("headers", "ssl", "html_js", "server_cve", "dns", "cookies", "cms"):
             if key not in _brk_w:          # suspended / absent module — not shown
                 continue
-            mx    = _brk_w[key]
-            label = _brk_lbl[key]
-            val   = float(breakdown.get(key, 0) or 0)
-            ratio = max(0.0, min(1.0, val / mx)) if mx else 0.0
-            cls   = "brk-good" if ratio >= 0.8 else ("brk-warn" if ratio >= 0.5 else "brk-bad")
-            disp  = int(round(val)) if abs(val - round(val)) < 0.05 else round(val, 1)
+            weight = _brk_w[key]
+            label  = _brk_lbl[key]
+            raw    = float(breakdown.get(f"{key}_raw", 0) or 0)   # 0–100, same scale for all
+            ratio  = max(0.0, min(1.0, raw / 100.0))
+            cls    = "brk-good" if ratio >= 0.8 else ("brk-warn" if ratio >= 0.5 else "brk-bad")
+            disp   = int(round(raw))
             brk_items.append(
                 f'<div class="brk-item {cls}" style="--i:{idx}">'
-                f'<div class="brk-row"><span class="brk-label">{label}</span>'
-                f'<span class="brk-val"><b>{disp}</b>/{mx}</span></div>'
+                f'<div class="brk-row">'
+                f'<span class="brk-label">{label}'
+                f'<span style="font-size:0.72em;opacity:0.55;font-weight:600;margin-left:6px">'
+                f'น้ำหนัก {weight}%</span></span>'
+                f'<span class="brk-val"><b>{disp}</b>/100</span></div>'
                 f'<div class="brk-track"><div class="brk-fill" style="--r:{ratio:.3f}"></div></div>'
                 f'</div>'
             )
             idx += 1
         st.markdown(
             '<div class="sec-card brk-card">'
-            '<div class="sec-card-title" style="margin-bottom:14px">Score Breakdown (Composite Weights)</div>'
+            '<div class="sec-card-title" style="margin-bottom:6px">Score Breakdown — คะแนนรายด้าน (เต็ม 100)</div>'
+            '<div style="font-size:0.8rem;opacity:0.6;margin-bottom:14px">'
+            'แต่ละด้านให้คะแนน 0–100 เท่ากันหมด · ตัวเลข "น้ำหนัก %" คือสัดส่วนที่นำไปคิดคะแนนรวม'
+            '</div>'
             f'<div class="brk-grid">{"".join(brk_items)}</div>'
             '</div>',
             unsafe_allow_html=True,
@@ -868,6 +877,7 @@ if st.session_state.get("scanned"):
             "Permissions-Policy":        ("LOW",    "จำกัด Browser API"),
         }
         st.markdown(f"**Headers Score: {headers_score}/100**")
+        _render_module_insight("headers")
         for h, (sev, desc) in hdr_defs.items():
             present  = h in found
             icon = _i(_P_CHECK, 16) if present else _i(_P_XCIRC, 16)

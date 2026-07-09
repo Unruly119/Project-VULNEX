@@ -18,11 +18,13 @@ from typing import Dict, List, Tuple
 
 from cachetools import TTLCache
 
-# Active modules that appear in the "Scan Modules" tab. The suspended modules
-# (http_methods, cms, cors, open_files) are intentionally NOT here — left untouched.
-ACTIVE_MODULES: Tuple[str, ...] = ("dns", "cookies", "js_exposure", "subdomains")
+# Modules that get an AI summary card. "headers" has its own tab; the other four are
+# dropdowns in the "Scan Modules" tab. The suspended modules (http_methods, cms, cors,
+# open_files) are intentionally NOT here — left untouched.
+ACTIVE_MODULES: Tuple[str, ...] = ("headers", "dns", "cookies", "js_exposure", "subdomains")
 
 _MODULE_NAME: Dict[str, str] = {
+    "headers":      "HTTP Security Headers",
     "dns":          "DNS & Email Security",
     "cookies":      "Cookie Security",
     "js_exposure":  "JavaScript Exposure",
@@ -31,6 +33,9 @@ _MODULE_NAME: Dict[str, str] = {
 
 # Authored, accurate "how we scan" — never sent to the model, so it can't be distorted.
 _SCAN_METHOD: Dict[str, str] = {
+    "headers": ("ส่งคำขอ GET หนึ่งครั้ง แล้วอ่าน HTTP response header ด้านความปลอดภัย 6 ตัว "
+                "(CSP, HSTS, X-Frame-Options ฯลฯ) — ตรวจทั้ง 'มีครบไหม' และ 'ตั้งค่ารัดกุมพอไหม' "
+                "ไม่ใช่แค่มี/ไม่มี จึงเป็นเหตุผลที่บางเว็บมี header ครบแต่ยังได้คะแนนไม่เต็ม"),
     "dns": ("ส่งคำขอ DNS แบบอ่านอย่างเดียวไปยัง public resolver (8.8.8.8 / 1.1.1.1) "
             "เพื่อดูระเบียน SPF, DMARC, DKIM, DNSSEC และ CAA — ไม่แตะเซิร์ฟเวอร์ของเว็บเลย"),
     "cookies": ("เปิดหน้าเว็บด้วยคำขอ GET หนึ่งครั้ง แล้วอ่านเฉพาะส่วนหัว Set-Cookie "
@@ -47,6 +52,74 @@ _insight_cache: TTLCache = TTLCache(maxsize=50, ttl=3600)
 # ─────────────────────────────────────────────────────────────────
 # Rule-based fact extractors (→ (problems, fixes)); also the fallback text source
 # ─────────────────────────────────────────────────────────────────
+_HDR_DESC = {
+    "Content-Security-Policy":   "ป้องกัน XSS",
+    "Strict-Transport-Security": "บังคับใช้ HTTPS เสมอ",
+    "X-Frame-Options":           "ป้องกัน clickjacking",
+    "X-Content-Type-Options":    "ป้องกัน MIME sniffing",
+    "Referrer-Policy":           "ควบคุมข้อมูล referrer",
+    "Permissions-Policy":        "จำกัดสิทธิ์ browser API",
+}
+_HDR_FIX = {
+    "Content-Security-Policy":   "ตั้ง CSP เช่น `default-src 'self'; script-src 'self'` และเลี่ยง `unsafe-inline`/`unsafe-eval`",
+    "Strict-Transport-Security": "ตั้ง `Strict-Transport-Security: max-age=31536000; includeSubDomains`",
+    "X-Frame-Options":           "ตั้ง `X-Frame-Options: DENY` (หรือ `SAMEORIGIN`)",
+    "X-Content-Type-Options":    "ตั้ง `X-Content-Type-Options: nosniff`",
+    "Referrer-Policy":           "ตั้ง `Referrer-Policy: strict-origin-when-cross-origin`",
+    "Permissions-Policy":        "ตั้ง Permissions-Policy จำกัด camera/microphone/geolocation",
+}
+
+
+def _hdr_weak_reason(h: str, val: str) -> str:
+    """อธิบายว่าทำไม header ที่ 'มีอยู่' ถึงยังได้คะแนนไม่เต็ม (อิงค่าจริงที่ตรวจพบ)."""
+    v = val.lower()
+    if h == "Content-Security-Policy":
+        if "unsafe-inline" in v and "unsafe-eval" in v:
+            return "มีทั้ง unsafe-inline และ unsafe-eval"
+        if "unsafe-inline" in v:
+            return "มี unsafe-inline"
+        if "unsafe-eval" in v:
+            return "มี unsafe-eval"
+        if v.strip() in ("", "*"):
+            return "นโยบายกว้างเกินไป"
+        return "ยังมีคำสั่งที่เสี่ยงอยู่"
+    if h == "Strict-Transport-Security":
+        return "อายุ (max-age) สั้นเกินไป — ควร ≥ 1 ปี (31536000)"
+    if h == "X-Frame-Options":
+        return "ควรตั้งเป็น DENY หรือ SAMEORIGIN"
+    if h == "X-Content-Type-Options":
+        return "ควรเป็น nosniff"
+    if h == "Referrer-Policy":
+        return "ค่าที่ตั้งยังเปิดเผยข้อมูล referrer มากไป"
+    return "การตั้งค่ายังไม่รัดกุมพอ"
+
+
+def _headers_facts(m: dict) -> Tuple[List[str], List[str]]:
+    if m.get("error"):
+        return [f"ตรวจ security header ไม่สำเร็จ ({m['error']})"], ["ลองสแกนใหม่อีกครั้ง"]
+    problems: List[str] = []
+    fixes: List[str] = []
+    found = m.get("headers_found") or {}
+    missing = m.get("headers_missing") or []
+    quality = m.get("headers_quality") or {}
+    # 1) header ที่ขาดไปเลย
+    for h in missing:
+        problems.append(f"ขาด {h} — {_HDR_DESC.get(h, '')}")
+        fixes.append(_HDR_FIX.get(h, f"เพิ่ม header {h}"))
+    # 2) header ที่ 'มี' แต่คุณภาพ < เต็ม (นี่คือเหตุผลที่คะแนนไม่เต็มทั้งที่ไม่ขาดตัวไหน)
+    for h, q in quality.items():
+        try:
+            qf = float(q)
+        except (TypeError, ValueError):
+            continue
+        if qf >= 1.0:
+            continue
+        reason = _hdr_weak_reason(h, str(found.get(h, "")))
+        problems.append(f"มี {h} แล้ว แต่ตั้งค่ายังไม่รัดกุม ({reason}) จึงยังได้คะแนนไม่เต็ม")
+        fixes.append(_HDR_FIX.get(h, f"ปรับ {h} ให้รัดกุมขึ้น"))
+    return problems, fixes
+
+
 def _dns_facts(m: dict) -> Tuple[List[str], List[str]]:
     if m.get("error"):
         return [f"ตรวจ DNS ไม่สำเร็จ ({m['error']})"], ["ลองสแกนใหม่ หรือตรวจว่าโดเมนสะกดถูกต้อง"]
@@ -125,6 +198,7 @@ def _subdomain_facts(m: dict) -> Tuple[List[str], List[str]]:
 
 
 _EXTRACTORS = {
+    "headers":     _headers_facts,
     "dns":         _dns_facts,
     "cookies":     _cookies_facts,
     "js_exposure": _js_facts,

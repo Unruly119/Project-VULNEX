@@ -218,44 +218,53 @@ def _gemini_generate_once(model_name: str, key: str, prompt: str, gen_config: di
 
 
 def _generate_gemini(prompt: str, gen_config: dict, keys: list[str]) -> str:
-    """วนทุกโมเดล (ฉลาดสุดก่อน) × ทุกคีย์ในพูล พร้อม cooldown + retry/backoff.
+    """วนทุกโมเดล (ฉลาดสุดก่อน) × ทุกคีย์ในพูล — สลับคีย์ "ทันที ไม่มี sleep" เมื่อคีย์ใดล้มเหลว.
 
-    ลำดับ: model ฉลาดสุด → ลองทุกคีย์ที่ว่าง → โควต้าหมดก็ cooldown แล้วสลับคีย์ →
-    หมดทุกคีย์ค่อยลง model ถัดไป."""
+    ออกแบบให้ fallback เร็วที่สุด (ตอบโจทย์ "คีย์หมดต้องสลับโดยไม่เสียเวลารอ"):
+    - โควต้าหมด/429/error ชั่วคราว → cooldown + ข้ามไปคีย์ถัดไป *ทันที* (การสลับคีย์
+      เร็วกว่าการนั่ง retry คีย์เดิม เพราะเรามีหลายคีย์ที่ปกติอยู่)
+    - `dead_keys`: คีย์ที่ล้มเหลวแล้วในรอบเรียกนี้จะไม่ถูกลองซ้ำข้ามโมเดล (กันเสีย
+      round-trip 429 ซ้ำ ๆ)
+    - พอทุกคีย์ตายก็ `break` เลิก Gemini ทันที เพื่อเด้งไป OpenRouter — ไม่วนโมเดลต่อ
+    ทั้งเส้นทางนี้ไม่มี `time.sleep` เลย ⇒ เวลาที่ใช้ = เฉพาะ network round-trip เท่านั้น."""
     models = _build_fallback_models()
     last_exc: Exception | None = None
     quota_hits = 0
+    dead_keys: set[str] = set()      # คีย์ที่ตายในรอบเรียกนี้ — ไม่ลองซ้ำอีก
 
     for model_name in models:
         model_dead = False
         for key in _available_keys(keys):
-            for attempt in range(_MAX_RETRIES_PER_MODEL):
-                try:
-                    return _gemini_generate_once(model_name, key, prompt, gen_config)
-                except google.api_core.exceptions.NotFound as exc:
-                    # โมเดลนี้ไม่มี/ถูกปิด → เลิกทั้งลูปคีย์ ไปโมเดลถัดไป
-                    last_exc = exc
-                    model_dead = True
-                    break
-                except (google.api_core.exceptions.ResourceExhausted,
-                        google.api_core.exceptions.TooManyRequests) as exc:
-                    last_exc = exc
-                    quota_hits += 1
-                    _mark_cooldown(key)          # พักคีย์นี้ แล้วสลับไปคีย์ถัดไปทันที
-                    break
-                except Exception as exc:
-                    last_exc = exc
-                    if _is_quota_error(exc):
-                        quota_hits += 1
-                        _mark_cooldown(key)
-                        break
-                    # error ชั่วคราวอื่น → retry คีย์เดิมด้วย backoff
-                    if attempt < _MAX_RETRIES_PER_MODEL - 1:
-                        time.sleep(_backoff_seconds(attempt, exc))
-                        continue
-                    break
-            if model_dead:
+            if key in dead_keys:
+                continue
+            try:
+                return _gemini_generate_once(model_name, key, prompt, gen_config)
+            except google.api_core.exceptions.NotFound as exc:
+                # โมเดลนี้ไม่มี/ถูกปิด → เลิกลูปคีย์ ไปโมเดลถัดไป (คีย์ยังดีอยู่)
+                last_exc = exc
+                model_dead = True
                 break
+            except (google.api_core.exceptions.ResourceExhausted,
+                    google.api_core.exceptions.TooManyRequests) as exc:
+                last_exc = exc
+                quota_hits += 1
+                _mark_cooldown(key)              # พัก 45 วิ (ข้ามในคำขอถัดไปด้วย)
+                dead_keys.add(key)               # ข้ามทันทีในรอบนี้
+                continue                         # → คีย์ถัดไปทันที ไม่มี sleep
+            except Exception as exc:
+                last_exc = exc
+                if _is_quota_error(exc):
+                    quota_hits += 1
+                    _mark_cooldown(key)
+                    dead_keys.add(key)
+                    continue
+                # error ชั่วคราวอื่น (500 / timeout) → สลับคีย์ถัดไปทันที ไม่หน่วง
+                dead_keys.add(key)
+                continue
+        if model_dead:
+            continue
+        if len(dead_keys) >= len(keys):
+            break                                # ทุกคีย์ตาย → เลิก Gemini เร็ว ไป OpenRouter
 
     if quota_hits and last_exc and _is_quota_error(last_exc):
         raise RuntimeError(
@@ -278,8 +287,9 @@ def _generate_openrouter(prompt: str, gen_config: dict | None = None) -> str:
         "HTTP-Referer": "https://github.com/Project-VULNEX",
         "X-Title": "Project-VULNEX",
     }
+    # timeout รัดกุม: connect 8 วิ, read 30 วิ — กันโมเดลที่ค้างไม่ให้ถ่วง fallback
     last_err: str = "unknown"
-    with httpx.Client(timeout=45.0) as client:
+    with httpx.Client(timeout=httpx.Timeout(30.0, connect=8.0)) as client:
         for model in _OPENROUTER_MODELS:
             payload = {
                 "model": model,

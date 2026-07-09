@@ -31,28 +31,32 @@ _ICT = timezone(timedelta(hours=7))
 
 import streamlit as st
 
-# ── Secrets → env bridge (Streamlit Cloud fix) ───────────────────
-# Streamlit Cloud supplies API keys via st.secrets (secrets.toml), NOT a .env file.
-# ai_engine reads keys with os.getenv(), so on deploy — where there is no .env —
-# GEMINI_KEYS/OPENROUTER end up empty and the app silently falls to OFFLINE (no AI at
-# all). This copies every top-level string secret into os.environ BEFORE ai_engine is
-# imported (it's imported lazily further down), so the key pool is populated on deploy.
-# setdefault → never clobber a real env var; try/except → no secrets.toml locally is fine
-# (there .env drives everything). This must run before the first `from ai_engine import`.
-try:
-    for _sk, _sv in st.secrets.items():
-        if isinstance(_sv, str):
-            os.environ.setdefault(_sk, _sv)
-except Exception:
-    pass  # no secrets.toml (local dev) — rely on .env / real environment variables
-
 # ── Page config ──────────────────────────────────────────────────
+# MUST be the first Streamlit command. NOTE: the st.secrets→env bridge below runs
+# AFTER this on purpose — touching st.secrets before set_page_config can raise
+# "set_page_config must be the first command", which our try/except would swallow,
+# silently leaving the keys unbridged on deploy (→ no AI).
 st.set_page_config(
     page_title="Project-VULNEX",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="collapsed",   # sidebar removed — keep it shut
 )
+
+# ── Secrets → env bridge (Streamlit Cloud fix) ───────────────────
+# Streamlit Cloud supplies API keys via st.secrets (secrets.toml), NOT a .env file.
+# ai_engine reads keys with os.getenv(), so on deploy — where there is no .env —
+# GEMINI_KEYS/OPENROUTER would be empty and the app falls to OFFLINE (no AI at all).
+# Copy every top-level string secret into os.environ BEFORE ai_engine is imported
+# (it's imported lazily much further down), so the key pool is populated on deploy.
+# Set when the env var is missing OR empty; try/except → no secrets.toml locally is
+# fine (there .env drives everything).
+try:
+    for _sk, _sv in st.secrets.items():
+        if isinstance(_sv, str) and _sv and not (os.environ.get(_sk) or "").strip():
+            os.environ[_sk] = _sv
+except Exception:
+    pass  # no secrets.toml (local dev) — rely on .env / real environment variables
 
 # ── Custom CSS ───────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
@@ -528,6 +532,36 @@ if not MODULES_OK:
     st.error(f"ไม่สามารถโหลด modules ได้: {MODULE_ERR}")
     st.info("ตรวจสอบว่า venv เปิดอยู่และติดตั้ง requirements.txt แล้ว")
     st.stop()
+
+# ── AI / key diagnostic (TEMPORARY — remove after deploy is confirmed) ──────────
+# Self-reports the exact provider state ON THE DEPLOYED HOST so we can see why AI is
+# offline there. Shows counts only (never key values); the button does one live call
+# and prints the real exception. Safe to leave collapsed for users.
+with st.expander("🔧 สถานะ AI / คีย์ (debug)"):
+    _gem_env = sorted(k for k in os.environ if k.upper().startswith("GEMINI_API_KEY"))
+    _or_env = any(k.upper() == "OPENROUTER_API_KEY" for k in os.environ)
+    try:
+        _sec_keys = sorted(st.secrets.keys())
+        _sec_ok = True
+    except Exception as _e:
+        _sec_keys, _sec_ok = [], f"อ่านไม่ได้: {_e}"
+    st.write(f"**GEMINI_* ใน os.environ:** {len(_gem_env)} → {_gem_env}")
+    st.write(f"**OPENROUTER_API_KEY ใน os.environ:** {_or_env}")
+    st.write(f"**st.secrets อ่านได้:** {_sec_ok} → keys: {_sec_keys}")
+    try:
+        from ai_engine import GEMINI_KEYS as _GK, OPENROUTER_API_KEY as _ORK
+        st.write(f"**ai_engine โหลด GEMINI_KEYS:** {len(_GK)} คีย์  ·  **OpenRouter:** {bool(_ORK)}")
+    except Exception as _e:
+        st.error(f"ai_engine import error: {_e}")
+    if st.button("▶ ทดสอบเรียก AI ตอนนี้"):
+        try:
+            from ai_engine import generate_smart
+            _t, _p = generate_smart("ตอบสั้นๆ ว่า OK")
+            st.success(f"AI OK — provider={_p} · ตอบ: {_t[:80]}")
+        except Exception as _e:
+            import traceback as _tb
+            st.error(f"AI FAILED: {type(_e).__name__}: {_e}")
+            st.code(_tb.format_exc())
 
 # ── Input section ─────────────────────────────────────────────────
 # The institution name is no longer typed in here — the PDF report

@@ -287,6 +287,23 @@ def render_ai_analysis(analysis: str) -> None:
             st.markdown(body.strip())
 
 
+def _render_module_insight(mod_key: str) -> None:
+    """Render the per-module 'AI summary' card at the top of a Scan-Modules dropdown:
+    how we scanned (static) + what's wrong & how to fix (AI, rule-based fallback).
+    Rendered as Markdown (no raw HTML) so scanned values can't inject markup."""
+    ins = (st.session_state.get("module_insights") or {}).get(mod_key)
+    if not ins:
+        return
+    method = ins.get("method", "")
+    if method:
+        st.markdown(f"**วิธีสแกน:** {method}")
+    badge = "AI สรุป" if ins.get("source") == "ai" else "สรุปอัตโนมัติ"
+    tone = "🟢" if ins.get("status") == "ok" else "🟠"
+    st.markdown(f"**{tone} {badge}**")
+    st.markdown(ins.get("summary", ""))
+    st.divider()
+
+
 @st.fragment
 def render_pdf_report_section() -> None:
     """Render the 'สร้างรายงานความปลอดภัย' (create PDF) section in isolation.
@@ -483,7 +500,7 @@ def _init_session_state() -> None:
         "scan_data": None,  "ai_data": None,   "server_data": None,
         "org": "",          "url": "",          "scanned": False,
         "pdf_ready": False, "pdf_bytes": None,
-        "chat_history": [],
+        "chat_history": [], "module_insights": {},
     }.items():
         st.session_state.setdefault(key, default)
 
@@ -591,6 +608,14 @@ if scan_btn and url:
         )
         ai_data = analyze(scan_data, server_data)
 
+        # Per-module AI summaries for the Scan Modules dropdowns (one batched, cached
+        # call; rule-based fallback inside). Best-effort — never let it break a scan.
+        try:
+            from module_insight import build_module_insights
+            module_insights = build_module_insights(scan_data, server_data)
+        except Exception:
+            module_insights = {}
+
         loading_ph.markdown(
             _scan_skeleton_html("เสร็จสิ้น — กำลังแสดงผล", 100, target_safe),
             unsafe_allow_html=True,
@@ -600,15 +625,16 @@ if scan_btn and url:
 
         # Bulk update keeps all keys consistent; resets any stale PDF state
         st.session_state.update({
-            "scan_data":   scan_data,
-            "ai_data":     ai_data,
-            "server_data": server_data,
-            "org":         org,
-            "url":         clean_url,
-            "scanned":     True,
-            "pdf_ready":   False,
-            "pdf_bytes":   None,
-            "chat_history": [],  # clear chat on new scan
+            "scan_data":       scan_data,
+            "ai_data":         ai_data,
+            "server_data":     server_data,
+            "org":             org,
+            "url":             clean_url,
+            "scanned":         True,
+            "pdf_ready":       False,
+            "pdf_bytes":       None,
+            "chat_history":    [],  # clear chat on new scan
+            "module_insights": module_insights,
         })
 
 elif scan_btn and not url:
@@ -889,6 +915,7 @@ if st.session_state.get("scanned"):
 
         # ── Active scan modules (passive) ───────────────────────
         with st.expander("🌐 DNS & Email Security", expanded=True):
+            _render_module_insight("dns")
             if dns.get("error"):
                 st.error(dns["error"])
             else:
@@ -906,6 +933,7 @@ if st.session_state.get("scanned"):
                     st.warning(f"**{f.get('title')}**: {f.get('detail')}")
 
         with st.expander("🍪 Cookie Security"):
+            _render_module_insight("cookies")
             if cookies.get("error"):
                 st.error(cookies["error"])
             else:
@@ -918,6 +946,7 @@ if st.session_state.get("scanned"):
                         st.caption("⚠️ " + "; ".join(issues))
 
         with st.expander("📜 JavaScript Exposure"):
+            _render_module_insight("js_exposure")
             st.metric("JS Score", f"{js_exp.get('score', 'N/A')}/100")
             st.write(f"Scripts analyzed: {js_exp.get('scripts_analyzed', 0)}")
             if js_exp.get("source_maps_exposed"):
@@ -926,6 +955,7 @@ if st.session_state.get("scanned"):
                 st.error(f"**{s.get('type')}** in {s.get('source')}")
 
         with st.expander("🔍 Subdomain Recon"):
+            _render_module_insight("subdomains")
             st.write(f"**{subs.get('count', 0)} subdomains** discovered (passive)")
             if subs.get("all_subdomains"):
                 st.code("\n".join(subs["all_subdomains"][:30]))

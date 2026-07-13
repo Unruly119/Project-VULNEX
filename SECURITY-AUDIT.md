@@ -130,3 +130,30 @@ All changed files pass `py_compile`.
 4. **`verify=False` everywhere (T1).** Accepted by design; if any module is ever made to send
    data to the target, revisit.
 5. **Local dev dependency (DEP1).** `pydantic-settings` → 2.14.2 in the dev venv (no app impact).
+
+---
+
+## 5. Status update — 2026-07-13
+
+| ID | Status | What changed since the audit |
+|----|--------|------------------------------|
+| **S1** | ✅ Fixed | `is_safe_host()` resolves domains and fails closed (unchanged since the audit). |
+| **S2** | ✅ Fixed | `SSRF_EVENT_HOOKS` wired into every `follow_redirects=True` client. |
+| **S3** | ✅ Fixed | `ssl_check` / `subdomain_recon` guard the raw TLS socket. |
+| **S4** | ✅ Fixed | UNTRUSTED-SCAN-DATA fence in `build_prompt` / `build_chat_prompt`. |
+| **A1** | ✅ **Resolved — option (a), stronger** | The product decision was taken: **suspend the non-passive modules entirely** rather than trim them. `scanner._SUSPENDED_MODULES = ("http_methods", "cms", "cors", "open_files")` — they are no longer called by `run_scan()`; each returns `{"suspended": True}`. Their code and imports are kept so a future opt-in can revive them. The composite score renormalizes the remaining weights (`_renormalize_weights`), so a paused module earns no phantom points, and the UI groups them under a "temporarily suspended" notice. **The "Passive Scan Only" claim is now literally true:** the live scan sends only `GET`, DNS queries, and a TLS handshake. |
+| **D1** | ⚠️ **Partially open** | `open_files` and `cms_fingerprint` are moot (suspended). **`headers.py` and `cookie_security.py` still call `client.get(url)` with no byte cap** — a decompression bomb / multi-GB body can still OOM one scan worker. Apply the `client.stream()` + byte-cap pattern already used in `html_parser.py` (5 MB) and `js_exposure.py` (3 MB). |
+| **T1** | ➖ Accepted | `verify=False` remains intentional (must scan expired-cert sites). |
+| **DEP1** | ➖ Dev-only | No app impact. |
+
+**Residual items 2 (DNS-rebinding TOCTOU) and 3 (D1, above) remain open** and are the two
+worth doing next. Item 1 (the A1 decision) is closed.
+
+**Scope note:** the audit's header says "12 scanner modules" — that was the state at audit
+time. The live scan now runs **7 modules + `check_server`**; the other 4 are suspended (A1).
+
+**PDF engine:** the report is built as self-contained HTML (`html_generator.py`) and rendered
+by headless Chromium (`report_generator.html_to_pdf`, Playwright). It embeds fonts/images as
+data URIs and references **no external resources**, so the render cannot be turned into SSRF
+or script execution; the only `subprocess.run` (`ensure_browser`) uses a fixed argument list.
+ReportLab is no longer used anywhere in the codebase.

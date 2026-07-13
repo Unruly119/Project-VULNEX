@@ -10,7 +10,9 @@ IT administrators and teachers at Thai educational institutions with limited cyb
 
 ## Product Purpose
 
-VULNEX passively scans a target URL across 12 security modules (headers, SSL, DNS, cookies, CORS, CMS, JS exposure, open files, subdomains, HTTP methods, HTML, server info), scores the site 0–100, generates a Gemini AI analysis in Thai, and exports a single-page PDF audit report. Success = a non-technical user understands what's wrong, how serious it is, and what to do first.
+VULNEX passively scans a target URL across 8 security modules (headers, SSL, HTML/SRI, DNS, cookies, JS exposure, subdomains, server info + CVE lookup), scores the site 0–100, generates a Gemini AI analysis in Thai, and exports a single-page PDF audit report. Success = a non-technical user understands what's wrong, how serious it is, and what to do first.
+
+Four further modules (CORS, CMS, HTTP methods, open files) are written but **suspended**: they send non-passive requests, which would contradict the "Passive Scan Only" promise. Keeping that promise literally true is a product commitment, not just a technical one — re-enabling any of them requires a deliberate decision (see `SECURITY-AUDIT.md`, finding A1).
 
 ## Brand Personality
 

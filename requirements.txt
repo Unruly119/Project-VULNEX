@@ -15,4 +15,4 @@ playwright>=1.40.0
 # Login/signup + scan-history/audit are stored in Supabase (PostgREST over the
 # existing httpx dep — no supabase-py needed). This adds the browser-side login
 # cookie component used by src/auth.py.
-streamlit-cookies-controller>=0.1.0
+streamlit-cookies-controller>=0.0.4

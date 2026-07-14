@@ -11,3 +11,8 @@ dnspython>=2.6.0
 # HTML→PDF report engine (run once after install:  python -m playwright install chromium)
 # NOTE: replaced ReportLab — the report is rendered as HTML by headless Chromium.
 playwright>=1.40.0
+# ── Membership / backend ──────────────────────────────────────────
+# Login/signup + scan-history/audit are stored in Supabase (PostgREST over the
+# existing httpx dep — no supabase-py needed). This adds the browser-side login
+# cookie component used by src/auth.py.
+streamlit-cookies-controller>=0.1.0

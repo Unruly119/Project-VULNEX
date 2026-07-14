@@ -83,6 +83,19 @@ from ui_shared import inject_base_styles, manual_anchor_html, render_footer
 
 inject_base_styles()
 
+# ── Authentication gate (MANDATORY) ──────────────────────────────
+# Login is required before anything else. require_auth() draws the login/signup
+# screen and st.stop()s the script when the visitor is not authenticated, so the
+# scanner is unreachable without an account — there is no bypass. When authed it
+# renders the account bar (+ logout) and returns the user. supabase_client is the
+# server-side data layer using the project SECRET key (never sent to the browser;
+# the st.secrets→env bridge above makes SUPABASE_* visible to it on deploy).
+from auth import require_auth, get_client_meta
+import supabase_client as _db
+
+_auth_user = require_auth()
+_auth_uid  = _auth_user.get("id")
+
 # ── Import scanning / AI modules ─────────────────────────────────
 # Only is_safe_host (the SSRF guard used by normalise_url) is imported up front:
 # it's pure-stdlib and instant. The heavy modules are deferred — scanner pulls in
@@ -353,6 +366,10 @@ def render_pdf_report_section() -> None:
     # งานหนักทำ "นอก" st.columns: ปิดแถวคอลัมน์ให้เสร็จก่อนค่อยบล็อก — กันแถว
     # กล่องข้อมูล+ปุ่มแสดงซ้อนกันสองชุดระหว่างรอ
     if pdf_requested:
+        _pdf_t0     = time.time()
+        _pdf_req_at = _db._iso()
+        _scan_db_id = st.session_state.get("scan_db_id")
+        _uid        = (st.session_state.get("auth_user") or {}).get("id")
         try:
             # Lazy import (deferred from module top). ai_engine is already loaded
             # post-scan; the html/report modules are cheap.
@@ -382,8 +399,36 @@ def render_pdf_report_section() -> None:
                     "GEMINI_API_KEY_Backup)"
                 )
             st.success(f"สร้าง PDF สำเร็จ ({len(pdf_bytes):,} bytes)")
+            # audit the successful build (best-effort)
+            try:
+                _pdf_ms = int((time.time() - _pdf_t0) * 1000)
+                _db.insert_report_event(
+                    scan_id=_scan_db_id, user_id=_uid, status="success",
+                    ai_provider="offline" if report_ai.get("offline_fallback") else "ai",
+                    ai_offline_fallback=bool(report_ai.get("offline_fallback")),
+                    duration_ms=_pdf_ms, page_count=1, file_size_bytes=len(pdf_bytes),
+                    requested_at=_pdf_req_at,
+                )
+                _db.mark_scan_pdf(_scan_db_id, _pdf_ms)
+                _db.log_user_event(
+                    user_id=_uid, session_id=st.session_state.get("auth_login_event"),
+                    event_type="pdf_generated", scan_id=_scan_db_id,
+                    detail={"bytes": len(pdf_bytes)}, duration_ms=_pdf_ms,
+                    meta=get_client_meta(),
+                )
+            except Exception:
+                pass
         except Exception as exc:
             st.error(f"สร้าง PDF ไม่สำเร็จ: {exc}")
+            try:
+                _db.insert_report_event(
+                    scan_id=_scan_db_id, user_id=_uid, status="error",
+                    duration_ms=int((time.time() - _pdf_t0) * 1000),
+                    error_type=type(exc).__name__, error_message=str(exc),
+                    requested_at=_pdf_req_at,
+                )
+            except Exception:
+                pass
 
     if st.session_state.get("pdf_ready"):
         now    = datetime.now(_ICT).strftime("%Y%m%d_%H%M")
@@ -505,6 +550,7 @@ def _init_session_state() -> None:
         "org": "",          "url": "",          "scanned": False,
         "pdf_ready": False, "pdf_bytes": None,
         "chat_history": [], "module_insights": {},
+        "scan_db_id": None,
     }.items():
         st.session_state.setdefault(key, default)
 
@@ -600,6 +646,8 @@ if scan_btn and url:
         # the network. Run them concurrently so the server/CVE probe overlaps the
         # scan instead of adding its round-trip on top. They stay architecturally
         # separate (check_server is not inside run_scan) — only their waits share.
+        _scan_t0    = time.time()
+        _started_iso = _db._iso()
         with ThreadPoolExecutor(max_workers=2) as _ex:
             _fut_scan   = _ex.submit(run_scan, clean_url)
             _fut_server = _ex.submit(check_server, clean_url)
@@ -627,6 +675,32 @@ if scan_btn and url:
         time.sleep(0.25)
         loading_ph.empty()
 
+        _scan_dur_ms  = int((time.time() - _scan_t0) * 1000)
+        _finished_iso = _db._iso()
+
+        # Persist the scan for this logged-in user (best-effort — telemetry must
+        # never break a scan). Stores the wide columns + full JSONB blobs + per-
+        # module rows + CVEs, and an audit user_event. scan_db_id links the later
+        # PDF-build event to this scan row.
+        _scan_db_id = None
+        try:
+            _meta = get_client_meta()
+            _scan_db_id = _db.insert_scan(
+                user_id=_auth_uid, url=clean_url,
+                scan_data=scan_data, server_data=server_data, ai_data=ai_data,
+                started_at=_started_iso, finished_at=_finished_iso,
+                duration_ms=_scan_dur_ms, meta=_meta,
+            )
+            _db.log_user_event(
+                user_id=_auth_uid, session_id=st.session_state.get("auth_login_event"),
+                event_type="scan_completed", scan_id=_scan_db_id, target_url=clean_url,
+                detail={"score": ai_data.get("score"), "risk": ai_data.get("risk_level"),
+                        "cve": len(server_data.get("vulnerabilities", []) or [])},
+                duration_ms=_scan_dur_ms, meta=_meta,
+            )
+        except Exception:
+            pass
+
         # Bulk update keeps all keys consistent; resets any stale PDF state
         st.session_state.update({
             "scan_data":       scan_data,
@@ -639,6 +713,7 @@ if scan_btn and url:
             "pdf_bytes":       None,
             "chat_history":    [],  # clear chat on new scan
             "module_insights": module_insights,
+            "scan_db_id":      _scan_db_id,
         })
 
 elif scan_btn and not url:

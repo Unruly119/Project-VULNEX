@@ -26,6 +26,14 @@ from ui_shared import inject_base_styles, render_footer
 
 inject_base_styles()
 
+# ── Authentication gate (MANDATORY) ──────────────────────────────
+# The manual is a second Streamlit page reachable by its own URL, so it must
+# enforce login too — otherwise it would be a way around the gate. Not authed →
+# require_auth() renders the login screen here and stops.
+from auth import require_auth
+
+require_auth()
+
 # ── Top-left back button ─────────────────────────────────────────
 # The sidebar nav is gone; this quiet ghost button (top-left, above the hero)
 # is the way back to the scan page. Same-tab st.switch_page replaces the manual
@@ -79,6 +87,7 @@ st.markdown(f"""
     <strong>VULNEX</strong> คือเครื่องมือ <strong>ตรวจสอบความปลอดภัยแบบไม่รุกล้ำ (Passive Scan)</strong>
     สำหรับเว็บไซต์สถานศึกษา ระบบจะส่งเพียงคำขออ่านข้อมูลทั่วไปเหมือนการเปิดเว็บปกติ
     <strong>ไม่มีการเจาะระบบ ไม่มีการเดารหัสผ่าน และไม่แก้ไขข้อมูลใด ๆ</strong>
+    เพียง <strong>เข้าสู่ระบบด้วยบัญชีของคุณ</strong> แล้วใส่ URL —
     เมื่อตรวจเสร็จ คุณจะได้คะแนนความปลอดภัย 0–100 บทวิเคราะห์ภาษาไทยจาก AI
     และรายงาน PDF หนึ่งหน้าที่ดาวน์โหลดได้ทันที
   </p>
@@ -210,7 +219,7 @@ st.markdown(f"""
 <div class="manual-tip">
   {_icon(I_INFO, 20)}
   <p>
-    <strong>ไม่ต้องเข้าสู่ระบบ และไม่ต้องกรอกชื่อสถานศึกษาเอง</strong> —
+    <strong>เข้าสู่ระบบครั้งเดียว ไม่ต้องกรอกชื่อสถานศึกษาเอง</strong> —
     เพียงใส่ URL แล้วกดตรวจสอบ ระบบจะจัดการที่เหลือให้ทั้งหมด
     การสแกนเป็นแบบไม่รุกล้ำ จึงปลอดภัยต่อเว็บไซต์เป้าหมายเสมอ
   </p>

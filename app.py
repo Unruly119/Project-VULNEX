@@ -786,6 +786,17 @@ if st.session_state.get("scanned"):
     with tab1:
         render_ai_analysis(ai_data.get("analysis", "ไม่มีข้อมูล"))
 
+        # ── Chat-with-AI box (local LLM, isolated @st.fragment) ──────
+        # Sits directly below the analysis sections, before the PDF section.
+        # Local-only by design — see chat_ui / local_llm. Lazy import so the
+        # hardware probe + Ollama client never load for a user who doesn't scan.
+        st.markdown('<div class="chat-divider"></div>', unsafe_allow_html=True)
+        try:
+            from chat_ui import render_chat_panel
+            render_chat_panel(scan_data, server_data, ai_data)
+        except Exception as _chat_exc:                       # noqa: BLE001
+            st.caption(f"ช่องแชท AI ไม่พร้อมใช้งานชั่วคราว: {_chat_exc}")
+
     with tab2:
         # Escape all server-originated strings before HTML injection
         srv_raw_safe  = _esc(server_data.get("server_raw", "N/A") or "Hidden")

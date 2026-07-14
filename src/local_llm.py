@@ -835,31 +835,6 @@ def chat_stream(
         raise RuntimeError(f"เชื่อมต่อ Local LLM ไม่สำเร็จ: {exc}") from exc
 
 
-def generate_once(tag: str, messages: list[dict], max_tokens: int = 8,
-                  temperature: float = 0.0) -> str:
-    """One short, non-streamed completion — the scope classifier's transport."""
-    payload = {
-        "model":    tag,
-        "messages": messages,
-        "stream":   False,
-        "options": {
-            "temperature": temperature,
-            "num_ctx":     2048,
-            "num_predict": max_tokens,
-        },
-        "keep_alive": _KEEP_ALIVE,
-        "think":      False,
-    }
-    try:
-        with httpx.Client(timeout=httpx.Timeout(90.0, connect=3.0),
-                          follow_redirects=False) as c:
-            r = c.post(f"{_base_url()}/api/chat", json=payload)
-            r.raise_for_status()
-            return ((r.json().get("message") or {}).get("content") or "").strip()
-    except Exception as exc:                     # noqa: BLE001
-        raise RuntimeError(f"Local LLM ไม่ตอบสนอง: {exc}") from exc
-
-
 # ── Install helper (shown in the "no backend" state) ─────────────────
 def install_command() -> str:
     if sys.platform == "win32":

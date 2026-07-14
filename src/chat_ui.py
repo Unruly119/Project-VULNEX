@@ -7,12 +7,14 @@
 #   Fable-styled markup. It is wrapped in one @st.fragment so asking a
 #   question reruns just this panel — never the scan, never the PDF section.
 #
-#   Every state the panel can be in:
-#     · no Ollama binary            → install card (+ Cloud caveat)
-#     · binary present, daemon down  → "start engine" card
-#     · running, no model on disk    → download card with live progress
-#     · box too small for any model  → honest dead-end card
-#     · ready                        → header · thread · suggestions · input
+#   HYBRID engine: it prefers a READY local model (private, free), and otherwise
+#   falls back to the cloud Gemini/OpenRouter cascade (ai_engine.chat_stream) so
+#   the box works on Streamlit Cloud and on phones too. The pre-flight scope gate,
+#   the untrusted-data fence, and the output sanitiser apply to BOTH engines.
+#
+#   Engine resolution (render_chat_panel): ready local model → "local"; else any
+#   API key → "cloud"; else the setup states (install / start / download /
+#   unsupported / none). Setup states only appear when NEITHER engine is usable.
 #
 #   The chat content is rendered with plain st.markdown (NO unsafe_allow_html),
 #   so even though the reply comes from a local model it cannot inject HTML
@@ -59,6 +61,23 @@ _SVG_DOWNLOAD = (
     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'
     '<polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
 )
+_SVG_CLOUD = (
+    '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"'
+    ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M17.5 19a4.5 4.5 0 0 0 .5-8.972 6 6 0 0 0-11.64-1.5A4 4 0 1 0 6.5 19z"/></svg>'
+)
+
+
+def _cloud_available() -> bool:
+    """Does the Gemini/OpenRouter cascade have any usable key? (hybrid fallback).
+
+    Lazy import so a machine that only ever uses local never pays ai_engine's
+    google-generativeai import here — it's already loaded post-scan anyway."""
+    try:
+        from ai_engine import _has_any_provider
+        return bool(_has_any_provider())
+    except Exception:      # noqa: BLE001
+        return False
 
 # Use the DEFAULT role avatars (no custom avatar=): a custom icon collapses both
 # roles to the same `stChatMessageAvatarCustom` test-id, whereas the defaults
@@ -75,37 +94,44 @@ _K_MODE    = "chat_mode"        # "fast" | "deep"
 _K_PENDING = "chat_pending"     # a queued question (from a suggestion chip)
 
 
-def _engine_badge(status: L.Status, plan: L.Plan, ready_tag: str, model: L.LocalModel | None) -> str:
-    """The 'Local · <model> · <accel>' chip in the panel header."""
-    if not status.installed:
-        dot, label = "off", "ยังไม่ได้ติดตั้ง"
-    elif not status.running:
-        dot, label = "warn", "กำลังเริ่มเอนจิน"
-    elif not model:
-        dot, label = "warn", "เครื่องไม่รองรับ"
-    elif not ready_tag:
-        dot, label = "warn", f"รอดาวน์โหลด · {_esc(model.label, 40)}"
+def _engine_badge(engine: str, plan: L.Plan, model: L.LocalModel | None) -> str:
+    """Header chip naming the ACTIVE engine — 'Local · <model> · <accel>' or
+    'Cloud · AI ออนไลน์' — so it's always clear where the reply comes from."""
+    if engine == "local":
+        dot, kind, label = "on", "Local", f"{_esc(model.label, 40)} · {_esc(plan.hw.accel, 12)}"
+    elif engine == "cloud":
+        dot, kind, label = "on", "Cloud", "AI ออนไลน์"
+    elif engine == "download":
+        dot, kind, label = "warn", "Local", f"รอดาวน์โหลด · {_esc(model.label, 40) if model else ''}"
+    elif engine == "start":
+        dot, kind, label = "warn", "Local", "กำลังเริ่มเอนจิน"
+    elif engine == "install":
+        dot, kind, label = "off", "Local", "ยังไม่ได้ติดตั้ง"
+    elif engine == "unsupported":
+        dot, kind, label = "warn", "Local", "เครื่องไม่รองรับ"
     else:
-        dot, label = "on", f"{_esc(model.label, 40)} · {_esc(plan.hw.accel, 12)}"
+        dot, kind, label = "off", "AI", "ไม่พร้อมใช้งาน"
     return (
         '<span class="chat-badge">'
         f'<span class="chat-badge-dot chat-dot-{dot}"></span>'
-        f'<span class="chat-badge-kind">Local</span>'
+        f'<span class="chat-badge-kind">{kind}</span>'
         f'<span class="chat-badge-model">{label}</span>'
         '</span>'
     )
 
 
-def _header(status: L.Status, plan: L.Plan, ready_tag: str, model: L.LocalModel | None) -> None:
+def _header(engine: str, plan: L.Plan, model: L.LocalModel | None) -> None:
+    sub = ("ผู้ช่วยในเครื่อง · ตอบจากผลสแกนของเว็บนี้เท่านั้น" if engine == "local"
+           else "ตอบจากผลสแกนของเว็บนี้เท่านั้น")
     st.markdown(
         '<div class="chat-head">'
         '<div class="chat-head-title">'
         f'<span class="chat-head-icon">{_SVG_SPARK}</span>'
         '<div class="chat-head-text">'
         '<span class="chat-head-name">ถามต่อกับ AI</span>'
-        '<span class="chat-head-sub">ผู้ช่วยในเครื่อง · ตอบจากผลสแกนของเว็บนี้เท่านั้น</span>'
+        f'<span class="chat-head-sub">{sub}</span>'
         '</div></div>'
-        f'{_engine_badge(status, plan, ready_tag, model)}'
+        f'{_engine_badge(engine, plan, model)}'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -126,9 +152,9 @@ def _state_card(icon: str, title: str, body_html: str, tone: str = "info") -> No
 def _cloud_caveat() -> None:
     st.markdown(
         '<div class="chat-caveat">'
-        'หมายเหตุ: ช่องแชทนี้ประมวลผลด้วยโมเดลในเครื่องที่รันแอป (ไม่ส่งข้อมูลออกนอกเครื่อง) '
-        'จึงใช้ได้เฉพาะเครื่องที่ติดตั้ง Ollama — บนโฮสต์สาธารณะอย่าง Streamlit Cloud จะใช้ไม่ได้ '
-        'ส่วนบทวิเคราะห์และรายงาน PDF ยังทำงานผ่าน AI ออนไลน์ตามปกติ'
+        'โมเดลในเครื่อง (ผ่าน Ollama) ทำงานบนเครื่องที่รันแอปและไม่ส่งข้อมูลออกนอกเครื่อง '
+        'เหมาะกับความเป็นส่วนตัวสูงสุด — ถ้าเครื่องนี้ไม่มีโมเดลในเครื่อง (เช่นบน Streamlit Cloud '
+        'หรือเปิดผ่านมือถือ) ระบบจะใช้ AI ออนไลน์ตอบให้อัตโนมัติ จึงถามได้จากทุกอุปกรณ์'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -161,14 +187,18 @@ def _suggestion_chips(scan_data: dict, server_data: dict, ai_data: dict) -> None
             st.rerun(scope="fragment")
 
 
-def _answer(tag: str, prompt: str, scan_data: dict, server_data: dict,
-            ai_data: dict, mode: str) -> None:
-    """Run one turn: append the question, stream the reply, persist both.
+def _run_turn(engine: str, ready_tag: str, prompt: str, scan_data: dict,
+              server_data: dict, ai_data: dict, mode: str) -> None:
+    """Run one chat turn: append the question, stream the reply, persist both.
 
-    Called only after the pre-flight scope gate has passed (or produced a
-    canned refusal, which is appended without touching the model)."""
+    Engine-agnostic — the same bubble/streaming/persist logic drives both the
+    local Ollama model and the cloud Gemini/OpenRouter cascade. Called only after
+    the pre-flight scope gate has passed. The pre-flight gate, the untrusted-data
+    fence, and the output sanitiser all apply to BOTH engines, so the guardrails
+    are identical whichever one answers."""
     history = st.session_state.setdefault("chat_history", [])
     history.append({"role": "user", "content": prompt})
+    prior = history[:-1]                       # context excludes the new question
 
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -181,11 +211,19 @@ def _answer(tag: str, prompt: str, scan_data: dict, server_data: dict,
 
         acc, err = "", ""
         try:
-            for chunk in L.chat_stream(tag, C.build_messages(
-                    prompt, scan_data, server_data, ai_data, history[:-1], mode), mode):
+            if engine == "local":
+                stream = L.chat_stream(
+                    ready_tag,
+                    C.build_messages(prompt, scan_data, server_data, ai_data, prior, mode),
+                    mode,
+                )
+            else:                              # cloud — Gemini/OpenRouter cascade
+                from ai_engine import chat_stream as _ai_chat_stream
+                stream = _ai_chat_stream(prompt, scan_data, server_data, ai_data, prior, mode)
+            for chunk in stream:
                 acc += chunk
                 placeholder.markdown(C.sanitize_reply(acc) + " ▍")
-        except RuntimeError as exc:
+        except Exception as exc:               # noqa: BLE001
             err = str(exc)
 
         if err and not acc:
@@ -242,10 +280,34 @@ def _render_unsupported_state(plan: L.Plan) -> None:
         _SVG_CPU, "เครื่องนี้ยังไม่รองรับโมเดลในเครื่อง",
         f"หน่วยความจำที่ใช้ได้ประมาณ <b>{plan.hw.budget_gb:.1f} GB</b> "
         f"({_esc(plan.hw.summary, 60)}) ซึ่งยังไม่พอต่อโมเดลที่เล็กที่สุดในระบบ "
-        "ลองใช้เครื่องที่มี RAM หรือการ์ดจอมากกว่านี้ ส่วนบทวิเคราะห์และรายงาน PDF "
-        "ยังใช้งานได้ตามปกติผ่าน AI ออนไลน์",
+        "และยังไม่ได้ตั้งค่า AI ออนไลน์ไว้ — เพิ่ม API key (Gemini/OpenRouter) "
+        "เพื่อให้ช่องแชทตอบผ่านคลาวด์ได้ หรือใช้เครื่องที่มี RAM/การ์ดจอมากกว่านี้",
         tone="warn",
     )
+
+
+def _pull_with_progress(model: L.LocalModel) -> None:
+    """Download `model` with a live progress bar; on success re-run the fragment
+    so the panel flips to the ready (local) state. Shared by the download card and
+    the cloud-mode 'enable local' expander."""
+    bar = st.progress(0.0, text="กำลังเริ่มดาวน์โหลด…")
+
+    def _on(p: L.PullProgress) -> None:
+        label = p.status or "กำลังดาวน์โหลด"
+        if p.total:
+            gb_done, gb_all = p.completed / 1024**3, p.total / 1024**3
+            bar.progress(min(1.0, p.pct), text=f"{label} · {gb_done:.1f}/{gb_all:.1f} GB")
+        else:
+            bar.progress(0.03, text=label)
+
+    tag, err = L.pull_model(model, on_progress=_on)
+    bar.empty()
+    if tag:
+        L.register_exit_cleanup()
+        st.success(f"ดาวน์โหลด {model.label} สำเร็จ พร้อมใช้งานแล้ว")
+        st.rerun(scope="fragment")
+    else:
+        st.error(f"ดาวน์โหลดไม่สำเร็จ: {err}")
 
 
 def _render_download_state(model: L.LocalModel, plan: L.Plan) -> None:
@@ -259,29 +321,34 @@ def _render_download_state(model: L.LocalModel, plan: L.Plan) -> None:
         "โมเดลจะถูกลบออกจากเครื่องอัตโนมัติเมื่อปิดแอป",
     )
     st.caption(f"เหตุผลที่เลือกรุ่นนี้: {model.why}")
-
     if st.button(f"ดาวน์โหลดโมเดล ({model.size_label})",
                  key="chat_pull", type="primary", use_container_width=True):
-        bar = st.progress(0.0, text="กำลังเริ่มดาวน์โหลด…")
-
-        def _on(p: L.PullProgress) -> None:
-            label = p.status or "กำลังดาวน์โหลด"
-            if p.total:
-                gb_done, gb_all = p.completed / 1024**3, p.total / 1024**3
-                bar.progress(min(1.0, p.pct),
-                             text=f"{label} · {gb_done:.1f}/{gb_all:.1f} GB")
-            else:
-                bar.progress(0.03, text=label)
-
-        tag, err = L.pull_model(model, on_progress=_on)
-        bar.empty()
-        if tag:
-            L.register_exit_cleanup()
-            st.success(f"ดาวน์โหลด {model.label} สำเร็จ พร้อมใช้งานแล้ว")
-            st.rerun(scope="fragment")
-        else:
-            st.error(f"ดาวน์โหลดไม่สำเร็จ: {err}")
+        _pull_with_progress(model)
     _cloud_caveat()
+
+
+def _render_no_ai_state() -> None:
+    _state_card(
+        _SVG_CLOUD, "ยังไม่มี AI ที่พร้อมใช้งาน",
+        "ช่องแชทต้องการอย่างใดอย่างหนึ่ง: โมเดลในเครื่อง (Ollama) หรือ API key ของ AI ออนไลน์ "
+        "(Gemini/OpenRouter) — ตั้งค่าอย่างใดอย่างหนึ่งแล้วลองใหม่อีกครั้ง",
+        tone="warn",
+    )
+    if st.button("ตรวจอีกครั้ง", key="chat_recheck_none"):
+        st.rerun(scope="fragment")
+
+
+def _render_enable_local_expander(model: L.LocalModel, plan: L.Plan) -> None:
+    """Shown in CLOUD mode when this machine COULD run a local model — a
+    non-blocking offer to download it and switch to fully-private local mode."""
+    with st.expander("ใช้โมเดลในเครื่องแทน (ส่วนตัว ไม่ส่งข้อมูลออกนอกเครื่อง)"):
+        st.caption(
+            f"เครื่องนี้รองรับ {model.label} ({model.size_label}) — ดาวน์โหลดครั้งเดียว "
+            "เพื่อสลับมาตอบด้วยโมเดลในเครื่องแทน AI ออนไลน์ (โมเดลจะถูกลบเมื่อปิดแอป)"
+        )
+        if st.button(f"ดาวน์โหลด {model.label} ({model.size_label})",
+                     key="chat_pull_opt", use_container_width=True):
+            _pull_with_progress(model)
 
 
 def _render_manage_row(plan: L.Plan) -> None:
@@ -315,41 +382,68 @@ def render_chat_panel(scan_data: dict, server_data: dict, ai_data: dict) -> None
     with st.container(key=_CHAT_KEY):
         status = L.backend_status(autostart=True)
         plan   = L.resolve_plan()
-        model  = plan.pick(st.session_state[_K_MODE])
+        mode   = st.session_state[_K_MODE]
+        model  = plan.pick(mode)
         ready_tag = L.resolve_tag(model) if (status.running and model) else ""
+        cloud_ok  = _cloud_available()
 
         # Arm the on-exit disk sweep whenever the engine is live — this also
         # cleans up a manifest left behind by a previous hard-killed session.
         if status.running:
             L.register_exit_cleanup()
 
-        _header(status, plan, ready_tag, model)
+        # ── Hybrid engine resolution ─────────────────────────────────
+        # Prefer a READY local model (private, free); otherwise fall back to the
+        # cloud Gemini/OpenRouter cascade so the box works on Streamlit Cloud and
+        # on phones. The setup states below only appear when NEITHER is usable.
+        if status.running and model and ready_tag:
+            engine = "local"
+        elif cloud_ok:
+            engine = "cloud"
+        elif status.running and model and not ready_tag:
+            engine = "download"          # local possible, no cloud → must download
+        elif not status.installed:
+            engine = "install"
+        elif not status.running:
+            engine = "start"
+        elif model is None:
+            engine = "unsupported"
+        else:
+            engine = "none"
 
-        # ── Not-ready gates ──────────────────────────────────────────
-        if not status.installed:
-            _render_install_state()
-            return
-        if not status.running:
-            _render_start_state()
-            return
-        if model is None:
-            _render_unsupported_state(plan)
-            return
-        if not ready_tag:
+        _header(engine, plan, model)
+
+        # ── Setup-only states (no usable engine yet) ─────────────────
+        if engine == "download":
             _render_download_state(model, plan)
             return
+        if engine == "install":
+            _render_install_state()
+            return
+        if engine == "start":
+            _render_start_state()
+            return
+        if engine == "unsupported":
+            _render_unsupported_state(plan)
+            return
+        if engine == "none":
+            _render_no_ai_state()
+            return
 
-        # ── Ready: mode toggle · thread · input ─────────────────────
+        # ── Ready (local OR cloud): mode toggle · thread · input ─────
+        mode_help = ("ตอบเร็ว: โมเดลที่ตอบไว · คิดนาน: โมเดลที่คิดละเอียดกว่าเพื่อคำตอบที่ดีขึ้น"
+                     if engine == "local"
+                     else "ตอบเร็ว: ตอบกระชับรวดเร็ว · คิดนาน: วิเคราะห์ละเอียดขึ้น (ใช้โทเคนมากขึ้น)")
         mode_label = st.segmented_control(
             "โหมดการตอบ",
             options=["ตอบเร็ว", "คิดนาน"],
-            default="คิดนาน" if st.session_state[_K_MODE] == "deep" else "ตอบเร็ว",
+            default="คิดนาน" if mode == "deep" else "ตอบเร็ว",
             key="chat_mode_control",
-            help="ตอบเร็ว: ใช้โมเดลที่ตอบไว · คิดนาน: ใช้โมเดลที่คิดละเอียดกว่าเพื่อคำตอบที่ดีขึ้น",
+            help=mode_help,
             label_visibility="collapsed",
         )
         new_mode = "deep" if mode_label == "คิดนาน" else "fast"
-        if new_mode != st.session_state[_K_MODE]:
+        if new_mode != mode:
             st.session_state[_K_MODE] = new_mode
             st.rerun(scope="fragment")
 
@@ -365,10 +459,16 @@ def render_chat_panel(scan_data: dict, server_data: dict, ai_data: dict) -> None
         if prompt:
             allowed, refusal = C.in_scope(prompt)
             if allowed:
-                _answer(ready_tag, prompt, scan_data, server_data, ai_data,
-                        st.session_state[_K_MODE])
+                _run_turn(engine, ready_tag, prompt, scan_data, server_data,
+                          ai_data, st.session_state[_K_MODE])
             else:
                 _refuse(prompt, refusal)
             st.rerun(scope="fragment")
 
+        # ── Footer ───────────────────────────────────────────────────
+        # In cloud mode on a machine that COULD run a local model, offer the
+        # private local option (non-blocking). Managed-model cleanup shows
+        # whenever VULNEX has pulled any model.
+        if engine == "cloud" and status.running and model and not ready_tag:
+            _render_enable_local_expander(model, plan)
         _render_manage_row(plan)

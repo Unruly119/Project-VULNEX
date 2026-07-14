@@ -987,8 +987,16 @@ def chat_stream(
     server_data: dict,
     ai_data: dict,
     chat_history: list | None = None,
+    mode: str = "fast",
 ):
-    """Generator yielding text chunks — Gemini (ทุกคีย์) → OpenRouter → offline."""
+    """Generator yielding text chunks — Gemini (ทุกคีย์) → OpenRouter → offline.
+
+    This is the CLOUD engine behind the chat box's hybrid fallback (used when no
+    local Ollama model is available — e.g. on Streamlit Cloud or a phone viewing
+    the deployed app). ``mode`` mirrors the box's ตอบเร็ว/คิดนาน toggle: "deep"
+    raises the token budget and appends a step-by-step reasoning nudge so the
+    on-screen behaviour matches the local engine's two modes.
+    """
     if not _has_any_provider():
         yield _offline_chat_reply(user_message, scan_data, ai_data)
         return
@@ -996,6 +1004,13 @@ def chat_stream(
     prompt = build_chat_prompt(
         scan_data, server_data, ai_data, user_message, chat_history
     )
+    cfg = dict(_CHAT_CONFIG)
+    if mode == "deep":
+        cfg["max_output_tokens"] = 2048
+        prompt += (
+            "\n\n(โหมดคิดละเอียด: วิเคราะห์ทีละขั้นอย่างรอบคอบ เชื่อมโยงหลักฐานจากผลสแกนหลายจุด "
+            "แล้วสรุปเป็นคำแนะนำที่จัดลำดับความสำคัญและปฏิบัติได้จริง)"
+        )
     last_exc: Exception | None = None
 
     # 1) Gemini streaming — วนโมเดล (ฉลาดสุดก่อน) × ทุกคีย์ที่ว่าง (cooldown-aware)
@@ -1005,7 +1020,7 @@ def chat_stream(
             try:
                 with _genai_lock:
                     genai.configure(api_key=key)
-                    m = genai.GenerativeModel(model_name, generation_config=_CHAT_CONFIG)
+                    m = genai.GenerativeModel(model_name, generation_config=cfg)
                     stream = m.generate_content(prompt, stream=True)
                     got_any = False
                     for chunk in stream:
@@ -1030,7 +1045,7 @@ def chat_stream(
     # 2) OpenRouter (ไม่ stream — ส่งเป็นก้อนเดียว)
     if OPENROUTER_API_KEY:
         try:
-            yield _generate_openrouter(prompt, _CHAT_CONFIG)
+            yield _generate_openrouter(prompt, cfg)
             return
         except Exception as exc:                         # noqa: BLE001
             last_exc = exc
@@ -1047,7 +1062,9 @@ def chat(
     server_data: dict,
     ai_data: dict,
     chat_history: list | None = None,
+    mode: str = "fast",
 ) -> dict:
     """Non-streaming chat — collects full response."""
-    parts = list(chat_stream(user_message, scan_data, server_data, ai_data, chat_history))
+    parts = list(chat_stream(user_message, scan_data, server_data, ai_data,
+                             chat_history, mode))
     return {"reply": "".join(parts), "offline": not _has_any_provider()}

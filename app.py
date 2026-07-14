@@ -786,10 +786,11 @@ if st.session_state.get("scanned"):
     with tab1:
         render_ai_analysis(ai_data.get("analysis", "ไม่มีข้อมูล"))
 
-        # ── Chat-with-AI box (local LLM, isolated @st.fragment) ──────
+        # ── Chat-with-AI box (hybrid local/cloud, isolated @st.fragment) ──
         # Sits directly below the analysis sections, before the PDF section.
-        # Local-only by design — see chat_ui / local_llm. Lazy import so the
-        # hardware probe + Ollama client never load for a user who doesn't scan.
+        # Prefers a local Ollama model; falls back to the cloud AI cascade when
+        # none is available (Streamlit Cloud, phones) — see chat_ui / local_llm.
+        # Lazy import so the HW probe + Ollama client never load pre-scan.
         st.markdown('<div class="chat-divider"></div>', unsafe_allow_html=True)
         try:
             from chat_ui import render_chat_panel

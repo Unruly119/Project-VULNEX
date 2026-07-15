@@ -362,6 +362,12 @@ def insert_scan(*, user_id: str | None, url: str, scan_data: dict, server_data: 
         isinstance(v, dict) and v.get("error")
         for v in scan_data.values() if isinstance(v, dict)
     )
+    # total findings across every module (drives scans.findings_count + the
+    # per-finding rows written below)
+    findings_count = 0
+    for _mod in scan_data.values():
+        if isinstance(_mod, dict) and isinstance(_mod.get("findings"), list):
+            findings_count += len(_mod["findings"])
     row = {
         "user_id": user_id,
         "target_url": url[:2048],
@@ -382,6 +388,7 @@ def insert_scan(*, user_id: str | None, url: str, scan_data: dict, server_data: 
         "composite_score": _int(ai_data.get("score")),
         "risk_level": risk if risk in _RISK_OK else None,
         "cve_count": len(vulns),
+        "findings_count": findings_count,
         "dos_risk": bool(server_data.get("dos_risk", False)),
         "ai_provider": "offline" if ai_data.get("offline_fallback") else "ai",
         "ai_offline_fallback": bool(ai_data.get("offline_fallback", False)),
@@ -395,15 +402,27 @@ def insert_scan(*, user_id: str | None, url: str, scan_data: dict, server_data: 
     if not res:
         return None
     scan_id = res[0]["id"]
-    # child rows — best effort, don't block on failure
-    try:
-        _insert_scan_modules(scan_id, scan_data)
-    except Exception:
-        pass
-    try:
-        _insert_vulnerabilities(scan_id, vulns)
-    except Exception:
-        pass
+    # child rows — each best-effort and isolated so one failing detail table can
+    # never lose the scan or the other details.
+    for _writer, _args in (
+        (_insert_scan_modules,      (scan_id, scan_data)),
+        (_insert_vulnerabilities,   (scan_id, vulns)),
+        (_insert_findings,          (scan_id, scan_data)),
+        (_insert_http_headers,      (scan_id, scan_data)),
+        (_insert_ssl_details,       (scan_id, scan_data, ai_data)),
+        (_insert_server_details,    (scan_id, server_data, ai_data)),
+        (_insert_dns_records,       (scan_id, scan_data)),
+        (_insert_cookies,           (scan_id, scan_data)),
+        (_insert_js_issues,         (scan_id, scan_data)),
+        (_insert_html_assets,       (scan_id, scan_data)),
+        (_insert_subdomains,        (scan_id, scan_data)),
+        (_insert_score_breakdown,   (scan_id, ai_data)),
+        (_insert_ai_analysis,       (scan_id, ai_data)),
+    ):
+        try:
+            _writer(*_args)
+        except Exception:
+            pass
     return scan_id
 
 
@@ -446,6 +465,270 @@ def _insert_vulnerabilities(scan_id: str, vulns: list) -> None:
             "description": (v.get("desc") or v.get("description") or None),
             "fix": (v.get("fix") or None),
         })
+
+
+# ── detailed scan storage (normalized child tables · migration v5) ───
+# Each writer turns one slice of scan_data/server_data/ai_data into rows in a
+# dedicated table, all linked back to the parent scan via scan_id. Every writer
+# is best-effort (wrapped by the caller) so a telemetry hiccup never breaks a
+# scan. Weights mirror scanner/headers.HEADER_WEIGHTS and ai_engine.base_weights
+# — kept as local constants to avoid importing the scanner stack here.
+_HEADER_WEIGHTS = {
+    "Content-Security-Policy":   30,
+    "Strict-Transport-Security": 25,
+    "X-Frame-Options":           20,
+    "X-Content-Type-Options":    15,
+    "Referrer-Policy":            5,
+    "Permissions-Policy":        5,
+}
+_SCORE_COMPONENTS = ("headers", "ssl", "html_js", "server_cve", "dns", "cookies", "cms")
+
+
+def _insert_bulk(table: str, rows: list[dict]) -> None:
+    """POST many rows in one request (return=minimal). No-op on empty."""
+    c = _http()
+    if c is None or not rows:
+        return
+    try:
+        c.post(f"/{table}", content=json.dumps(rows).encode("utf-8"),
+               headers={"Prefer": "return=minimal"})
+    except Exception:
+        pass
+
+
+def _sev(v, default: str = "INFO") -> str:
+    s = str(v or default).upper()
+    return s if s in _SEV_OK else default
+
+
+def _insert_findings(scan_id: str, scan_data: dict) -> None:
+    """Every finding from every module → one row each (module_key + severity)."""
+    rows = []
+    for key, mod in (scan_data or {}).items():
+        if not isinstance(mod, dict):
+            continue
+        for f in (mod.get("findings") or []):
+            if not isinstance(f, dict):
+                continue
+            rows.append({
+                "scan_id": scan_id,
+                "module_key": key,
+                "severity": _sev(f.get("severity")),
+                "title": (str(f.get("title"))[:300] if f.get("title") else None),
+                "detail": (str(f.get("detail") or f.get("description"))[:2000]
+                           if (f.get("detail") or f.get("description")) else None),
+            })
+    _insert_bulk("scan_findings", rows)
+
+
+def _insert_http_headers(scan_id: str, scan_data: dict) -> None:
+    """Each security header — present (with value + quality) or missing."""
+    hdr = scan_data.get("headers", {}) or {}
+    if hdr.get("error") or hdr.get("suspended"):
+        return
+    found = hdr.get("headers_found", {}) or {}
+    quality = hdr.get("headers_quality", {}) or {}
+    missing = hdr.get("headers_missing", []) or []
+    rows = []
+    for name in _HEADER_WEIGHTS:
+        present = name in found
+        if not present and name not in missing:
+            continue
+        rows.append({
+            "scan_id": scan_id,
+            "header_name": name,
+            "present": present,
+            "value": (str(found.get(name))[:4000] if present else None),
+            "quality": (float(quality.get(name)) if present and quality.get(name) is not None else None),
+            "weight": _HEADER_WEIGHTS[name],
+        })
+    _insert_bulk("scan_http_headers", rows)
+
+
+def _insert_ssl_details(scan_id: str, scan_data: dict, ai_data: dict) -> None:
+    ssl = scan_data.get("ssl", {}) or {}
+    if not ssl or ssl.get("suspended"):
+        return
+    subscore = (ai_data.get("breakdown", {}) or {}).get("ssl_raw")
+    row = {
+        "scan_id": scan_id,
+        "has_ssl": ssl.get("has_ssl"),
+        "valid": ssl.get("valid"),
+        "days_left": _int(ssl.get("days_left")),
+        "issuer": (str(ssl.get("issuer"))[:500] if ssl.get("issuer") else None),
+        "expires_at": (str(ssl.get("expires"))[:100] if ssl.get("expires") else None),
+        "tls_version": (ssl.get("tls_version") or None),
+        "cipher_suite": (str(ssl.get("cipher_suite"))[:200] if ssl.get("cipher_suite") else None),
+        "cipher_bits": _int(ssl.get("cipher_bits")),
+        "warnings": ssl.get("tls_warnings", []) if isinstance(ssl.get("tls_warnings"), list) else [],
+        "warning": (str(ssl.get("warning"))[:1000] if ssl.get("warning") else None),
+        "error_type": (ssl.get("error_type") or None),
+        "subscore": _int(subscore),
+    }
+    _insert("scan_ssl_details", {k: v for k, v in row.items() if v is not None})
+
+
+def _insert_server_details(scan_id: str, server_data: dict, ai_data: dict) -> None:
+    sd = server_data or {}
+    subscore = (ai_data.get("breakdown", {}) or {}).get("server_cve_raw")
+    risk = str(sd.get("risk_level", "") or "").upper()
+    row = {
+        "scan_id": scan_id,
+        "server_raw": (str(sd.get("server_raw"))[:1000] if sd.get("server_raw") else None),
+        "server_type": (sd.get("server_type") or None),
+        "server_version": (str(sd.get("server_version"))[:200] if sd.get("server_version") else None),
+        "version_exposed": sd.get("version_exposed"),
+        "http_version": (str(sd.get("http_version"))[:50] if sd.get("http_version") else None),
+        "h2_enabled": sd.get("h2_enabled"),
+        "dos_risk": bool(sd.get("dos_risk", False)),
+        "dos_detail": (str(sd.get("dos_detail"))[:2000] if sd.get("dos_detail") else None),
+        "risk_level": risk if risk in _RISK_OK else None,
+        "subscore": _int(subscore),
+    }
+    _insert("scan_server_details", {k: v for k, v in row.items() if v is not None})
+
+
+def _insert_dns_records(scan_id: str, scan_data: dict) -> None:
+    dns = scan_data.get("dns", {}) or {}
+    if dns.get("error") or dns.get("suspended") or not dns:
+        return
+    spf   = dns.get("spf", {}) or {}
+    dmarc = dns.get("dmarc", {}) or {}
+    dkim  = dns.get("dkim", {}) or {}
+    dnssec = dns.get("dnssec", {}) or {}
+    caa   = dns.get("caa", {}) or {}
+    mx    = dns.get("mx", {}) or {}
+    ns    = dns.get("ns", {}) or {}
+    rows = [
+        {"scan_id": scan_id, "record_type": "spf", "present": bool(spf.get("present")),
+         "record": (spf.get("record") or None), "policy": (spf.get("policy") or None),
+         "issues": spf.get("issues", []), "detail": {"lookups": spf.get("lookups", 0)}},
+        {"scan_id": scan_id, "record_type": "dmarc", "present": bool(dmarc.get("present")),
+         "record": (dmarc.get("record") or None), "policy": (dmarc.get("policy") or None),
+         "issues": dmarc.get("issues", []), "detail": {}},
+        {"scan_id": scan_id, "record_type": "dkim", "present": bool(dkim.get("present")),
+         "record": None, "policy": None, "issues": [],
+         "detail": {"selectors_found": dkim.get("selectors_found", [])}},
+        {"scan_id": scan_id, "record_type": "dnssec", "present": bool(dnssec.get("signed")),
+         "record": None, "policy": None, "issues": [], "detail": {}},
+        {"scan_id": scan_id, "record_type": "caa", "present": bool(caa.get("present")),
+         "record": None, "policy": None, "issues": [], "detail": {"records": caa.get("records", [])}},
+        {"scan_id": scan_id, "record_type": "mx", "present": bool(mx.get("count", 0)),
+         "record": None, "policy": None, "issues": [],
+         "detail": {"count": mx.get("count", 0), "records": mx.get("records", [])}},
+        {"scan_id": scan_id, "record_type": "ns", "present": bool(ns.get("count", 0)),
+         "record": None, "policy": None, "issues": [],
+         "detail": {"count": ns.get("count", 0), "diverse": ns.get("diverse", False)}},
+    ]
+    _insert_bulk("scan_dns_records", rows)
+
+
+def _insert_cookies(scan_id: str, scan_data: dict) -> None:
+    ck = scan_data.get("cookies", {}) or {}
+    if ck.get("suspended"):
+        return
+    rows = []
+    for c in (ck.get("cookies") or []):
+        if not isinstance(c, dict):
+            continue
+        rows.append({
+            "scan_id": scan_id,
+            "cookie_name": (str(c.get("name") or "")[:300] or "(unnamed)"),
+            "secure": c.get("secure"),
+            "httponly": c.get("httponly"),
+            "samesite": (c.get("samesite") or None),
+            "domain": (str(c.get("domain"))[:300] if c.get("domain") else None),
+            "path": (str(c.get("path"))[:300] if c.get("path") else None),
+            "is_session": c.get("is_session_name"),
+            "issues": c.get("issues", []) if isinstance(c.get("issues"), list) else [],
+        })
+    _insert_bulk("scan_cookies", rows)
+
+
+def _insert_js_issues(scan_id: str, scan_data: dict) -> None:
+    js = scan_data.get("js_exposure", {}) or {}
+    if js.get("suspended"):
+        return
+    rows = []
+    for s in (js.get("secrets_found") or []):
+        if isinstance(s, dict):
+            rows.append({"scan_id": scan_id, "issue_type": "secret",
+                         "severity": _sev(s.get("severity")),
+                         "label": (str(s.get("type"))[:200] if s.get("type") else None),
+                         "source": (str(s.get("source"))[:500] if s.get("source") else None)})
+    for m in (js.get("source_maps_exposed") or []):
+        rows.append({"scan_id": scan_id, "issue_type": "source_map", "severity": "MEDIUM",
+                     "label": "Source map exposed", "source": str(m)[:500]})
+    for lib in (js.get("outdated_libs") or []):
+        if isinstance(lib, dict):
+            rows.append({"scan_id": scan_id, "issue_type": "outdated_lib", "severity": None,
+                         "label": (str(lib.get("lib"))[:200] if lib.get("lib") else None),
+                         "source": (str(lib.get("src"))[:500] if lib.get("src") else None)})
+    _insert_bulk("scan_js_issues", [{k: v for k, v in r.items() if v is not None} for r in rows])
+
+
+def _insert_html_assets(scan_id: str, scan_data: dict) -> None:
+    html = scan_data.get("html", {}) or {}
+    if html.get("suspended"):
+        return
+    rows = []
+    for s in (html.get("external_scripts") or []):
+        if isinstance(s, dict):
+            rows.append({"scan_id": scan_id, "asset_type": "external_script",
+                         "url": (str(s.get("src"))[:2048] if s.get("src") else None),
+                         "has_sri": s.get("has_sri")})
+    for f in (html.get("insecure_forms") or []):
+        if isinstance(f, dict):
+            rows.append({"scan_id": scan_id, "asset_type": "insecure_form",
+                         "url": (str(f.get("action"))[:2048] if f.get("action") else None),
+                         "has_password": f.get("has_password")})
+    _insert_bulk("scan_html_assets", rows)
+
+
+def _insert_subdomains(scan_id: str, scan_data: dict) -> None:
+    sub = scan_data.get("subdomains", {}) or {}
+    if sub.get("suspended"):
+        return
+    san = set(sub.get("from_cert_san") or [])
+    crt = set(sub.get("from_crtsh") or [])
+    allsubs = sub.get("all_subdomains") or sorted(san | crt)
+    rows = []
+    for s in allsubs:
+        rows.append({
+            "scan_id": scan_id,
+            "subdomain": str(s)[:300],
+            "from_cert_san": s in san,
+            "from_crtsh": s in crt,
+        })
+    _insert_bulk("scan_subdomains", rows)
+
+
+def _insert_score_breakdown(scan_id: str, ai_data: dict) -> None:
+    brk = ai_data.get("breakdown", {}) or {}
+    weights = brk.get("_weights", {}) or {}
+    rows = []
+    for comp in _SCORE_COMPONENTS:
+        if comp not in weights:      # dropped/suspended component
+            continue
+        rows.append({
+            "scan_id": scan_id,
+            "component": comp,
+            "points_earned": _int(brk.get(comp)),
+            "weight": _int(weights.get(comp)),
+            "raw_subscore": _int(brk.get(f"{comp}_raw")),
+        })
+    _insert_bulk("scan_score_breakdown", rows)
+
+
+def _insert_ai_analysis(scan_id: str, ai_data: dict) -> None:
+    row = {
+        "scan_id": scan_id,
+        "provider": (ai_data.get("provider") or ("offline" if ai_data.get("offline_fallback") else None)),
+        "offline_fallback": bool(ai_data.get("offline_fallback", False)),
+        "analysis_md": (str(ai_data.get("analysis"))[:100000] if ai_data.get("analysis") else None),
+        "error": (str(ai_data.get("error"))[:2000] if ai_data.get("error") else None),
+    }
+    _insert("scan_ai_analysis", {k: v for k, v in row.items() if v is not None})
 
 
 def mark_scan_pdf(scan_id: str, duration_ms: int | None) -> None:

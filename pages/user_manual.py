@@ -26,13 +26,19 @@ from ui_shared import inject_base_styles, render_footer
 
 inject_base_styles()
 
-# ── Authentication gate (MANDATORY) ──────────────────────────────
-# The manual is a second Streamlit page reachable by its own URL, so it must
-# enforce login too — otherwise it would be a way around the gate. Not authed →
-# require_auth() renders the login screen here and stops.
-from auth import require_auth
+# ── Auth (public page) ───────────────────────────────────────────
+# The manual is help content, so it's public — the login wall lives at the scan
+# action on the main page, not here. init() only bootstraps a returning session
+# from the cookie; the top bar shows the account (or a sign-in link). If a sign-in
+# was requested from here, the same auth screen renders in place.
+import auth
 
-require_auth()
+_controller, _auth_user = auth.init()
+if st.session_state.get("show_auth") and _auth_user is None:
+    auth.render_auth_screen(_controller)
+    render_footer()
+    st.stop()
+auth.render_top_bar(_controller, _auth_user)
 
 # ── Top-left back button ─────────────────────────────────────────
 # The sidebar nav is gone; this quiet ghost button (top-left, above the hero)
@@ -87,7 +93,7 @@ st.markdown(f"""
     <strong>VULNEX</strong> คือเครื่องมือ <strong>ตรวจสอบความปลอดภัยแบบไม่รุกล้ำ (Passive Scan)</strong>
     สำหรับเว็บไซต์สถานศึกษา ระบบจะส่งเพียงคำขออ่านข้อมูลทั่วไปเหมือนการเปิดเว็บปกติ
     <strong>ไม่มีการเจาะระบบ ไม่มีการเดารหัสผ่าน และไม่แก้ไขข้อมูลใด ๆ</strong>
-    เพียง <strong>เข้าสู่ระบบด้วยบัญชีของคุณ</strong> แล้วใส่ URL —
+    เพียง <strong>ใส่ URL แล้วกดตรวจสอบ</strong> — ระบบจะให้เข้าสู่ระบบเฉพาะตอนเริ่มสแกน
     เมื่อตรวจเสร็จ คุณจะได้คะแนนความปลอดภัย 0–100 บทวิเคราะห์ภาษาไทยจาก AI
     และรายงาน PDF หนึ่งหน้าที่ดาวน์โหลดได้ทันที
   </p>
@@ -219,8 +225,8 @@ st.markdown(f"""
 <div class="manual-tip">
   {_icon(I_INFO, 20)}
   <p>
-    <strong>เข้าสู่ระบบครั้งเดียว ไม่ต้องกรอกชื่อสถานศึกษาเอง</strong> —
-    เพียงใส่ URL แล้วกดตรวจสอบ ระบบจะจัดการที่เหลือให้ทั้งหมด
+    <strong>ใส่ URL ได้เลยโดยไม่ต้องเข้าสู่ระบบก่อน</strong> —
+    ระบบจะขอให้เข้าสู่ระบบเมื่อกดเริ่มสแกนเท่านั้น จากนั้นจัดการที่เหลือให้ทั้งหมด
     การสแกนเป็นแบบไม่รุกล้ำ จึงปลอดภัยต่อเว็บไซต์เป้าหมายเสมอ
   </p>
 </div>

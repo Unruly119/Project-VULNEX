@@ -83,18 +83,23 @@ from ui_shared import inject_base_styles, manual_anchor_html, render_footer
 
 inject_base_styles()
 
-# ── Authentication gate (MANDATORY) ──────────────────────────────
-# Login is required before anything else. require_auth() draws the login/signup
-# screen and st.stop()s the script when the visitor is not authenticated, so the
-# scanner is unreachable without an account — there is no bypass. When authed it
-# renders the account bar (+ logout) and returns the user. supabase_client is the
-# server-side data layer using the project SECRET key (never sent to the browser;
-# the st.secrets→env bridge above makes SUPABASE_* visible to it on deploy).
-from auth import require_auth, get_client_meta
+# ── Authentication (scan-first, auth-on-action) ──────────────────
+# The scan page is public. auth.init() only bootstraps a returning session from
+# the login cookie — it does NOT gate. The login wall is raised later, at the
+# scan ACTION (see the scan block): a guest who presses "เริ่มตรวจสอบ" is sent to
+# the sign-in screen, and the scan runs itself once they're in. supabase_client is
+# the server-side data layer using the project SECRET key (never sent to the
+# browser; the st.secrets→env bridge above makes SUPABASE_* visible to it on deploy).
+import auth
 import supabase_client as _db
 
-_auth_user = require_auth()
-_auth_uid  = _auth_user.get("id")
+_controller, _auth_user = auth.init()
+
+# Sign-in wall (shown only when a gated action asked for it) — replaces the page.
+if st.session_state.get("show_auth") and _auth_user is None:
+    auth.render_auth_screen(_controller)
+    render_footer()
+    st.stop()
 
 # ── Import scanning / AI modules ─────────────────────────────────
 # Only is_safe_host (the SSRF guard used by normalise_url) is imported up front:
@@ -414,7 +419,7 @@ def render_pdf_report_section() -> None:
                     user_id=_uid, session_id=st.session_state.get("auth_login_event"),
                     event_type="pdf_generated", scan_id=_scan_db_id,
                     detail={"bytes": len(pdf_bytes)}, duration_ms=_pdf_ms,
-                    meta=get_client_meta(),
+                    meta=auth.get_client_meta(),
                 )
             except Exception:
                 pass
@@ -557,6 +562,9 @@ def _init_session_state() -> None:
 
 _init_session_state()
 
+# ── Account / sign-in bar (right-aligned, above the hero) ────────
+auth.render_top_bar(_controller, _auth_user)
+
 # ── Hero ─────────────────────────────────────────────────────────
 _hero_img_uri = _img_data_uri(os.path.join("src", "Public", "Hero_Image.jpg"))
 st.markdown(f"""
@@ -606,12 +614,32 @@ scan_btn = st.button("เริ่มตรวจสอบ", use_container_width
 
 st.markdown("---")
 
-# ── Scan logic ────────────────────────────────────────────────────
-if scan_btn and url:
-    clean_url, url_error = normalise_url(url)
-    if url_error:
-        st.warning(url_error)
+# ── Scan trigger (auth-on-action) ─────────────────────────────────
+# Resolve the URL to scan this run: a signed-in press runs immediately; a guest's
+# press raises the sign-in wall (remembering the URL); a URL left waiting behind
+# the wall (visitor just signed in) runs itself now.
+scan_target = None
+if scan_btn:
+    if not url:
+        st.warning("กรุณาใส่ URL ก่อนกด ตรวจสอบ")
     else:
+        clean_url, url_error = normalise_url(url)
+        if url_error:
+            st.warning(url_error)
+        elif _auth_user is None:
+            auth.request_login(clean_url)      # → sign-in screen, then auto-scan
+        else:
+            scan_target = clean_url
+if scan_target is None and _auth_user is not None:
+    _pending = st.session_state.pop("pending_scan_url", None)
+    if _pending:
+        scan_target = _pending
+        auth.scroll_top()   # fresh page after login — start the scan from the top
+
+if scan_target:
+    clean_url, url_error = scan_target, None
+    _auth_uid = (_auth_user or {}).get("id")
+    if not url_error:
         # Skeleton loading screen (replaces the bare spinner). Rendered into a
         # placeholder before the blocking work; Streamlit flushes the delta
         # mid-script, so the shimmer + radar sweep animate in-browser during the
@@ -684,7 +712,7 @@ if scan_btn and url:
         # PDF-build event to this scan row.
         _scan_db_id = None
         try:
-            _meta = get_client_meta()
+            _meta = auth.get_client_meta()
             _scan_db_id = _db.insert_scan(
                 user_id=_auth_uid, url=clean_url,
                 scan_data=scan_data, server_data=server_data, ai_data=ai_data,
@@ -715,9 +743,6 @@ if scan_btn and url:
             "module_insights": module_insights,
             "scan_db_id":      _scan_db_id,
         })
-
-elif scan_btn and not url:
-    st.warning("กรุณาใส่ URL ก่อนกด ตรวจสอบ")
 
 # ── Results ──────────────────────────────────────────────────────
 if st.session_state.get("scanned"):

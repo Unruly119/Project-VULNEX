@@ -76,8 +76,9 @@
   --border-hi:   #c8c2b8;   /* slightly darker on hover / focus        */
 
   /* Brand accent — Fable's terracotta / clay warm-orange */
-  --accent:      #c4622d;   /* primary CTA, links, highlights          */
-  --accent-2:    #a8511f;   /* hover state                             */
+  --accent:        #c4622d;   /* primary CTA, links, highlights          */
+  --accent-2:      #a8511f;   /* hover state                             */
+  --accent-bright: #d9754a;   /* terracotta tuned for dark surfaces (≥4.5:1 on --ink) */
   --accent-dim:  rgba(196, 98, 45, 0.10);
   --accent-glow: rgba(196, 98, 45, 0.22);
 
@@ -1540,3 +1541,332 @@ div[data-testid="stDownloadButton"] > button:hover { box-shadow: 0 6px 22px var(
   animation-delay: calc(var(--i, 0) * 0.1s + 0.2s);
 }
 .btn-ref { animation: fade-in var(--t-base) var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms); }
+
+
+/* ════════════════════════════════════════════════════════════════
+   Authentication — quiet top bar + the "instrument plate" gate
+   ────────────────────────────────────────────────────────────────
+   One bordered plate, two panels: a dark ink brand panel (serif statement,
+   reticle-framed passive-scan console) beside the form on the warm surface.
+   No floating card, no decorative glow — structure comes from the plate.
+
+   Selector convention: Streamlit's global button rule is
+   "div.stButton > button { ... !important }" (0,1,2). Every override here
+   rides the keyed container: ".st-key-X div.stButton > button" (0,2,2) — it
+   always wins, including :hover, without a specificity war. Markdown text in
+   the dark panel needs !important colour because of the body-hardening rule
+   ".stMarkdown div { color: var(--ink-2) !important }".
+   Motion is opacity/box-shadow only on interactives and translateY on the
+   sweep decor; everything freezes under prefers-reduced-motion via the global
+   rule at the top of this file.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Account / sign-in top bar (above the hero) ── */
+.st-key-auth-topbar { margin: -0.5rem 0 0.25rem; }
+.st-key-auth-topbar [data-testid="stHorizontalBlock"] { align-items: center; }
+.auth-whoami {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  font-family: var(--font-sans); font-size: 0.8125rem; color: var(--muted);
+}
+.auth-whoami .auth-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--c-low); box-shadow: 0 0 0 3px var(--c-low-bg);
+}
+[data-testid="stMarkdownContainer"] .auth-whoami .auth-whoami-txt { color: var(--ink-2) !important; }
+.st-key-auth-topbar div.stButton > button {
+  width: auto !important; min-width: 0 !important;
+  display: inline-flex !important; margin-left: auto !important;
+  background: transparent !important; color: var(--ink-2) !important;
+  border: 1px solid var(--border-hi) !important; box-shadow: none !important;
+  border-radius: var(--r-pill) !important;
+  padding: 0.3rem 0.95rem !important;
+  font-size: 0.8125rem !important; font-weight: 500 !important;
+}
+.st-key-signin_top div.stButton > button {
+  color: var(--accent) !important; border-color: var(--accent-glow) !important;
+}
+.st-key-logout_btn div.stButton > button:hover {
+  background: var(--accent-dim) !important; color: var(--accent-2) !important;
+  border-color: var(--accent) !important; box-shadow: none !important;
+}
+.st-key-signin_top div.stButton > button:hover {
+  background: var(--accent) !important; color: #fff !important;
+  border-color: var(--accent) !important; box-shadow: none !important;
+}
+.st-key-auth-topbar div.stButton > button:focus-visible {
+  outline: 2px solid var(--accent) !important; outline-offset: 2px !important;
+}
+
+/* ── Auth screen shell ── */
+.st-key-vulnex-auth {
+  max-width: 1060px; margin: 0 auto;
+  padding-top: clamp(0.4rem, 3.5vh, 2.2rem);
+}
+.st-key-auth-back { margin-bottom: 0.5rem; }
+.st-key-auth-back div.stButton > button {
+  width: auto !important; display: inline-flex !important;
+  background: transparent !important; color: var(--muted) !important;
+  border: none !important; box-shadow: none !important;
+  padding: 0.25rem 0.4rem !important; border-radius: var(--r-sm) !important;
+  font-size: 0.8125rem !important; font-weight: 500 !important;
+}
+.st-key-auth-back div.stButton > button:hover {
+  color: var(--accent) !important; background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ── The plate ── */
+.st-key-auth-plate {
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 24px 60px -32px rgba(20, 20, 19, 0.28);
+  animation: fade-in var(--t-slow) var(--ease) both;
+}
+.st-key-auth-plate [data-testid="stHorizontalBlock"] {
+  gap: 0 !important; align-items: stretch !important; flex-wrap: wrap;
+}
+.st-key-auth-plate [data-testid="stColumn"] { min-width: 0 !important; }
+/* dark bg on the PLATE's own left column only — nested rows (e.g. the tabs
+   columns inside the form side) must not inherit it */
+.st-key-auth-plate [data-testid="stColumn"]:first-child:not(.st-key-auth-form-side *) { background: var(--ink); }
+/* height chain so the dark panel fills the column no matter which side is taller */
+.st-key-auth-plate [data-testid="stColumn"]:first-child > div,
+.st-key-auth-plate [data-testid="stColumn"]:first-child > div > div,
+.st-key-auth-plate [data-testid="stColumn"]:first-child [data-testid="stVerticalBlock"],
+.st-key-auth-plate [data-testid="stColumn"]:first-child [data-testid="stVerticalBlock"] > .element-container,
+.st-key-auth-plate [data-testid="stColumn"]:first-child .stMarkdown,
+.st-key-auth-plate [data-testid="stColumn"]:first-child [data-testid="stMarkdownContainer"] { height: 100%; }
+
+/* ── Dark brand panel ── */
+.gate-panel {
+  height: 100%; min-height: 480px;
+  display: flex; flex-direction: column;
+  padding: 2.4rem 2.2rem 2rem;
+}
+.gate-brand { display: flex; align-items: center; gap: 0.6rem; }
+.gate-brand svg { width: 21px; height: 21px; color: var(--accent-bright); flex: none; }
+.gate-panel .gate-word {
+  font-family: var(--font-serif) !important; font-size: 1.05rem;
+  font-weight: 600; letter-spacing: -0.01em; color: #f5f0e8 !important;
+}
+.gate-panel .gate-word em { font-style: normal; color: var(--accent-bright) !important; }
+.gate-panel .gate-statement {
+  font-family: var(--font-serif) !important; font-weight: 600 !important;
+  font-size: clamp(1.5rem, 2.4vw, 1.95rem) !important; line-height: 1.32 !important;
+  letter-spacing: -0.01em !important; color: #f5f0e8 !important;
+  margin: 2.1rem 0 0.75rem !important; padding: 0 !important;
+  text-wrap: balance;
+}
+.gate-panel .gate-statement span,
+.gate-panel .gate-statement a { color: #f5f0e8 !important; }
+.gate-panel .gate-sub {
+  font-size: 0.875rem !important; line-height: 1.65 !important;
+  color: rgba(245, 240, 232, 0.68) !important;
+  max-width: 32ch; margin: 0 !important;
+}
+
+/* the console — reticle corners + sweep, the scanner made visible */
+.gate-console {
+  position: relative; margin-top: auto; padding: 1.05rem 1.15rem;
+  background: rgba(245, 240, 232, 0.045);
+  overflow: hidden;
+}
+.gate-sub + .gate-console { margin-top: 2rem; }   /* floor when panel is short */
+.gc-c {
+  position: absolute; width: 13px; height: 13px;
+  border: 0 solid var(--accent-bright); opacity: 0.9;
+}
+.gc-tl { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
+.gc-tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; }
+.gc-bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; }
+.gc-br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
+.gc-sweep {
+  position: absolute; left: 4px; right: 4px; top: 0; height: 1.5px;
+  background: linear-gradient(90deg, transparent, rgba(217, 117, 74, 0.8), transparent);
+  animation: gate-sweep 3.4s var(--ease) infinite;
+  pointer-events: none;
+}
+@keyframes gate-sweep {
+  0%   { transform: translateY(6px);   opacity: 0; }
+  12%  { opacity: 0.9; }
+  70%  { opacity: 0.35; }
+  100% { transform: translateY(128px); opacity: 0; }
+}
+.gc-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 1rem; padding: 0.32rem 0;
+}
+.gate-console .gc-k {
+  font-size: 0.7rem !important; letter-spacing: 0.06em;
+  color: rgba(245, 240, 232, 0.58) !important; flex: none;
+}
+.gate-console .gc-host {
+  font-family: var(--font-mono) !important; font-size: 0.82rem !important;
+  font-weight: 600; color: var(--accent-bright) !important;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 62%;
+}
+.gate-console .gc-v {
+  font-size: 0.8rem !important; color: rgba(245, 240, 232, 0.88) !important;
+  display: inline-flex; align-items: center;
+}
+.gc-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--accent-bright); margin-right: 0.45rem;
+  animation: gate-dot 2.2s ease-in-out infinite;
+}
+@keyframes gate-dot { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+/* the three vows — quiet, structural, edge metadata */
+.gate-panel .gate-vows {
+  display: flex; flex-wrap: wrap; gap: 0.55rem;
+  margin-top: 1.5rem; padding-top: 1.05rem;
+  border-top: 1px solid rgba(245, 240, 232, 0.14);
+  font-size: 0.72rem; letter-spacing: 0.04em;
+  color: rgba(245, 240, 232, 0.62) !important;
+}
+.gate-panel .gate-vows span { color: var(--accent-bright) !important; }
+
+/* ── Form side ── */
+.st-key-auth-form-side { padding: 2rem 2.2rem 1.7rem; }
+.st-key-auth-form-side [data-testid="stForm"] { border: none !important; padding: 0 !important; }
+
+/* underline tabs on a hairline track */
+.st-key-auth-tabs { border-bottom: 1px solid var(--border); margin-bottom: 1.45rem; }
+.st-key-auth-tabs [data-testid="stHorizontalBlock"] { gap: 0 !important; flex-wrap: nowrap !important; }
+.st-key-auth-tabs [data-testid="stColumn"] { min-width: 0 !important; flex: 1 1 0 !important; }
+.st-key-auth-form-side .st-key-auth-tabs div.stButton > button p { color: inherit !important; }
+.st-key-auth-form-side .st-key-auth-tabs div.stButton > button {
+  margin-top: 0 !important;
+  width: 100% !important; background: transparent !important;
+  color: var(--muted) !important; border: none !important;
+  border-radius: 0 !important; box-shadow: none !important;
+  padding: 0.5rem 0 0.68rem !important;
+  font-size: 0.9375rem !important; font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  transition: color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease) !important;
+}
+.st-key-auth-form-side .st-key-auth-tabs div.stButton > button:hover {
+  background: transparent !important; color: var(--ink) !important; box-shadow: none !important;
+}
+.st-key-auth-form-side .st-key-auth-tabs div.stButton > button[kind="primary"] {
+  background: transparent !important; border: none !important;
+  color: var(--ink) !important; font-weight: 600 !important;
+  box-shadow: inset 0 -2px 0 var(--accent) !important;
+}
+.st-key-auth-form-side .st-key-auth-tabs div.stButton > button[kind="primary"]:hover {
+  background: transparent !important;
+  box-shadow: inset 0 -2px 0 var(--accent) !important;
+}
+
+/* labels + inputs — friendlier than the global uppercase micro-label */
+.st-key-auth-form-side .stTextInput label,
+.st-key-auth-form-side label {
+  text-transform: none !important; letter-spacing: 0 !important;
+  font-size: 0.8125rem !important; font-weight: 500 !important; color: var(--ink-2) !important;
+}
+.st-key-auth-form-side div[data-baseweb="input"] > div { border-radius: var(--r-md) !important; }
+.st-key-auth-form-side div[data-baseweb="input"] input {
+  font-size: 0.95rem !important; padding: 0.15rem 0.1rem !important;
+}
+
+/* primary CTA — the app's dark-ink action, incl. the form submit variant */
+.st-key-auth-form-side div.stButton > button[kind="primary"],
+.st-key-auth-form-side div[data-testid="stFormSubmitButton"] > button {
+  width: 100% !important;
+  background: var(--ink) !important; color: var(--bg) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.95rem !important; font-weight: 600 !important;
+  border: none !important; border-radius: var(--r-md) !important;
+  margin-top: 0.45rem !important; padding: 0.68rem 1.5rem !important;
+  transition: background var(--t-fast) var(--ease), box-shadow var(--t-base) var(--ease) !important;
+}
+.st-key-auth-form-side div.stButton > button[kind="primary"]:hover,
+.st-key-auth-form-side div[data-testid="stFormSubmitButton"] > button:hover {
+  background: var(--ink-2) !important;
+  box-shadow: 0 6px 20px rgba(20, 20, 19, 0.16) !important;
+}
+.st-key-auth-form-side div[data-testid="stFormSubmitButton"] > button * { color: inherit !important; }
+.st-key-auth-form-side div[data-testid="stFormSubmitButton"] > button:focus-visible {
+  outline: 2px solid var(--accent) !important; outline-offset: 2px !important;
+}
+
+/* consent checkbox */
+.st-key-auth-form-side [data-testid="stCheckbox"] { margin-top: 0.25rem; }
+.st-key-auth-form-side [data-testid="stCheckbox"] p {
+  font-size: 0.85rem !important; color: var(--ink-2) !important;
+}
+
+/* quiet text-links: policy opener + view-switch action */
+.st-key-auth-policy { margin: -0.35rem 0 0.35rem; }
+.st-key-auth-policy div.stButton > button,
+.st-key-auth-switch-to_signup div.stButton > button,
+.st-key-auth-switch-to_login div.stButton > button {
+  width: auto !important; display: inline-flex !important;
+  background: transparent !important; color: var(--accent) !important;
+  border: none !important; box-shadow: none !important;
+  padding: 0.12rem 0.15rem !important; border-radius: var(--r-sm) !important;
+  font-size: 0.8125rem !important; font-weight: 600 !important;
+}
+.st-key-auth-policy div.stButton > button:hover,
+.st-key-auth-switch-to_signup div.stButton > button:hover,
+.st-key-auth-switch-to_login div.stButton > button:hover {
+  background: transparent !important; color: var(--accent-2) !important;
+  text-decoration: underline !important; text-underline-offset: 3px;
+  box-shadow: none !important;
+}
+
+/* "no account yet?" row — lead + action on one centered line */
+.st-key-auth-switch-to_signup, .st-key-auth-switch-to_login { margin-top: 0.9rem; }
+/* the keyed container IS the stVerticalBlock — lay lead + action on one line */
+.st-key-auth-switch-to_signup, .st-key-auth-switch-to_login {
+  flex-direction: row !important; justify-content: center !important;
+  align-items: baseline !important; gap: 0.4rem !important;
+}
+.st-key-auth-switch-to_signup .element-container,
+.st-key-auth-switch-to_login .element-container { width: auto !important; flex: none !important; }
+.auth-switch-lead { font-size: 0.8125rem; color: var(--muted); }
+[data-testid="stMarkdownContainer"] .auth-switch-lead { color: var(--muted) !important; }
+.st-key-auth-switch-to_signup div.stButton > button,
+.st-key-auth-switch-to_login div.stButton > button { font-size: 0.875rem !important; }
+
+/* ── Responsive ──
+   Streamlit stacks columns below its own mobile breakpoint; the plate then
+   reads dark band → form. Type steps down instead of overflowing. */
+@media (max-width: 900px) {
+  .gate-panel { padding: 2rem 1.7rem 1.7rem; min-height: 0; }
+  .st-key-auth-form-side { padding: 1.7rem 1.7rem 1.5rem; }
+  .gate-panel .gate-statement { font-size: 1.45rem !important; margin-top: 1.6rem !important; }
+}
+@media (max-width: 640px) {
+  .st-key-vulnex-auth { padding-top: 0.4rem; }
+  /* Streamlit no longer auto-stacks columns on small viewports — stack the
+     PLATE's own two panels; nested rows (the tabs) stay side-by-side. */
+  .st-key-auth-plate [data-testid="stHorizontalBlock"]:not(.st-key-auth-form-side *) {
+    flex-direction: column !important;
+  }
+  .st-key-auth-plate [data-testid="stColumn"]:not(.st-key-auth-form-side *) {
+    width: 100% !important; min-width: 100% !important; flex: 1 1 100% !important;
+  }
+  .gate-panel { padding: 1.6rem 1.4rem 1.4rem; }
+  .gate-panel .gate-statement { margin-top: 1.2rem !important; }
+  .gate-sub + .gate-console { margin-top: 1.4rem; }
+  .st-key-auth-form-side { padding: 1.5rem 1.4rem 1.3rem; }
+}
+
+/* ── PDPA policy modal — readable measure, calm rhythm ── */
+div[data-testid="stDialog"] div[role="dialog"]:has(.st-key-pdpa-body) {
+  width: min(620px, calc(100vw - 2rem)) !important;
+}
+.pdpa-lede { font-size: 0.95rem; color: var(--ink-2); line-height: 1.65; margin-bottom: 0.4rem; }
+[data-testid="stMarkdownContainer"] .pdpa-lede { color: var(--ink-2) !important; }
+.st-key-pdpa-body h3 {
+  font-size: 1.02rem !important; font-weight: 600 !important;
+  color: var(--ink) !important; margin: 1.3rem 0 0.45rem !important;
+  letter-spacing: -0.01em !important;
+}
+.st-key-pdpa-body p, .st-key-pdpa-body li {
+  font-size: 0.9375rem !important; line-height: 1.75 !important;
+}
+.st-key-privacy_close_btn div.stButton > button { margin-top: 0.9rem !important; font-weight: 600 !important; }

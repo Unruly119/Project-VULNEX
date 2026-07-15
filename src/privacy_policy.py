@@ -1,56 +1,43 @@
-# privacy_policy.py — Thai PDPA privacy notice for Project-VULNEX
+# privacy_policy.py — Privacy notice for Project-VULNEX (Thai, Apple-style voice)
 # ────────────────────────────────────────────────────────────────
-#   One authored, static Thai policy shown at signup. The user must tick
-#   "ยอมรับ" to create an account (req: consent-gated signup). It is opened in a
-#   modal (st.dialog) so the signup form fields stay filled while it is read —
-#   no re-typing after closing it.
+#   Shown at signup and openable any time from the auth screen. Consent is
+#   required to create an account; the modal (st.dialog) keeps the signup form
+#   filled while it's read. The copy is principle-led and reassuring rather than
+#   a clinical enumeration — calm, plain, and honest.
 #
 #   All copy is static (no user input), so no escaping is needed here.
 # ────────────────────────────────────────────────────────────────
 import streamlit as st
 
-# Bump this string (and supabase_client.PRIVACY_VERSION) together when the policy
-# text materially changes, so re-consent can be detected per user.
+# Bump this (and supabase_client.PRIVACY_VERSION) together on a material change.
 POLICY_VERSION = "2026-07-14"
 
+# The short line under the "read policy" affordance and at signup.
+POLICY_TAGLINE = "ข้อมูลของคุณเป็นของคุณ เราเก็บเท่าที่จำเป็นและดูแลมันอย่างดีที่สุด"
+
 POLICY_MD = """
-**Project-VULNEX — นโยบายความเป็นส่วนตัว (PDPA)**
-_ปรับปรุงล่าสุด: 14 กรกฎาคม 2569_
+เราออกแบบ VULNEX ด้วยความเชื่อง่าย ๆ ข้อเดียว — **ความเป็นส่วนตัวของคุณมาก่อน**
+เราเก็บข้อมูลเท่าที่จำเป็นต่อการให้บริการจริง ๆ และดูแลมันอย่างดีที่สุด
+ข้อมูลของคุณเป็นของคุณ ไม่ใช่สินค้าที่เรานำไปขาย
 
-VULNEX เป็นเครื่องมือตรวจสอบความปลอดภัยเว็บไซต์สถานศึกษาแบบ **ไม่รุกล้ำ (Passive)**
-เราเก็บข้อมูลเท่าที่จำเป็นเพื่อให้บริการและดูแลความปลอดภัยของระบบเท่านั้น
-โปรดอ่านนโยบายนี้ก่อนสมัครสมาชิก
+### สิ่งที่เราเก็บ และเพราะอะไร
+- **บัญชีของคุณ** — อีเมลที่ใช้เข้าสู่ระบบ และรหัสผ่านที่ถูกเข้ารหัสแบบทางเดียว
+  จนแม้แต่เราเองก็อ่านไม่ได้
+- **ประวัติการตรวจสอบ** — เว็บไซต์ที่คุณสแกนและผลลัพธ์ เก็บไว้ให้คุณย้อนกลับมาดูได้
+- **ข้อมูลการใช้งานพื้นฐาน** — เท่าที่ระบบต้องใช้เพื่อรักษาความปลอดภัยของบัญชี
+  และพัฒนาเครื่องมือให้ดีขึ้น ไม่มากไปกว่านั้น
 
-### 1. ข้อมูลที่เราเก็บ
-- **บัญชีผู้ใช้:** อีเมล และรหัสผ่าน (จัดเก็บเป็น *ค่าแฮชแบบทางเดียว* เท่านั้น — เราไม่เห็นและไม่เก็บรหัสผ่านจริงของคุณ)
-- **ประวัติการใช้งาน:** เวลาที่เข้าสู่ระบบ/ออกจากระบบ, IP address, ชนิดอุปกรณ์/เบราว์เซอร์/ระบบปฏิบัติการ (จาก User-Agent)
-- **ประวัติการสแกน:** URL ที่คุณตรวจสอบ, ผลการสแกน, คะแนน, ช่องโหว่ที่พบ, และเวลาที่ใช้
-- **การสร้างรายงาน:** จำนวนครั้งและเวลาที่ใช้สร้างไฟล์ PDF
+### สิ่งที่เราไม่ทำ
+เราไม่ขายข้อมูลของคุณ ไม่แลกเปลี่ยนเพื่อการโฆษณา และไม่เก็บรหัสผ่านเป็นข้อความธรรมดา
+การสแกนของเราเป็นแบบ **อ่านอย่างเดียว** — มองดูเว็บไซต์เหมือนผู้เข้าชมทั่วไป
+ไม่แตะต้อง ไม่เปลี่ยนแปลง และไม่รบกวนระบบของเป้าหมาย
 
-### 2. เราเก็บไปทำไม
-- ให้บริการระบบสมาชิกและแสดงผลการสแกนของคุณ
-- ดูแลความปลอดภัยของระบบ ตรวจจับการใช้งานผิดปกติ และป้องกันการโจมตี
-- ปรับปรุงคุณภาพและความเสถียรของเครื่องมือ
+### คุณคือคนควบคุม
+คุณขอดู แก้ไข หรือลบข้อมูลของคุณเมื่อไรก็ได้ และถอนความยินยอมได้ทุกเมื่อ
+เพียงติดต่อทีมงาน เราจะดำเนินการให้ตามสิทธิ์ของคุณภายใต้
+พระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล (PDPA)
 
-### 3. เราไม่ทำสิ่งเหล่านี้
-- ไม่ขาย ไม่แลกเปลี่ยน และไม่เปิดเผยข้อมูลของคุณให้บุคคลที่สามเพื่อการตลาด
-- ไม่เก็บรหัสผ่านเป็นข้อความธรรมดา
-- ไม่เจาะ ไม่โจมตี และไม่แก้ไขข้อมูลบนเว็บไซต์เป้าหมายที่คุณสแกน (สแกนแบบอ่านอย่างเดียว)
-
-### 4. ความปลอดภัยของข้อมูล
-ข้อมูลถูกจัดเก็บบนฐานข้อมูล Supabase (PostgreSQL) ที่เปิด Row Level Security เต็มรูปแบบ
-คีย์ที่เข้าถึงฐานข้อมูลได้อยู่ฝั่งเซิร์ฟเวอร์เท่านั้น ไม่ถูกส่งไปยังเบราว์เซอร์
-คุกกี้การเข้าสู่ระบบเก็บเพียง *โทเคนสุ่ม* ที่ฝั่งฐานข้อมูลบันทึกไว้เป็นค่าแฮชเท่านั้น
-
-### 5. สิทธิของคุณ (ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562)
-คุณมีสิทธิขอเข้าถึง แก้ไข ลบ หรือระงับการใช้ข้อมูลส่วนบุคคลของคุณได้
-รวมถึงสิทธิถอนความยินยอมเมื่อใดก็ได้ โดยติดต่อผู้ดูแลระบบ
-
-### 6. การเก็บรักษาและการติดต่อ
-เราเก็บข้อมูลไว้เท่าที่จำเป็นต่อการให้บริการ หากต้องการใช้สิทธิข้างต้นหรือมีข้อสงสัย
-กรุณาติดต่อผู้ดูแลระบบของโครงการ Project-VULNEX
-
-_การกดยอมรับถือว่าคุณได้อ่านและยินยอมให้เก็บและใช้ข้อมูลตามนโยบายนี้_
+_เมื่อกดยอมรับ ถือว่าคุณเข้าใจและยินยอมตามแนวทางนี้ — ขอบคุณที่ไว้วางใจให้เราดูแล_
 """
 
 
@@ -58,11 +45,17 @@ def render_policy_body() -> None:
     st.markdown(POLICY_MD)
 
 
-@st.dialog("นโยบายความเป็นส่วนตัว (PDPA)", width="large")
+# Default (small) dialog width as the base; index.css widens it to a 620px
+# reading measure — "large" spans ~90ch of Thai text, too long to read.
+@st.dialog("ความเป็นส่วนตัวของคุณ")
 def open_policy_dialog() -> None:
-    """Read-only policy modal. Closing it keeps the signup form intact (the
-    inputs are bound to session_state keys, so nothing is lost)."""
-    render_policy_body()
-    st.caption("อ่านจบแล้วปิดหน้าต่างนี้ แล้วติ๊ก “ยอมรับ” เพื่อสมัครสมาชิกได้เลย")
-    if st.button("ปิด", use_container_width=True, key="privacy_close_btn"):
-        st.rerun()
+    """Read-only policy modal. Closing it keeps the signup form intact."""
+    with st.container(key="pdpa-body"):
+        st.markdown(
+            '<div class="pdpa-lede">'
+            'ใช้เวลาสักครู่ทำความเข้าใจว่าเราดูแลข้อมูลของคุณอย่างไร'
+            '</div>',
+            unsafe_allow_html=True)
+        render_policy_body()
+        if st.button("เข้าใจแล้ว", use_container_width=True, key="privacy_close_btn"):
+            st.rerun()

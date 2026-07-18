@@ -16,3 +16,7 @@ playwright>=1.40.0
 # existing httpx dep — no supabase-py needed). This adds the browser-side login
 # cookie component used by src/auth.py.
 streamlit-cookies-controller>=0.0.4
+# ── RAG (คลังความรู้) ─────────────────────────────────────────────
+# Qdrant Cloud vector store + Gemini embeddings — ใช้โดย src/rag/
+# (คำถาม/ผลสแกน → ค้นคลังความรู้ → เติม prompt → Gemini ตอบ)
+qdrant-client>=1.12.0

@@ -170,7 +170,22 @@ def _cache_key(scan_data: dict) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
 
 
-def _ai_prompt(facts: Dict[str, dict]) -> str:
+def _kb_context(facts: Dict[str, dict]) -> str:
+    """RAG: ดึงความรู้อ้างอิงจาก Qdrant ตามปัญหาที่พบในทุกโมดูล (fail-soft → '')."""
+    probs: List[str] = []
+    for f in facts.values():
+        probs.extend(f["problems"][:2])
+    if not probs:
+        return ""
+    try:
+        from rag import format_context, retrieve
+        chunks = retrieve(" | ".join(probs)[:400], k=4)
+        return format_context(chunks, max_chars=2000)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _ai_prompt(facts: Dict[str, dict], kb_context: str = "") -> str:
     blocks = []
     for key, f in facts.items():
         prob = "; ".join(f["problems"]) or "ไม่พบปัญหา"
@@ -178,13 +193,20 @@ def _ai_prompt(facts: Dict[str, dict]) -> str:
         blocks.append(f"[{key}] {f['name']}\n- ปัญหาที่ตรวจพบ: {prob}\n- แนวทางแก้ที่แนะนำ: {fix}")
     data = "\n\n".join(blocks)
     header_fmt = "".join(f"[{k}] <สรุป>\n" for k in facts)
+    kb_block = ""
+    if kb_context:
+        kb_block = (
+            "\nข้อมูลอ้างอิงมาตรฐาน (เชื่อถือได้ — ใช้ประกอบคำอธิบายและวิธีแก้ให้ถูกต้อง):\n"
+            f"{kb_context}\n"
+        )
     return (
         "คุณเป็นผู้เชี่ยวชาญความปลอดภัยไซเบอร์ที่อธิบายให้ครูและเจ้าหน้าที่ไอทีของโรงเรียนเข้าใจง่าย "
         "โดยไม่ใช้ศัพท์เทคนิคเกินจำเป็น\n\n"
         "ด้านล่างคือผลการสแกนแต่ละหัวข้อพร้อมข้อเท็จจริงที่ตรวจพบ ให้เขียน 'สรุปสั้น 2-3 ประโยค' "
         "ต่อหนึ่งหัวข้อ อธิบายว่าพบปัญหาตรงไหนและควรแก้อย่างไร ด้วยภาษาไทยที่เป็นกันเองแต่ถูกต้อง "
         "หากหัวข้อใดไม่พบปัญหา ให้ชมสั้น ๆ ว่าทำได้ดี\n"
-        "กติกา: ห้ามแต่งข้อมูลเกินจากที่ให้ไว้ ห้ามใช้อีโมจิ ตอบเป็นภาษาไทยเท่านั้น\n\n"
+        "กติกา: ห้ามแต่งข้อมูลเกินจากที่ให้ไว้ ห้ามใช้อีโมจิ ตอบเป็นภาษาไทยเท่านั้น\n"
+        f"{kb_block}\n"
         "ตอบตามรูปแบบนี้ (ขึ้นต้นแต่ละหัวข้อด้วย [key] ตามที่กำหนด ห้ามเปลี่ยน key):\n"
         f"{header_fmt}\n"
         f"ข้อมูลผลสแกน:\n{data}"
@@ -230,7 +252,7 @@ def build_module_insights(scan_data: dict, server_data: dict | None = None) -> D
         try:
             from ai_engine import generate_smart
             txt, _prov = generate_smart(
-                _ai_prompt(facts),
+                _ai_prompt(facts, _kb_context(facts)),
                 {"temperature": 0.3, "max_output_tokens": 1024},
             )
             parsed = _parse_ai(txt, set(facts))

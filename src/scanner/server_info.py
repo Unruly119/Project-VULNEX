@@ -26,6 +26,37 @@ VULN_DB = {
         {"range": (1,1,0,  1,25,3),  "cve": "CVE-2024-24990", "severity": "HIGH",
          "desc": "HTTP/3 use-after-free in QUIC connection",
          "fix": "อัปเกรดเป็น nginx 1.25.4+"},
+        {"range": (1,25,0, 1,26,0),  "cve": "CVE-2024-32760", "severity": "MEDIUM",
+         "desc": "HTTP/3 buffer overwrite ใน QUIC stack",
+         "fix": "อัปเกรดเป็น nginx 1.26.1+ หรือ 1.27.0+"},
+        # NB: ช่วงต่อไปนี้ปิดที่ "เวอร์ชัน stable สุดท้ายที่ยังมีช่องโหว่" (เช่น 1.30.x)
+        # เพราะ nginx มีสองสาย (stable เลขคู่ / mainline เลขคี่) แต่ VULN_DB เก็บช่วงเดียว
+        # การปิดที่สาย stable จับ 1.18–1.29.x (ที่โรงเรียนใช้จริง) ได้ครบ โดยไม่ false-positive
+        # กับ stable ล่าสุดที่แพตช์แล้ว — ยอมพลาดเฉพาะ mainline 1.31.x ที่แทบไม่มีใครรัน
+        {"range": (1,5,13, 1,26,1),  "cve": "CVE-2024-7347",  "severity": "LOW",
+         "desc": "Buffer overread ใน ngx_http_mp4_module (ไฟล์ mp4 ที่สร้างพิเศษ)",
+         "fix": "อัปเกรดเป็น nginx 1.26.2+ หรือ 1.27.1+"},
+        {"range": (1,11,4, 1,26,2),  "cve": "CVE-2025-23419", "severity": "MEDIUM",
+         "desc": "TLS session resumption ข้ามการตรวจ client certificate ระหว่าง virtual servers",
+         "fix": "อัปเกรดเป็น nginx 1.26.3+ หรือ 1.27.4+"},
+        {"range": (0,1,17, 1,30,1),  "cve": "CVE-2026-9256",  "severity": "MEDIUM",
+         "desc": "Buffer overflow ใน ngx_http_rewrite_module",
+         "fix": "อัปเกรดเป็น nginx 1.30.2+ หรือ 1.31.1+"},
+        {"range": (1,13,10, 1,30,2), "cve": "CVE-2026-42055", "severity": "MEDIUM",
+         "desc": "Buffer overflow ใน ngx_http_proxy_v2_module / ngx_http_grpc_module",
+         "fix": "อัปเกรดเป็น nginx 1.30.3+ หรือ 1.31.2+"},
+        {"range": (1,31,0, 1,31,1),  "cve": "CVE-2026-42530", "severity": "HIGH",
+         "desc": "HTTP/3 use-after-free (mainline)",
+         "fix": "อัปเกรดเป็น nginx 1.31.2+"},
+        {"range": (0,9,6,  1,30,3),  "cve": "CVE-2026-42533", "severity": "HIGH",
+         "desc": "Heap buffer overflow เมื่อใช้ map ร่วมกับ regex (แก้ ก.ค. 2026)",
+         "fix": "อัปเกรดเป็น nginx 1.30.4+ หรือ 1.31.3+ ทันที"},
+        {"range": (1,15,8, 1,30,3),  "cve": "CVE-2026-60005", "severity": "MEDIUM",
+         "desc": "Memory disclosure ผ่าน ngx_http_slice_module (unnamed regex captures)",
+         "fix": "อัปเกรดเป็น nginx 1.30.4+ หรือ 1.31.3+"},
+        {"range": (0,8,11, 1,30,3),  "cve": "CVE-2026-56434", "severity": "MEDIUM",
+         "desc": "Use-after-free ใน ngx_http_ssi_module จาก backend response ที่สร้างพิเศษ",
+         "fix": "อัปเกรดเป็น nginx 1.30.4+ หรือ 1.31.3+"},
     ],
     "apache": [
         {"range": (2,4,0,  2,4,49),  "cve": "CVE-2021-41773", "severity": "CRITICAL",
@@ -43,6 +74,15 @@ VULN_DB = {
         {"range": (2,4,0,  2,4,59),  "cve": "CVE-2024-38476", "severity": "HIGH",
          "desc": "SSRF via mod_rewrite with backend UDS",
          "fix": "อัปเกรดเป็น Apache 2.4.60+"},
+        {"range": (2,4,35, 2,4,63),  "cve": "CVE-2025-23048", "severity": "HIGH",
+         "desc": "mod_ssl TLS session resumption — ข้าม access control ระหว่าง virtual hosts",
+         "fix": "อัปเกรดเป็น Apache 2.4.64+"},
+        {"range": (2,4,17, 2,4,63),  "cve": "CVE-2025-53020", "severity": "MEDIUM",
+         "desc": "HTTP/2 memory exhaustion DoS (late release of memory)",
+         "fix": "อัปเกรดเป็น Apache 2.4.64+"},
+        {"range": (2,4,17, 2,4,66),  "cve": "CVE-2026-23918", "severity": "CRITICAL",
+         "desc": "HTTP/2 double free → DoS และอาจถึง RCE (CVSS 8.8, แก้ พ.ค. 2026)",
+         "fix": "อัปเกรดเป็น Apache 2.4.67+ ทันที"},
     ],
     "iis": [
         {"range": (7,0,0, 10,0,17763), "cve": "CVE-2022-21907", "severity": "CRITICAL",
@@ -155,6 +195,8 @@ def check_server(url: str) -> dict:
             "CVE-2023-44487",  # nginx HTTP/2 Rapid Reset
             "CVE-2024-27316",  # Apache HTTP/2 CONTINUATION flood
             "CVE-2019-0190",   # Apache DoS via SSL bug
+            "CVE-2025-53020",  # Apache HTTP/2 memory exhaustion
+            "CVE-2026-23918",  # Apache HTTP/2 double free (DoS/RCE)
         }
         for vuln in result["vulnerabilities"]:
             if vuln["cve"] in _DOS_CVE_IDS:

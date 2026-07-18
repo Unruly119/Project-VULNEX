@@ -15,3 +15,7 @@ Claude.md
 # Generated security report PDFs (build artifacts)
 VULNEX_Report_*.pdf
 logs/
+# RAG knowledge SOURCE — the live data lives on Qdrant Cloud (ingested via
+# scripts/ingest_knowledge.py). Keep these .md locally as the re-ingest source,
+# but the repo/runtime never needs them: the app queries Qdrant, not these files.
+knowledge/

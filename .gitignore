@@ -19,3 +19,5 @@ logs/
 # scripts/ingest_knowledge.py). Keep these .md locally as the re-ingest source,
 # but the repo/runtime never needs them: the app queries Qdrant, not these files.
 knowledge/
+# Playwright MCP scratch (snapshots, console logs, E2E screenshots)
+.playwright-mcp/

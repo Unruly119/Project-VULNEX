@@ -118,6 +118,9 @@
   /* Hamburger icon (three round-capped lines) — used as a CSS mask on the
      sidebar control so it renders crisp and undistorted at any size. */
   --hamburger-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='3.5' y1='6' x2='20.5' y2='6'/%3E%3Cline x1='3.5' y1='12' x2='20.5' y2='12'/%3E%3Cline x1='3.5' y1='18' x2='20.5' y2='18'/%3E%3C/svg%3E");
+
+  /* Exit-arrow glyph for the logout button (mask → tinted by currentColor) */
+  --icon-logout: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'/%3E%3Cpolyline points='16 17 21 12 16 7'/%3E%3Cline x1='21' y1='12' x2='9' y2='12'/%3E%3C/svg%3E");
 }
 
 /* ── Motion safety ─────────────────────────────────────────────── */
@@ -1564,34 +1567,89 @@ div[data-testid="stDownloadButton"] > button:hover { box-shadow: 0 6px 22px var(
 /* ── Account / sign-in top bar (above the hero) ── */
 .st-key-auth-topbar { margin: -0.5rem 0 0.25rem; }
 .st-key-auth-topbar [data-testid="stHorizontalBlock"] { align-items: center; }
-.auth-whoami {
-  display: inline-flex; align-items: center; gap: 0.5rem;
-  font-family: var(--font-sans); font-size: 0.8125rem; color: var(--muted);
+
+/* Signed-in account pill: gradient avatar (initial) + email + status.
+   A quiet card that reads as "you are here", lifts a touch on hover. */
+.acct-pill {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  padding: 0.32rem 0.8rem 0.32rem 0.4rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  box-shadow: 0 1px 2px rgba(20,20,19,0.04);
+  animation: acct-in var(--t-base) var(--ease) both;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-base) var(--ease);
 }
-.auth-whoami .auth-dot {
-  width: 7px; height: 7px; border-radius: 50%; flex: none;
-  background: var(--c-low); box-shadow: 0 0 0 3px var(--c-low-bg);
+.acct-pill:hover {
+  border-color: var(--border-hi);
+  box-shadow: 0 4px 14px -6px rgba(20,20,19,0.18);
 }
-[data-testid="stMarkdownContainer"] .auth-whoami .auth-whoami-txt { color: var(--ink-2) !important; }
+.acct-avatar {
+  position: relative; flex: none;
+  width: 30px; height: 30px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-sans) !important;
+  font-size: 0.8rem !important; font-weight: 700 !important;
+  color: #fff !important;
+  background: linear-gradient(140deg, var(--accent-bright), var(--accent-2));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 2px 6px -1px var(--accent-glow);
+}
+.acct-avatar .acct-presence {
+  position: absolute; right: -1px; bottom: -1px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--c-low); border: 2px solid var(--surface);
+  animation: acct-pulse 2.4s ease-in-out infinite;
+}
+.acct-meta { display: inline-flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+[data-testid="stMarkdownContainer"] .acct-meta .acct-email {
+  font-family: var(--font-sans) !important;
+  font-size: 0.8125rem !important; font-weight: 600 !important;
+  color: var(--ink) !important;
+  max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+[data-testid="stMarkdownContainer"] .acct-meta .acct-status {
+  font-size: 0.64rem !important; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--c-low) !important; font-weight: 600 !important;
+}
+@keyframes acct-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes acct-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(45,106,79,0.45); }
+  50%      { box-shadow: 0 0 0 4px rgba(45,106,79,0); }
+}
+
+/* Sign-in / logout controls */
 .st-key-auth-topbar div.stButton > button {
   width: auto !important; min-width: 0 !important;
-  display: inline-flex !important; margin-left: auto !important;
+  display: inline-flex !important; align-items: center !important; gap: 0.4rem !important;
+  margin-left: auto !important;
   background: transparent !important; color: var(--ink-2) !important;
   border: 1px solid var(--border-hi) !important; box-shadow: none !important;
   border-radius: var(--r-pill) !important;
-  padding: 0.3rem 0.95rem !important;
-  font-size: 0.8125rem !important; font-weight: 500 !important;
+  padding: 0.34rem 0.95rem !important;
+  font-size: 0.8125rem !important; font-weight: 600 !important;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease) !important;
 }
+/* leading exit-arrow glyph on the logout button (CSS mask → crisp, theme-tinted) */
+.st-key-logout_btn div.stButton > button::before {
+  content: ""; width: 15px; height: 15px; flex: none;
+  background: currentColor;
+  -webkit-mask: var(--icon-logout) center / contain no-repeat;
+          mask: var(--icon-logout) center / contain no-repeat;
+  transition: transform var(--t-base) var(--ease);
+}
+.st-key-logout_btn div.stButton > button:hover::before { transform: translateX(2px); }
 .st-key-signin_top div.stButton > button {
   color: var(--accent) !important; border-color: var(--accent-glow) !important;
 }
 .st-key-logout_btn div.stButton > button:hover {
   background: var(--accent-dim) !important; color: var(--accent-2) !important;
   border-color: var(--accent) !important; box-shadow: none !important;
+  transform: translateY(-1px) !important;
 }
 .st-key-signin_top div.stButton > button:hover {
   background: var(--accent) !important; color: #fff !important;
-  border-color: var(--accent) !important; box-shadow: none !important;
+  border-color: var(--accent) !important; box-shadow: 0 4px 14px -4px var(--accent-glow) !important;
+  transform: translateY(-1px) !important;
 }
 .st-key-auth-topbar div.stButton > button:focus-visible {
   outline: 2px solid var(--accent) !important; outline-offset: 2px !important;
@@ -1615,22 +1673,64 @@ div[data-testid="stDownloadButton"] > button:hover { box-shadow: 0 6px 22px var(
   box-shadow: none !important;
 }
 
-/* ── The plate ── */
-.st-key-auth-plate {
-  border: 1px solid var(--border-hi);
-  border-radius: var(--r-xl);
-  overflow: hidden;
-  background: var(--surface);
-  box-shadow: 0 24px 60px -32px rgba(20, 20, 19, 0.28);
-  animation: fade-in var(--t-slow) var(--ease) both;
+/* ── Ambient aura — soft coloured light behind the glass card. Without
+   something coloured behind it, backdrop-filter has nothing to refract, so
+   these blurred orbs are what make the frosted glass read as glass. ── */
+.st-key-vulnex-auth { position: relative; }
+.st-key-vulnex-auth::before {
+  content: ""; position: absolute; z-index: 0;
+  inset: -12% -8% -18%;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 44% at 18% 22%, rgba(217, 117, 74, 0.42), transparent 70%),
+    radial-gradient(34% 40% at 82% 30%, rgba(196, 98, 45, 0.30), transparent 72%),
+    radial-gradient(46% 50% at 68% 88%, rgba(146, 112, 10, 0.20), transparent 70%),
+    radial-gradient(40% 46% at 30% 92%, rgba(45, 106, 79, 0.16), transparent 72%);
+  filter: blur(46px) saturate(1.15);
+  opacity: 0.9;
+  animation: aura-drift 18s ease-in-out infinite alternate;
 }
+@keyframes aura-drift {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+  to   { transform: translate3d(2%, 1.5%, 0) scale(1.06); }
+}
+.st-key-auth-back { position: relative; z-index: 2; }
+
+/* ── The plate — a frosted-glass card floating over the aura ── */
+.st-key-auth-plate {
+  position: relative; z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(250, 248, 244, 0.55);
+  -webkit-backdrop-filter: blur(26px) saturate(1.5);
+          backdrop-filter: blur(26px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 2px 8px rgba(20, 20, 19, 0.06),
+    0 20px 44px -14px rgba(20, 20, 19, 0.22),
+    0 48px 90px -34px rgba(20, 20, 19, 0.42);
+  animation: glass-rise 0.55s var(--ease) both;
+}
+.st-key-auth-plate > [data-testid="stVerticalBlock"] { gap: 0 !important; }
 .st-key-auth-plate [data-testid="stHorizontalBlock"] {
   gap: 0 !important; align-items: stretch !important; flex-wrap: wrap;
 }
+@keyframes glass-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.975); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-key-vulnex-auth::before { animation: none; }
+}
 .st-key-auth-plate [data-testid="stColumn"] { min-width: 0 !important; }
-/* dark bg on the PLATE's own left column only — nested rows (e.g. the tabs
-   columns inside the form side) must not inherit it */
-.st-key-auth-plate [data-testid="stColumn"]:first-child:not(.st-key-auth-form-side *) { background: var(--ink); }
+/* dark glass on the PLATE's own left column only — a darker frosted region so
+   the light brand text keeps its contrast, while still reading as one glass card
+   (nested rows, e.g. the tabs inside the form side, must not inherit it) */
+.st-key-auth-plate [data-testid="stColumn"]:first-child:not(.st-key-auth-form-side *) {
+  background: linear-gradient(155deg, rgba(24, 23, 21, 0.86), rgba(20, 20, 19, 0.78));
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06);
+}
 /* height chain so the dark panel fills the column no matter which side is taller */
 .st-key-auth-plate [data-testid="stColumn"]:first-child > div,
 .st-key-auth-plate [data-testid="stColumn"]:first-child > div > div,
@@ -1682,18 +1782,6 @@ div[data-testid="stDownloadButton"] > button:hover { box-shadow: 0 6px 22px var(
 .gc-tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; }
 .gc-bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; }
 .gc-br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
-.gc-sweep {
-  position: absolute; left: 4px; right: 4px; top: 0; height: 1.5px;
-  background: linear-gradient(90deg, transparent, rgba(217, 117, 74, 0.8), transparent);
-  animation: gate-sweep 3.4s var(--ease) infinite;
-  pointer-events: none;
-}
-@keyframes gate-sweep {
-  0%   { transform: translateY(6px);   opacity: 0; }
-  12%  { opacity: 0.9; }
-  70%  { opacity: 0.35; }
-  100% { transform: translateY(128px); opacity: 0; }
-}
 .gc-row {
   display: flex; justify-content: space-between; align-items: baseline;
   gap: 1rem; padding: 0.32rem 0;
@@ -1712,11 +1800,17 @@ div[data-testid="stDownloadButton"] > button:hover { box-shadow: 0 6px 22px var(
   display: inline-flex; align-items: center;
 }
 .gc-dot {
-  width: 6px; height: 6px; border-radius: 50%; flex: none;
-  background: var(--accent-bright); margin-right: 0.45rem;
-  animation: gate-dot 2.2s ease-in-out infinite;
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--accent-bright); margin-right: 0.5rem;
+  box-shadow: 0 0 0 0 rgba(217, 117, 74, 0.55);
+  animation: gate-dot 2.8s ease-in-out infinite;
 }
-@keyframes gate-dot { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+/* steady dot + a soft expanding halo — a calm "live" pulse, no flicker */
+@keyframes gate-dot {
+  0%   { box-shadow: 0 0 0 0 rgba(217, 117, 74, 0.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(217, 117, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(217, 117, 74, 0); }
+}
 
 /* the three vows — quiet, structural, edge metadata */
 .gate-panel .gate-vows {

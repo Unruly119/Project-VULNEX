@@ -45,6 +45,11 @@ _SHIELD = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
            '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
            '<path d="m9 12 2 2 4-4"/></svg>')
 
+_LOCK = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+         'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+         '<rect x="4" y="11" width="16" height="10" rx="2"/>'
+         '<path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>')
+
 
 # ── request / client metadata ────────────────────────────────────
 def _headers() -> dict:
@@ -200,6 +205,29 @@ def request_login(pending_url: str | None = None) -> None:
     st.rerun()
 
 
+def purge_stale_auth() -> None:
+    """Evict any auth-screen DOM the wall left behind.
+
+    render_auth_screen builds keyed containers (`st-key-vulnex-auth`, the back
+    button, …). Streamlit does not always prune a keyed container the run after it
+    stops being emitted, so once the wall drops the dead login plate can linger
+    *below* the scan page — a ghost you only meet when you scroll. This renders a
+    zero-height component whose script removes those orphaned nodes from the parent
+    document. It is safe: show_auth is False on every post-login run, so Streamlit
+    never re-emits these keys — nothing living is removed.
+    """
+    import streamlit.components.v1 as components
+    components.html(
+        "<script>"
+        "const d = window.parent.document;"
+        "d.querySelectorAll("
+        "  '.st-key-vulnex-auth, .st-key-auth-back, .st-key-auth-plate'"
+        ").forEach(n => { const c = n.closest('.stElementContainer, .element-container') || n; c.remove(); });"
+        "</script>",
+        height=0,
+    )
+
+
 def scroll_top() -> None:
     """Reset the scroll position of Streamlit's main container.
 
@@ -230,10 +258,17 @@ def render_top_bar(controller: CookieController, user: dict | None) -> None:
         left, right = st.columns([1, 0.34], vertical_alignment="center")
         with left:
             if user:
-                email = _html.escape(str(user.get("gmail", "")))
+                raw_email = str(user.get("gmail", "")).strip()
+                email = _html.escape(raw_email)
+                initial = _html.escape((raw_email[:1] or "?").upper())
                 st.markdown(
-                    f'<div class="auth-whoami"><span class="auth-dot"></span>'
-                    f'<span class="auth-whoami-txt">{email}</span></div>',
+                    f'<div class="acct-pill">'
+                    f'<span class="acct-avatar">{initial}'
+                    f'<i class="acct-presence"></i></span>'
+                    f'<span class="acct-meta">'
+                    f'<span class="acct-email">{email}</span>'
+                    f'<span class="acct-status">เข้าสู่ระบบแล้ว</span>'
+                    f'</span></div>',
                     unsafe_allow_html=True)
         with right:
             if user:
@@ -296,7 +331,6 @@ def _gate_panel_html(pending: str | None) -> str:
   <div class="gate-console">
     <i class="gc-c gc-tl"></i><i class="gc-c gc-tr"></i>
     <i class="gc-c gc-bl"></i><i class="gc-c gc-br"></i>
-    <span class="gc-sweep"></span>
     <div class="gc-row"><span class="gc-k">เป้าหมาย</span><span class="gc-host">{target}</span></div>
     <div class="gc-row"><span class="gc-k">โหมด</span><span class="gc-v">Passive · อ่านอย่างเดียว</span></div>
     <div class="gc-row"><span class="gc-k">สถานะ</span><span class="gc-v"><i class="gc-dot"></i>{status}</span></div>
@@ -321,6 +355,16 @@ def _tabs(view: str) -> None:
 def _finish(controller: CookieController, user: dict, event: str) -> None:
     _establish_session(controller, user, event)
     st.session_state["show_auth"] = False          # pending_scan_url stays → auto-scan
+    # Arm the post-login DOM cleanup for the next few runs (purge_stale_auth) so the
+    # dead login plate can't linger under the scan page — see purge_stale_auth().
+    st.session_state["auth_cleanup_runs"] = 3
+    # If a scan was waiting behind the wall, arm the TWO-PHASE auto-scan (consumed in
+    # app.py). Streamlit only prunes the auth screen's keyed containers when the
+    # current run finishes; running the multi-second scan on this same run would
+    # freeze the dead login plate on screen for the whole scan. The flag defers the
+    # scan to a fresh run whose only job first is to flush that stale plate.
+    if st.session_state.get("pending_scan_url"):
+        st.session_state["autoscan_pending"] = True
     st.rerun()
 
 

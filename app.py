@@ -101,6 +101,14 @@ if st.session_state.get("show_auth") and _auth_user is None:
     render_footer()
     st.stop()
 
+# Just came through the wall: sweep away any auth-screen DOM Streamlit left behind
+# for the next few runs (keyed containers can outlive their last render → a dead
+# login plate under the scan page). Harmless once there's nothing to remove.
+_cleanup_runs = st.session_state.get("auth_cleanup_runs", 0)
+if _cleanup_runs > 0 and _auth_user is not None:
+    auth.purge_stale_auth()
+    st.session_state["auth_cleanup_runs"] = _cleanup_runs - 1
+
 # ── Import scanning / AI modules ─────────────────────────────────
 # Only is_safe_host (the SSRF guard used by normalise_url) is imported up front:
 # it's pure-stdlib and instant. The heavy modules are deferred — scanner pulls in
@@ -631,10 +639,19 @@ if scan_btn:
         else:
             scan_target = clean_url
 if scan_target is None and _auth_user is not None:
-    _pending = st.session_state.pop("pending_scan_url", None)
-    if _pending:
-        scan_target = _pending
+    # Two-phase post-login auto-scan. Streamlit only tears down the auth screen's
+    # keyed containers when a run FINISHES, so scanning on the first post-login run
+    # would leave the dead login plate frozen on screen for the whole scan.
+    #   phase 1 (autoscan_pending): this run has already painted the clean scan page
+    #            above — finishing it prunes the stale plate. We just flip to phase 2
+    #            and rerun; no blocking work touches this run.
+    #   phase 2 (autoscan_go): a pristine canvas — run the scan with its skeleton.
+    if st.session_state.pop("autoscan_go", False):
+        scan_target = st.session_state.pop("pending_scan_url", None)
         auth.scroll_top()   # fresh page after login — start the scan from the top
+    elif st.session_state.pop("autoscan_pending", False):
+        st.session_state["autoscan_go"] = True
+        st.rerun()
 
 if scan_target:
     clean_url, url_error = scan_target, None

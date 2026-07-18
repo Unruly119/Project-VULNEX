@@ -14,3 +14,4 @@ Claude.md
 .cursor
 # Generated security report PDFs (build artifacts)
 VULNEX_Report_*.pdf
+logs/

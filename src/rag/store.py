@@ -17,6 +17,10 @@ import os
 COLLECTION = "vulnex_knowledge"
 VECTOR_DIM = 768
 
+# แยก collection สำหรับ "ตาราง CVE แบบมีโครงสร้าง" ที่ scanner ใช้จับคู่ช่วงเวอร์ชัน
+# (ไม่ใช่การค้นเชิงความหมาย จึงใช้เวกเตอร์จิ๋ว size=1 แค่ให้ Qdrant ยอมรับ point)
+CVE_COLLECTION = "vulnex_cve"
+
 
 def _env_ci(*names: str) -> str:
     for name in names:
@@ -155,12 +159,96 @@ def search(query_vector: list[float], limit: int = 5,
     return out
 
 
-def count() -> int:
+def count(collection: str | None = None) -> int:
     """จำนวนจุดใน collection (0 ถ้าไม่มี/เชื่อมต่อไม่ได้)."""
     client = get_client()
     if client is None:
         return 0
     try:
-        return int(client.count(COLLECTION, exact=True).count)
+        return int(client.count(collection or COLLECTION, exact=True).count)
     except Exception:  # noqa: BLE001
         return 0
+
+
+# ─────────────────────────────────────────────────────────────────
+# CVE table (structured, for the scanner) — collection 'vulnex_cve'
+# ─────────────────────────────────────────────────────────────────
+
+def ensure_cve_collection(recreate: bool = False) -> bool:
+    """ทำให้มี collection 'vulnex_cve' + keyword index บน server_type. คืน True ถ้าพร้อม."""
+    client = get_client()
+    if client is None:
+        return False
+    from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
+
+    try:
+        exists = client.collection_exists(CVE_COLLECTION)
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        if exists and recreate:
+            client.delete_collection(CVE_COLLECTION)
+            exists = False
+        if not exists:
+            # เวกเตอร์จิ๋ว size=1 — เราใช้ scroll+filter ไม่ใช่ semantic search
+            client.create_collection(
+                collection_name=CVE_COLLECTION,
+                vectors_config=VectorParams(size=1, distance=Distance.COSINE),
+            )
+        try:
+            client.create_payload_index(
+                collection_name=CVE_COLLECTION,
+                field_name="server_type",
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
+        except Exception:  # noqa: BLE001 — มี index แล้ว
+            pass
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def upsert_cve_entries(points: list[dict]) -> int:
+    """เพิ่ม/อัปเดตรายการ CVE — points = [{'id','payload'}] (vector ถูกใส่ให้เป็น [0.0])."""
+    client = get_client()
+    if client is None or not points:
+        return 0
+    from qdrant_client.models import PointStruct
+
+    structs = [
+        PointStruct(id=p["id"], vector=[0.0], payload=p["payload"])
+        for p in points
+    ]
+    client.upsert(collection_name=CVE_COLLECTION, points=structs, wait=True)
+    return len(structs)
+
+
+def load_cve_entries(server_type: str | None = None) -> list[dict]:
+    """ดึงรายการ CVE ทั้งหมด (หรือเฉพาะ server_type) จาก Qdrant. คืน [] ถ้าไม่พร้อม."""
+    client = get_client()
+    if client is None:
+        return []
+    scroll_filter = None
+    if server_type:
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+        scroll_filter = Filter(
+            must=[FieldCondition(key="server_type", match=MatchValue(value=server_type))]
+        )
+    out: list[dict] = []
+    next_off = None
+    try:
+        while True:
+            pts, next_off = client.scroll(
+                collection_name=CVE_COLLECTION,
+                scroll_filter=scroll_filter,
+                limit=256,
+                offset=next_off,
+                with_payload=True,
+                with_vectors=False,
+            )
+            out.extend(dict(p.payload or {}) for p in pts)
+            if next_off is None:
+                break
+    except Exception:  # noqa: BLE001 — ไม่มี collection/เชื่อมต่อไม่ได้ → คืนว่าง
+        return []
+    return out

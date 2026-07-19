@@ -919,13 +919,21 @@ if st.session_state.get("scanned"):
         dos_cell  = (f'<span class="col-bad">{_ico_alert} YES — {dos_detail_safe}</span>'
                      if dos_risk else f'<span class="col-good">{_ico_ok} ไม่มีความเสี่ยง</span>')
 
+        # ส่วนประกอบที่ตรวจเจอ (เช่น web server + OpenSSL + PHP) — แสดงเมื่อเจอมากกว่าตัวเดียว
+        components = [str(c) for c in (server_data.get("components") or [])]
+        comps_row = ""
+        if len(components) > 1:
+            comps_safe = _esc(", ".join(components))
+            comps_row = (f'  <tr><td>ส่วนประกอบที่ตรวจเจอ</td>'
+                         f'<td><span class="col-info">{comps_safe}</span></td></tr>\n')
+
         st.markdown(f"""<div class="sec-card">
 <div class="sec-card-title"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/></svg> Web Server Detection</div>
 <table class="info-table">
   <tr><td>Server Header</td>  <td><code>{srv_raw_safe}</code></td></tr>
   <tr><td>Server Type</td>    <td><span class="col-info server-type-val">{stype_safe}</span></td></tr>
   <tr><td>Version</td>        <td>{ver_cell}</td></tr>
-  <tr><td>HTTP Version</td>   <td>{http_ver_safe}</td></tr>
+{comps_row}  <tr><td>HTTP Version</td>   <td>{http_ver_safe}</td></tr>
   <tr><td>HTTP/2 DoS Risk</td><td>{dos_cell}</td></tr>
 </table>
 </div>""", unsafe_allow_html=True)

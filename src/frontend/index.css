@@ -1964,3 +1964,217 @@ div[data-testid="stDialog"] div[role="dialog"]:has(.st-key-pdpa-body) {
   font-size: 0.9375rem !important; line-height: 1.75 !important;
 }
 .st-key-privacy_close_btn div.stButton > button { margin-top: 0.9rem !important; font-weight: 600 !important; }
+
+/* ════════════════════════════════════════════════════════════════
+   PAGE 3 · /dashboard — real-time scan operations (hidden page)
+   Product register: same parchment/terracotta system, denser rhythm.
+   All classes are db-* scoped; panels are keyed st.containers
+   ([class*="st-key-db_panel_"]) so charts + heads share one plate.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Header: title left, live status right ── */
+.db-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+  margin: 0.5rem 0 1.5rem;
+  animation: fade-up var(--t-slow) var(--ease) both;
+}
+/* .db-head prefix out-specifies Streamlit's own markdown h1 sizing */
+.db-head .db-title {
+  font-family: var(--font-serif);
+  font-size: 1.9rem !important; font-weight: 600; color: var(--ink);
+  letter-spacing: -0.02em; line-height: 1.15;
+  margin: 0 0 0.3rem; padding: 0 !important;
+  text-wrap: balance;
+}
+.db-title [data-testid="stHeaderActionElements"] { display: none; }
+.db-sub { font-size: 0.875rem; color: var(--muted); margin: 0; }
+.db-live {
+  display: inline-flex; align-items: center; gap: 0.55rem;
+  background: var(--surface-hi); border: 1px solid var(--border);
+  border-radius: var(--r-pill); padding: 0.42rem 0.95rem;
+  font-size: 0.75rem; font-weight: 600; color: var(--ink-2);
+  white-space: nowrap;
+}
+.db-live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--c-low); flex: none;
+  animation: db-live-pulse 2.2s var(--ease) infinite;
+}
+.db-live-dot.is-off { background: var(--c-crit); animation: none; }
+.db-live-time { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+@keyframes db-live-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(45, 106, 79, 0.35); }
+  70%  { box-shadow: 0 0 0 7px rgba(45, 106, 79, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(45, 106, 79, 0); }
+}
+
+/* ── Stat band: one plate, hairline-separated cells (no card grid) ── */
+.db-stats {
+  display: grid; grid-template-columns: repeat(6, 1fr);
+  background: var(--surface-hi); border: 1px solid var(--border);
+  border-radius: var(--r-lg); overflow: hidden;
+  margin-bottom: 1.25rem;
+  animation: fade-up var(--t-slow) var(--ease) both;
+}
+.db-stat { padding: 1.05rem 1.3rem 0.95rem; min-width: 0; }
+.db-stat + .db-stat { border-left: 1px solid var(--border); }
+.db-stat-val {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 1.65rem; font-weight: 600; color: var(--ink);
+  letter-spacing: -0.02em; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 0.28rem;
+}
+.db-stat-lbl { display: block; font-size: 0.78rem; color: var(--ink-2); line-height: 1.4; }
+.db-stat-delta { display: block; font-size: 0.71rem; margin-top: 0.3rem; color: var(--muted); }
+.db-stat-delta.is-up { color: var(--accent); font-weight: 600; }
+
+/* ── Panels (keyed st.container wraps head + chart in one plate) ── */
+[class*="st-key-db_panel_"] {
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 1.05rem 1.2rem 0.75rem;
+  margin-bottom: 1rem;
+  gap: 0.25rem !important;
+}
+.db-panel-head {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding-bottom: 0.55rem; border-bottom: 1px solid var(--border);
+  margin-bottom: 0.35rem;
+}
+.db-panel-head svg { color: var(--muted); flex: none; }
+.db-panel-title { font-size: 0.875rem; font-weight: 600; color: var(--ink); }
+.db-panel-note { margin-left: auto; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+.db-panel-empty {
+  padding: 2.6rem 1rem; text-align: center;
+  font-size: 0.83rem; color: var(--muted);
+}
+
+/* ── Custom donut legend (HTML, under the chart) ── */
+.db-legend { display: flex; flex-wrap: wrap; gap: 0.35rem 1.1rem; padding: 0.2rem 0.2rem 0.5rem; }
+.db-legend-item { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.78rem; color: var(--ink-2); }
+.db-legend-dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.db-legend-n { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ── Ranked lists (top problems / top hosts) ── */
+.db-rank { display: flex; flex-direction: column; padding: 0.15rem 0 0.45rem; }
+.db-rank-row {
+  display: grid; grid-template-columns: 1.5rem 1fr auto auto;
+  align-items: center; column-gap: 0.7rem;
+  padding: 0.52rem 0.2rem;
+}
+.db-rank-row + .db-rank-row { border-top: 1px solid var(--border); }
+.db-rank-num { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.db-rank-title {
+  font-size: 0.83rem; color: var(--ink); font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.db-rank-sub { font-size: 0.71rem; color: var(--muted); font-weight: 400; }
+.db-rank-count {
+  font-size: 0.8rem; color: var(--ink-2); font-weight: 600;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* ── Small severity / status chips ── */
+.db-chip {
+  display: inline-block; padding: 0.14rem 0.55rem; border-radius: var(--r-pill);
+  font-size: 0.64rem; font-weight: 600; letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.db-chip.c-crit { background: var(--c-crit-bg); border: 1px solid var(--c-crit-bdr); color: var(--c-crit); }
+.db-chip.c-high { background: var(--c-high-bg); border: 1px solid var(--c-high-bdr); color: var(--c-high); }
+.db-chip.c-med  { background: var(--c-med-bg);  border: 1px solid var(--c-med-bdr);  color: var(--c-med);  }
+.db-chip.c-low  { background: var(--c-low-bg);  border: 1px solid var(--c-low-bdr);  color: var(--c-low);  }
+.db-chip.c-info { background: rgba(29, 78, 216, 0.08); border: 1px solid rgba(29, 78, 216, 0.25); color: var(--c-info); }
+
+/* ── Score pills (stat + feed) — same thresholds as the scanner ── */
+.db-score-pill {
+  display: inline-block; min-width: 2.5rem; text-align: center;
+  padding: 0.16rem 0.55rem; border-radius: var(--r-pill);
+  font-size: 0.78rem; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.db-score-pill.sb-crit { background: var(--c-crit-bg); border: 1px solid var(--c-crit-bdr); color: var(--c-crit); }
+.db-score-pill.sb-high { background: var(--c-high-bg); border: 1px solid var(--c-high-bdr); color: var(--c-high); }
+.db-score-pill.sb-med  { background: var(--c-med-bg);  border: 1px solid var(--c-med-bdr);  color: var(--c-med);  }
+.db-score-pill.sb-good { background: var(--c-low-bg);  border: 1px solid var(--c-low-bdr);  color: var(--c-low);  }
+
+/* ── Live scan feed table ── */
+.db-feed-wrap { overflow-x: auto; padding-bottom: 0.35rem; }
+.db-feed { width: 100%; min-width: 700px; border-collapse: collapse; }
+/* Streamlit's markdown stylesheet draws full cell borders on every table —
+   reset hard, then re-apply only the horizontal hairlines. */
+.db-feed, .db-feed tr, .db-feed th, .db-feed td {
+  border: none !important; background: transparent;
+}
+.db-feed thead th {
+  font-size: 0.71rem; font-weight: 500; color: var(--muted);
+  text-align: left; padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--border) !important; white-space: nowrap;
+}
+.db-feed thead th.num, .db-feed tbody td.num {
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+.db-feed tbody td {
+  font-size: 0.83rem; color: var(--ink-2);
+  padding: 0.58rem 0.75rem; vertical-align: middle;
+  border-bottom: 1px solid var(--border) !important;
+}
+.db-feed tbody tr:last-child td { border-bottom: none !important; }
+.db-feed tbody tr { transition: background var(--t-fast); }
+.db-feed tbody tr:hover { background: var(--bg-warm); }
+.db-feed .db-host { font-weight: 600; color: var(--ink); }
+.db-feed .db-host-title {
+  display: block; font-size: 0.71rem; font-weight: 400; color: var(--muted);
+  max-width: 30ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.db-feed .db-time { white-space: nowrap; }
+.db-row-new td { animation: db-new-wash 4s var(--ease) both; }
+@keyframes db-new-wash {
+  from { background: var(--accent-dim); }
+  to   { background: transparent; }
+}
+.db-new-chip {
+  display: inline-block; margin-left: 0.45rem; padding: 0.1rem 0.5rem;
+  border-radius: var(--r-pill); background: var(--accent-dim);
+  border: 1px solid var(--accent-glow); color: var(--accent);
+  font-size: 0.62rem; font-weight: 600; letter-spacing: 0.04em;
+  vertical-align: 0.1rem;
+}
+
+/* ── Setup / error notices ── */
+.db-notice {
+  background: var(--surface-hi); border: 1px solid var(--border);
+  border-radius: var(--r-lg); padding: 2.4rem 1.6rem;
+  text-align: center; color: var(--muted); font-size: 0.875rem; line-height: 1.9;
+}
+.db-notice b { color: var(--ink); font-weight: 600; }
+
+/* ── Responsive ──
+   Streamlit no longer auto-stacks columns; stack any row that holds a
+   dashboard panel. Stat band re-flows 6 → 3 → 2 cells per row. */
+@media (max-width: 1150px) {
+  .db-stats { grid-template-columns: repeat(3, 1fr); }
+  .db-stat + .db-stat { border-left: 1px solid var(--border); }
+  .db-stat:nth-child(3n + 1) { border-left: none; }
+  .db-stat:nth-child(n + 4) { border-top: 1px solid var(--border); }
+}
+@media (max-width: 900px) {
+  [data-testid="stHorizontalBlock"]:has([class*="st-key-db_panel_"]) {
+    flex-direction: column !important;
+  }
+  [data-testid="stHorizontalBlock"]:has([class*="st-key-db_panel_"]) [data-testid="stColumn"] {
+    width: 100% !important; min-width: 100% !important; flex: 1 1 100% !important;
+  }
+}
+@media (max-width: 640px) {
+  .db-title { font-size: 1.55rem; }
+  .db-stats { grid-template-columns: repeat(2, 1fr); }
+  .db-stat { padding: 0.9rem 1.05rem 0.8rem; }
+  .db-stat:nth-child(3n + 1) { border-left: 1px solid var(--border); }
+  .db-stat:nth-child(2n + 1) { border-left: none; }
+  .db-stat:nth-child(n + 3) { border-top: 1px solid var(--border); }
+  .db-stat-val { font-size: 1.4rem; }
+}

@@ -821,3 +821,63 @@ def _int(v) -> int | None:
         return int(v)
     except (TypeError, ValueError):
         return None
+
+
+# ── dashboard read layer (/dashboard page · read-only) ───────────
+# The hidden real-time dashboard polls this every few seconds. Reads go
+# through the same service-key client as everything else; only aggregate-
+# friendly columns are selected (never the JSONB blobs, never emails/IPs).
+_DASH_SCAN_COLS = (
+    "id,scanned_at,target_host,site_title,composite_score,risk_level,"
+    "cve_count,findings_count,dos_risk,duration_ms,ai_provider,has_errors"
+)
+
+
+def _count_exact(table: str) -> int | None:
+    """Exact row count via PostgREST's Content-Range header (1-row request)."""
+    c = _http()
+    if c is None:
+        return None
+    try:
+        r = c.get(f"/{table}", params={"select": "id", "limit": 1},
+                  headers={"Prefer": "count=exact"})
+        if r.status_code in (200, 206):
+            cr = r.headers.get("content-range", "")
+            if "/" in cr and cr.split("/")[-1].isdigit():
+                return int(cr.split("/")[-1])
+    except Exception:
+        pass
+    return None
+
+
+def fetch_dashboard_data(scan_limit: int = 500) -> dict:
+    """One polling bundle for the /dashboard page. Never raises.
+
+    Returns {"scans": list|None, "findings": [], "breakdown": [], "totals": {}}.
+    scans is None (not []) when the DB is unreachable, so the page can tell
+    "connection lost" apart from "no data yet".
+    """
+    scans = _select("scans", {
+        "select": _DASH_SCAN_COLS,
+        "order": "scanned_at.desc",
+        "limit": scan_limit,
+    })
+    if scans is None:
+        return {"scans": None, "findings": [], "breakdown": [], "totals": {}}
+    findings = _select("scan_findings", {
+        "select": "severity,module_key,title,created_at",
+        "order": "created_at.desc",
+        "limit": 4000,
+    }) or []
+    breakdown = _select("scan_score_breakdown", {
+        "select": "component,raw_subscore",
+        "order": "created_at.desc",
+        "limit": 3000,
+    }) or []
+    totals = {
+        "scans": _count_exact("scans"),
+        "findings": _count_exact("scan_findings"),
+        "vulns": _count_exact("scan_vulnerabilities"),
+    }
+    return {"scans": scans, "findings": findings, "breakdown": breakdown,
+            "totals": totals}

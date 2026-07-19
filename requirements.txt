@@ -1,4 +1,5 @@
-streamlit>=1.35.0
+# >=1.49: /dashboard needs @st.fragment(run_every=), st.container(key=), width="stretch"
+streamlit>=1.49.0
 httpx[http2]>=0.27.0
 h2>=4.1.0
 beautifulsoup4>=4.12.0
@@ -16,6 +17,10 @@ playwright>=1.40.0
 # existing httpx dep — no supabase-py needed). This adds the browser-side login
 # cookie component used by src/auth.py.
 streamlit-cookies-controller>=0.0.4
+# ── Real-time dashboard (/dashboard, hidden page) ─────────────────
+# Plotly renders in the main document (not an iframe) so charts inherit the
+# base64-embedded Prompt/Anthropic fonts + Fable palette.
+plotly>=5.24.0
 # ── RAG (คลังความรู้) ─────────────────────────────────────────────
 # Qdrant Cloud vector store + Gemini embeddings — ใช้โดย src/rag/
 # (คำถาม/ผลสแกน → ค้นคลังความรู้ → เติม prompt → Gemini ตอบ)

@@ -48,25 +48,21 @@ def _render_inline_md(text: str) -> str:
     return "".join(paras) if paras else f"<p>{escaped}</p>"
 
 
-def _message_html(role: str, content: str) -> str:
+def _message_html(role: str, content: str, index: int = 0) -> str:
     is_user = role == "user"
     row_cls = "dotred-msg is-user" if is_user else "dotred-msg is-assistant"
     avatar = "คุณ" if is_user else "dR"
     body = f"<p>{_html.escape(content)}</p>" if is_user else _render_inline_md(content)
+    # --i drives a capped stagger delay in CSS (calc(var(--i) * 40ms), clamped
+    # to the last few items) so a freshly loaded thread eases in row by row
+    # instead of popping in as one flat block — see animate.md's list-rhythm
+    # guidance. Only the most recent messages need the delay to read; older
+    # ones above the fold would otherwise pay a growing, pointless wait.
     return (
-        f'<div class="{row_cls}">'
+        f'<div class="{row_cls}" style="--i:{min(index, 6)}">'
         f'<div class="dotred-avatar-sm">{avatar}</div>'
         f'<div class="dotred-bubble">{body}</div>'
         f'</div>'
-    )
-
-
-def _engine_badge_html(label: str) -> str:
-    is_offline = label == "Offline"
-    cls = "dotred-engine-badge is-offline" if is_offline else "dotred-engine-badge"
-    return (
-        f'<span class="{cls}"><span class="dotred-engine-dot"></span>'
-        f'{_html.escape(label)}</span>'
     )
 
 
@@ -133,7 +129,6 @@ def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> No
     streaming a reply never reruns (or ghosts) the rest of the page."""
     chat_context.ensure_history_for_scan(scan_data)
     history = chat_context.get_history()
-    engine_label = chat_engine.active_engine_label()
 
     # ── Card shell: header + thread in ONE markdown call ──────────────
     # Matches app.py's own .sec-card convention — the whole visible card
@@ -148,7 +143,10 @@ def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> No
             'คำถามของคุณเองก็ได้ครับ</div></div>'
         )
     else:
-        thread_inner = "".join(_message_html(m["role"], m["content"]) for m in history)
+        thread_inner = "".join(
+            _message_html(m["role"], m["content"], index=len(history) - 1 - i)
+            for i, m in enumerate(history)
+        )
 
     card_html = f'''
 <div class="dotred-card">
@@ -160,7 +158,6 @@ def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> No
         <div class="dotred-subtitle">ถามต่อเกี่ยวกับผลสแกนนี้ได้เลย</div>
       </div>
     </div>
-    {_engine_badge_html(engine_label)}
   </div>
   <div class="dotred-thread">{thread_inner}</div>
 </div>'''

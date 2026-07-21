@@ -2182,8 +2182,13 @@ div[data-testid="stDialog"] div[role="dialog"]:has(.st-key-pdpa-body) {
 
 /* ════════════════════════════════════════════════════════════════
    dotRED — ChatBOT panel (AI Analysis tab)
-   Reuses .sec-card shell + Fable tokens. No new visual language:
-   same radii, same border/surface colors, same accent, same fonts.
+   Reuses .sec-card shell + Fable tokens as a *base*, then layers a
+   deliberate motion system on top per the redesign brief: streaming
+   should feel alive (Claude/ChatGPT/Gemini-grade), the user bubble
+   should read clearly against the card (was --ink-on-warm, now
+   --accent solid), and every interactive element gets a real
+   hover/focus state. No new color family — accent + severity tokens
+   only, staying inside the Fable Restrained register.
 
    DOM note: .dotred-card wraps the header AND the thread in ONE
    st.markdown() call in chat_ui.py (matching app.py's own .sec-card
@@ -2193,6 +2198,30 @@ div[data-testid="stDialog"] div[role="dialog"]:has(.st-key-pdpa-body) {
    that markdown call's <div> — they render as later sibling elements.
    .dotred-panel-below wraps them via a keyed container so the same card
    visual (background/border/radius) continues seamlessly underneath. */
+
+/* ── dotRED-scoped keyframes ──────────────────────────────────────
+   Kept local to this section (rather than the global keyframe block
+   above) since they're single-purpose to this panel; still honour the
+   project's own prefers-reduced-motion blanket rule at the top of the
+   file, which zeroes all animation-duration/transition-duration globally. */
+@keyframes dotred-avatar-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+  50%      { box-shadow: 0 0 0 5px transparent; }
+}
+@keyframes dotred-cursor-blink {
+  0%, 45%  { opacity: 1; }
+  50%, 95% { opacity: 0.15; }
+  100%     { opacity: 1; }
+}
+@keyframes dotred-chip-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dotred-glow-sweep {
+  0%   { background-position: -150% 0; }
+  100% { background-position:  150% 0; }
+}
+
 .dotred-card {
   background: var(--surface-hi);
   border: 1px solid var(--border);
@@ -2201,6 +2230,7 @@ div[data-testid="stDialog"] div[role="dialog"]:has(.st-key-pdpa-body) {
   padding: 0;
   margin-bottom: 0;
   overflow: hidden;
+  position: relative;
 }
 div[class*="st-key-dotred_panel_below"] {
   background: var(--surface-hi);
@@ -2209,9 +2239,16 @@ div[class*="st-key-dotred_panel_below"] {
   border-radius: 0 0 var(--r-lg) var(--r-lg);
   margin-bottom: 1.125rem;
   padding: 0 0 0.5rem;
+  transition: border-color var(--t-base) var(--ease);
+}
+/* When a request is in flight, dotRED_stream_row exists as a live sibling
+   further down; nudge the panel border toward the accent so the whole card
+   reads as "active" without a loud state change. :has() keeps this pure CSS. */
+div[class*="st-key-dotred_panel_below"]:has(+ div[class*="st-key-dotred_stream_row"]) {
+  border-color: var(--border-hi);
 }
 
-/* ── Header row: avatar + name + engine badge ─────────────────── */
+/* ── Header row: avatar + name ─────────────────────────────────── */
 .dotred-header {
   display: flex;
   align-items: center;
@@ -2220,12 +2257,16 @@ div[class*="st-key-dotred_panel_below"] {
   padding: 1.125rem 1.375rem;
   border-bottom: 1px solid var(--border);
   background: var(--bg-warm);
+  position: relative;
+  overflow: hidden;
 }
 .dotred-header-left {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 .dotred-avatar {
   width: 2.25rem;
@@ -2241,6 +2282,10 @@ div[class*="st-key-dotred_panel_below"] {
   font-weight: 700;
   font-size: 0.8125rem;
   letter-spacing: -0.01em;
+  /* A slow, quiet breathing glow — dotRED is "present," not idle chrome.
+     Subtle enough to read as ambient life rather than a loading spinner;
+     runs continuously since it signals availability, not a transient state. */
+  animation: dotred-avatar-breathe 3.2s ease-in-out infinite;
 }
 .dotred-title {
   font-family: var(--font-sans);
@@ -2253,37 +2298,6 @@ div[class*="st-key-dotred_panel_below"] {
   font-size: 0.75rem;
   color: var(--muted);
   line-height: 1.3;
-}
-
-/* Engine badge — restrained single-tone pill, not a traffic light.
-   Color shifts only for the Offline state (a real degradation the user
-   should notice); Groq/Gemini/OpenRouter all read as "online" the same way. */
-.dotred-engine-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: var(--r-pill);
-  font-family: var(--font-sans);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  background: var(--c-low-bg);
-  border: 1px solid var(--c-low-bdr);
-  color: var(--c-low);
-}
-.dotred-engine-badge.is-offline {
-  background: var(--c-med-bg);
-  border-color: var(--c-med-bdr);
-  color: var(--c-med);
-}
-.dotred-engine-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  flex-shrink: 0;
 }
 
 /* ── Message thread ────────────────────────────────────────────── */
@@ -2309,8 +2323,11 @@ div[class*="st-key-dotred_panel_below"] {
   /* Opacity-only entrance — matches the project's own fix for the fade-up
      ghosting bug (see keyframes comment above): a translateY here would
      promote each bubble to its own GPU layer and leave a stale composited
-     ghost during Streamlit's rerun-heavy stream updates. */
+     ghost during Streamlit's rerun-heavy stream updates. Stagger via --i
+     (set inline per message in chat_ui.py) so a freshly loaded thread eases
+     in row by row instead of popping in as one flat block. */
   animation: fade-in var(--t-base) var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
 }
 .dotred-msg.is-user {
   margin-left: auto;
@@ -2322,16 +2339,26 @@ div[class*="st-key-dotred_panel_below"] {
   font-size: 0.875rem;
   line-height: 1.65;
   color: var(--ink);
+  transition: box-shadow var(--t-base) var(--ease);
 }
 .dotred-msg.is-assistant .dotred-bubble {
   background: var(--bg-warm);
   border: 1px solid var(--border);
   border-top-left-radius: var(--r-sm);
 }
+/* User bubble — was --ink solid, which read as near-black text on the near-
+   black bubble against the warm-beige card (the contrast bug flagged in
+   review). Resolved to --accent (Fable's own terracotta, already the
+   brand's one accent color) so the two message roles read as two distinct,
+   intentional voices — assistant = quiet paper, user = warm accent —
+   exactly the L/R rhythm Claude/ChatGPT/Gemini bubbles use, without
+   introducing any color outside the existing token set. */
 .dotred-msg.is-user .dotred-bubble {
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent-2);
   border-top-right-radius: var(--r-sm);
+  box-shadow: 0 2px 10px var(--accent-dim);
 }
 .dotred-bubble p:not(:last-child) { margin-bottom: 0.5rem; }
 .dotred-bubble ul, .dotred-bubble ol { padding-left: 1.25rem; margin: 0.4rem 0; }
@@ -2342,7 +2369,10 @@ div[class*="st-key-dotred_panel_below"] {
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
 }
-.dotred-msg.is-user .dotred-bubble code { background: rgba(255,255,255,0.15); }
+.dotred-msg.is-user .dotred-bubble code {
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+}
 
 .dotred-avatar-sm {
   width: 1.75rem;
@@ -2357,9 +2387,18 @@ div[class*="st-key-dotred_panel_below"] {
   font-size: 0.6875rem;
 }
 .dotred-msg.is-assistant .dotred-avatar-sm { background: var(--ink); color: var(--bg); }
-.dotred-msg.is-user .dotred-avatar-sm { background: var(--accent-dim); color: var(--accent); }
+/* User avatar now mirrors the bubble's accent-on-white flip (dim accent
+   chip, same visual family as the send button) instead of a washed-out tint
+   that competed for attention against the newly-solid accent bubble. */
+.dotred-msg.is-user .dotred-avatar-sm { background: var(--accent-dim); color: var(--accent-2); }
 
 /* ── Live streaming row (st.write_stream target) ─────────────────
+   The centerpiece of this redesign: while dotRED is composing an answer,
+   this row is the ONE place the interface communicates "real work is
+   happening" (see animate.md's perceived-performance note — a beat of
+   visible thinking reads as more trustworthy than an instant, suspiciously
+   easy answer for an AI-security-analysis feature).
+
    st.markdown() and st.write_stream() render as SIBLING elements in
    Streamlit's DOM, not nested inside each other — so rather than hand-
    nesting <div> open/close tags across two calls (which breaks: they'd
@@ -2371,7 +2410,7 @@ div[class*="st-key-dotred_panel_below"] {
 div[class*="st-key-dotred_stream_row"] {
   position: relative;
   max-width: 88%;
-  margin-left: 2.375rem; /* room for the ::before avatar */
+  margin: 1rem 0 0 2.375rem; /* room for the ::before avatar; matches .dotred-thread's row gap */
   background: var(--bg-warm);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -2381,6 +2420,12 @@ div[class*="st-key-dotred_stream_row"] {
   line-height: 1.65;
   color: var(--ink);
   animation: fade-in var(--t-base) var(--ease) both;
+  /* A thin sweeping accent highlight along the top edge — communicates
+     active generation without a spinner or a jarring color swap. Built as
+     a background-image on a 2px-tall pseudo band via ::after so it can
+     safely animate background-position (cheap; no layout, no repaint of
+     the text content above it). */
+  box-shadow: 0 2px 12px var(--accent-dim);
 }
 div[class*="st-key-dotred_stream_row"]::before {
   content: "dR";
@@ -2398,6 +2443,38 @@ div[class*="st-key-dotred_stream_row"]::before {
   font-family: var(--font-sans);
   font-weight: 700;
   font-size: 0.6875rem;
+  animation: dotred-avatar-breathe 1.4s ease-in-out infinite;
+}
+div[class*="st-key-dotred_stream_row"]::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    transparent, var(--accent-glow), transparent);
+  background-size: 200% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: dotred-glow-sweep 1.8s linear infinite;
+}
+/* A live text cursor at the end of the in-progress answer — the single
+   clearest "still typing" signal, matching the ChatGPT/Claude/Gemini
+   convention the brief calls out by name. st.write_stream renders into a
+   stMarkdownContainer inside this row; ::after on that container (not the
+   row itself) keeps the cursor glued to wherever the text currently ends,
+   including through Streamlit's internal re-paints as chunks arrive. */
+div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"]::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 0.9em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: dotred-cursor-blink 0.9s steps(1) infinite;
 }
 
 /* ── Typing indicator ──────────────────────────────────────────── */
@@ -2439,9 +2516,26 @@ div[class*="st-key-dotred_stream_row"]::before {
    continues the card visual below the markdown-rendered thread) — it needs
    its own horizontal padding since that wrapper has none by default. */
 div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type {
-  padding: 0 1.375rem;
+  padding: 0.25rem 1.375rem 0;
   gap: 0.5rem !important;
 }
+/* Each chip's own column gets the stagger — targeting stColumn (not the
+   button) means the delay applies to a stable, always-present wrapper
+   rather than fighting Streamlit's own button re-mount timing. Capped at
+   4 chips (suggested_questions() never returns more), so the total stagger
+   budget stays at 240ms — comfortably under animate.md's list-rhythm cap. */
+div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
+  > div[data-testid="stColumn"] {
+  animation: dotred-chip-in var(--t-base) var(--ease) both;
+}
+div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
+  > div[data-testid="stColumn"]:nth-child(1) { animation-delay: 0ms;  }
+div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
+  > div[data-testid="stColumn"]:nth-child(2) { animation-delay: 60ms; }
+div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
+  > div[data-testid="stColumn"]:nth-child(3) { animation-delay: 120ms; }
+div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
+  > div[data-testid="stColumn"]:nth-child(4) { animation-delay: 180ms; }
 
 /* Chips are rendered as real Streamlit buttons (st.button) so they are
    keyboard-reachable and share focus-visible behavior with the rest of the
@@ -2454,11 +2548,19 @@ div[class*="st-key-dotred_chip_"] div.stButton > button {
   padding: 0.45rem 1rem !important;
   font-size: 0.8125rem !important;
   font-weight: 500 !important;
+  transition: border-color var(--t-fast) var(--ease),
+              color        var(--t-fast) var(--ease),
+              background   var(--t-fast) var(--ease),
+              box-shadow   var(--t-fast) var(--ease) !important;
 }
 div[class*="st-key-dotred_chip_"] div.stButton > button:hover {
   border-color: var(--accent) !important;
   color: var(--accent) !important;
   background: var(--accent-dim) !important;
+  box-shadow: 0 2px 8px var(--accent-dim) !important;
+}
+div[class*="st-key-dotred_chip_"] div.stButton > button:active {
+  background: var(--accent-glow) !important;
 }
 
 /* ── Input row ─────────────────────────────────────────────────── */
@@ -2474,23 +2576,42 @@ div[class*="st-key-dotred_panel_below"] div[data-testid="stForm"] {
 div[class*="st-key-dotred_input_box"] div[data-baseweb="input"] > div {
   background: var(--surface) !important;
   border-radius: var(--r-md) !important;
+  transition: border-color var(--t-fast) var(--ease),
+              box-shadow   var(--t-fast) var(--ease) !important;
+}
+/* Streamlit's global focus rule already handles the border color; add the
+   accent glow ring here so the input matches the same focus treatment as
+   every other text field in the app (see the base div[data-baseweb="input"]
+   rule near the top of the file) instead of relying on inheritance alone. */
+div[class*="st-key-dotred_input_box"] div[data-baseweb="input"]:focus-within {
+  box-shadow: 0 0 0 3px var(--accent-dim) !important;
 }
 div[class*="st-key-dotred_send_btn"] div.stButton > button {
   background: var(--accent) !important;
   color: #fff !important;
   font-weight: 600 !important;
+  transition: background var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease) !important;
 }
 div[class*="st-key-dotred_send_btn"] div.stButton > button:hover {
   background: var(--accent-2) !important;
+  box-shadow: 0 3px 12px var(--accent-glow) !important;
+}
+div[class*="st-key-dotred_send_btn"] div.stButton > button:active {
+  background: var(--accent-2) !important;
+  box-shadow: 0 1px 4px var(--accent-dim) !important;
 }
 div[class*="st-key-dotred_clear_btn"] div.stButton > button {
   background: transparent !important;
   color: var(--muted) !important;
   border: 1px solid var(--border) !important;
+  transition: color        var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease) !important;
 }
 div[class*="st-key-dotred_clear_btn"] div.stButton > button:hover {
   color: var(--c-crit) !important;
   border-color: var(--c-crit-bdr) !important;
+  background: var(--c-crit-bg) !important;
 }
 
 /* ── Error banner (inline, not a modal — product register) ──────── */

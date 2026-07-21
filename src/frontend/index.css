@@ -2152,6 +2152,79 @@ div[data-testid="stDialog"] div[role="dialog"]:has(.st-key-pdpa-body) {
 }
 .db-notice b { color: var(--ink); font-weight: 600; }
 
+/* ════════════════════════════════════════════════════════════════
+   /impeccable critique pass — dashboard only
+   ────────────────────────────────────────────────────────────────
+   Findings addressed (see chat critique):
+   1. Stat band had no visual lead — the two numbers that matter most
+      to a non-technical admin (avg score, high/critical count) read
+      identically to "total scans". Now the risk-bearing cells get a
+      tinted panel + a real pill, matching .db-score-pill/.db-chip
+      already used elsewhere on this page (design-system consistency,
+      not a new pattern).
+   2. Six identical gray cards in a row → wall-of-cards. Panel heads
+      get a colored icon chip (reuses --accent-dim, already the app's
+      own token) so each panel reads as a distinct region, not a repeat.
+   3. Donut center total was plain ink — now tints toward the dominant
+      risk color in Python (see _render_risk_donut) so the chart's
+      headline number reinforces severity, per PRODUCT.md's "show
+      severity, not noise".
+   4. No stagger on stat cells/panels — every other panel in the app
+      (dotRED, metric-card) staggers its children; the dashboard's own
+      top-level rhythm was flat by omission, not by intent.
+   5. Feed table rows had inconsistent vertical rhythm between the
+      badge and em-dash paths for risk — pad the empty case so both
+      match the badge's line-height.
+   All additive: existing db-* rules untouched, this only layers on. */
+
+/* 1 — stat band: give the score + high-risk cells a body, not just a color */
+.db-stat.is-lead {
+  background: var(--accent-dim);
+  border-radius: var(--r-md);
+  margin: 0.3rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.6rem;
+}
+.db-stat.is-lead + .db-stat { border-left: none; }
+.db-stat-val .db-stat-pill {
+  display: inline-block;
+  padding: 0.08rem 0.5rem;
+  border-radius: var(--r-pill);
+  font-size: 0.92em;
+  vertical-align: 0.02em;
+}
+
+/* 2 — panel head: icon gets its own tinted chip instead of floating loose */
+.db-panel-head { gap: 0.65rem; }
+.db-panel-head .db-panel-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.75rem; height: 1.75rem; flex: none;
+  border-radius: var(--r-md);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.db-panel-head .db-panel-icon svg { color: inherit; }
+
+/* 4 — stagger: .db-stat uses the project's existing --i custom-property
+   convention (metric-card, skel-card, btn-ref all key off it the same way).
+   Panels are real st.container(key=...) elements, which can't receive an
+   inline style/custom-property from Python — so they stagger the same way
+   the dotRED message rows already do in this file: matched per concrete key
+   name, since CSS can't read a number out of a class string generically. */
+.db-stat { animation: fade-up var(--t-slow) var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms); }
+[class*="st-key-db_panel_"] { animation: fade-up var(--t-slow) var(--ease) both; }
+[class*="st-key-db_panel_trend"]    { animation-delay: 0.10s; }
+[class*="st-key-db_panel_risk"]     { animation-delay: 0.17s; }
+[class*="st-key-db_panel_hist"]     { animation-delay: 0.24s; }
+[class*="st-key-db_panel_modules"]  { animation-delay: 0.31s; }
+[class*="st-key-db_panel_problems"] { animation-delay: 0.38s; }
+[class*="st-key-db_panel_hosts"]    { animation-delay: 0.45s; }
+[class*="st-key-db_panel_feed"]     { animation-delay: 0.52s; }
+
+/* 5 — feed: keep the risk column's line-height identical whether it holds
+   a badge or the em-dash fallback */
+.db-feed .db-rank-sub { display: inline-block; padding: 0.3rem 0; }
+
 /* ── Responsive ──
    Streamlit no longer auto-stacks columns; stack any row that holds a
    dashboard panel. Stat band re-flows 6 → 3 → 2 cells per row. */

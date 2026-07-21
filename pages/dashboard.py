@@ -182,7 +182,7 @@ def _chart(fig, key: str) -> None:
 def _panel_head(icon: str, title: str, note: str = "") -> None:
     note_html = f'<span class="db-panel-note">{note}</span>' if note else ""
     st.markdown(
-        f'<div class="db-panel-head">{_icon(icon)}'
+        f'<div class="db-panel-head"><span class="db-panel-icon">{_icon(icon)}</span>'
         f'<span class="db-panel-title">{title}</span>{note_html}</div>',
         unsafe_allow_html=True,
     )
@@ -233,27 +233,44 @@ def _render_stats(df: pd.DataFrame, totals: dict, now_utc: datetime) -> None:
     delta24 = (f'<span class="db-stat-delta is-up">+{last24} ใน 24 ชม.</span>'
                if last24 else '<span class="db-stat-delta">ไม่มีใน 24 ชม.</span>')
 
-    def cell(val: str, lbl: str, sub: str = "", val_cls: str = "") -> str:
-        cls = f' style="color:{val_cls}"' if val_cls else ""
-        return (f'<div class="db-stat"><span class="db-stat-val"{cls}>{val}</span>'
+    def cell(val: str, lbl: str, sub: str = "", val_cls: str = "",
+             i: int = 0, lead: bool = False, pill: bool = False) -> str:
+        # `lead=True` gives the two risk-bearing cells (avg score, high/
+        # critical count) a tinted body instead of plain text-color-only
+        # emphasis — the two numbers a non-technical admin actually needs
+        # first now visually outrank "total scans" etc. `pill=True` wraps
+        # the value in the same pill shape as .db-score-pill/.db-chip used
+        # elsewhere on this page, so "score" reads as one visual language
+        # across the whole dashboard rather than a one-off text color here.
+        lead_cls = " is-lead" if lead else ""
+        if pill and val_cls:
+            val_html = (f'<span class="db-stat-pill" style="background:{val_cls}1a;'
+                        f'color:{val_cls}">{val}</span>')
+        elif val_cls:
+            val_html = f'<span style="color:{val_cls}">{val}</span>'
+        else:
+            val_html = val
+        return (f'<div class="db-stat{lead_cls}" style="--i:{i}">'
+                f'<span class="db-stat-val">{val_html}</span>'
                 f'<span class="db-stat-lbl">{lbl}</span>{sub}</div>')
 
     st.markdown(
         '<div class="db-stats">'
-        + cell(f"{total_scans:,}", "การสแกนทั้งหมด", delta24)
+        + cell(f"{total_scans:,}", "การสแกนทั้งหมด", delta24, i=0)
         + cell(f"{hosts:,}", "เว็บไซต์ที่ตรวจ",
-               '<span class="db-stat-delta">โดเมนไม่ซ้ำ</span>')
+               '<span class="db-stat-delta">โดเมนไม่ซ้ำ</span>', i=1)
         + cell(avg_txt, "คะแนนเฉลี่ย",
                '<span class="db-stat-delta">จากคะแนนเต็ม 100</span>',
-               val_cls=_score_hex(avg))
+               val_cls=_score_hex(avg), i=2, lead=True, pill=True)
         + cell(f"{high:,}", "เสี่ยงสูง–วิกฤต",
                f'<span class="db-stat-delta">{high_pct} ของการสแกน</span>',
-               val_cls=_RISK_COLOR["CRITICAL"] if high else "")
+               val_cls=_RISK_COLOR["CRITICAL"] if high else "",
+               i=3, lead=bool(high), pill=bool(high))
         + cell(f"{total_findings:,}", "ข้อค้นพบรวม",
-               f'<span class="db-stat-delta">เฉลี่ย {per_scan} ต่อสแกน</span>')
+               f'<span class="db-stat-delta">เฉลี่ย {per_scan} ต่อสแกน</span>', i=4)
         + cell(f"{total_vulns:,}", "ช่องโหว่ CVE",
                '<span class="db-stat-delta">จากทุกการสแกน</span>',
-               val_cls=_RISK_COLOR["HIGH"] if total_vulns else "")
+               val_cls=_RISK_COLOR["HIGH"] if total_vulns else "", i=5)
         + "</div>",
         unsafe_allow_html=True,
     )
@@ -314,10 +331,16 @@ def _render_risk_donut(df: pd.DataFrame) -> None:
         hovertemplate="ความเสี่ยง%{label} · %{value} สแกน (%{percent})<extra></extra>",
     ))
     fig.update_layout(**_base_layout(height=228))
+    # Center total now tints toward whichever risk band is most common
+    # (rather than staying plain ink) — the chart's own headline number
+    # reinforces severity at a glance, matching PRODUCT.md's "show
+    # severity, not noise" instead of reading as a neutral count.
+    dominant = max(rows, key=lambda r: r[1])[0]
+    total_color = _RISK_COLOR[dominant] if dominant != "LOW" else _INK
     fig.add_annotation(text=(f'<b style="font-size:26px">{total:,}</b><br>'
                              '<span style="font-size:12px">สแกน</span>'),
                        x=0.5, y=0.5, showarrow=False,
-                       font=dict(family=_FONT_STACK, color=_INK))
+                       font=dict(family=_FONT_STACK, color=total_color))
     _chart(fig, "db_c_risk")
     legend = "".join(
         f'<span class="db-legend-item">'

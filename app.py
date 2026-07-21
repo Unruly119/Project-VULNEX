@@ -80,6 +80,7 @@ def _img_data_uri(path: str) -> str:
 # visually. The sidebar navigation has been removed — the scan page has no
 # top-left nav; the manual page carries its own "back" button instead.
 from ui_shared import inject_base_styles, manual_anchor_html, render_footer
+import chat_ui  # dotRED — "ถามต่อกับ AI" panel rendered inside the AI Analysis tab
 
 inject_base_styles()
 
@@ -902,6 +903,8 @@ if st.session_state.get("scanned"):
 
     with tab1:
         render_ai_analysis(ai_data.get("analysis", "ไม่มีข้อมูล"))
+
+        chat_ui.render_dotred_panel(scan_data, server_data, ai_data)
 
     with tab2:
         # Escape all server-originated strings before HTML injection

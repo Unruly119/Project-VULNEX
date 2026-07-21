@@ -2301,50 +2301,140 @@ div[class*="st-key-dotred_panel_below"]:has(+ div[class*="st-key-dotred_stream_r
 }
 
 /* ── Message thread ────────────────────────────────────────────── */
-.dotred-thread {
+/* Retargeted from a plain .dotred-thread class to the keyed-container
+   selector: the thread is now a real st.container(key="dotred_thread")
+   (not a closed-off markdown string) so the live streaming placeholder can
+   render INSIDE it, in its correct scroll position, instead of appearing
+   as a sibling below the input row — see chat_ui.py's STREAMING LAYOUT FIX
+   note for the full "why". */
+div[class*="st-key-dotred_thread"] {
   padding: 1.25rem 1.375rem 0.25rem;
   max-height: 32rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  /* Anchors the scrollbar to the bottom as new content streams in, instead
+     of staying pinned to the top — the CSS-only equivalent of a JS
+     "scrollIntoView" auto-scroll. Supported in current Chrome/Edge; browsers
+     without it simply keep today's (top-anchored) behavior, which is a
+     harmless degrade, not a broken one. */
+  overflow-anchor: auto;
 }
-.dotred-thread::-webkit-scrollbar { width: 8px; }
-.dotred-thread::-webkit-scrollbar-track { background: transparent; }
-.dotred-thread::-webkit-scrollbar-thumb {
+div[class*="st-key-dotred_thread"]::-webkit-scrollbar { width: 8px; }
+div[class*="st-key-dotred_thread"]::-webkit-scrollbar-track { background: transparent; }
+div[class*="st-key-dotred_thread"]::-webkit-scrollbar-thumb {
   background: var(--border-hi);
   border-radius: var(--r-pill);
 }
+/* The header now renders as its own .dotred-card (see chat_ui.py) with no
+   bottom radius/border, and the thread container continues the same card
+   visual directly underneath — same seam technique already used between
+   the card and .dotred-panel_below. */
+.dotred-card.dotred-card-head {
+  border-bottom: none;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  margin-bottom: 0;
+}
+div[class*="st-key-dotred_thread"] {
+  background: var(--surface-hi);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
 
-.dotred-msg {
+/* ── Message rows ──────────────────────────────────────────────────
+   RETARGETED from static .dotred-msg/.dotred-bubble classes on a hand-built
+   HTML string to keyed st.container(key="dotred_msg_{user|ai}_{N}")
+   wrappers around REAL st.markdown(content) calls (see chat_ui.py's
+   _render_message). This is the fix for markdown fidelity: Streamlit's own
+   markdown engine renders GFM tables, ordered/unordered lists, bold, and
+   code natively — the previous hand-rolled regex parser only understood
+   **bold** and `code`, so anything else (tables especially, which the model
+   frequently produces) rendered as literal pipe-and-dash text.
+
+   The [class*="st-key-dotred_msg_user_"] / [...ai_...] prefix match works
+   regardless of the trailing index, since Streamlit always appends the
+   exact key string somewhere in the container's class list. */
+div[class*="st-key-dotred_msg_user_"],
+div[class*="st-key-dotred_msg_ai_"] {
   display: flex;
   gap: 0.625rem;
   max-width: 88%;
+  margin-bottom: 1rem;
+  position: relative;
   /* Opacity-only entrance — matches the project's own fix for the fade-up
      ghosting bug (see keyframes comment above): a translateY here would
      promote each bubble to its own GPU layer and leave a stale composited
-     ghost during Streamlit's rerun-heavy stream updates. Stagger via --i
-     (set inline per message in chat_ui.py) so a freshly loaded thread eases
-     in row by row instead of popping in as one flat block. */
+     ghost during Streamlit's rerun-heavy stream updates. */
   animation: fade-in var(--t-base) var(--ease) both;
-  animation-delay: calc(var(--i, 0) * 45ms);
 }
-.dotred-msg.is-user {
+/* Stagger delay per position — index baked into the key's trailing digits,
+   matched via attribute-contains against each concrete small number since
+   CSS has no way to read a number out of a class string generically. Covers
+   the same 0–6 range the previous --i variable was capped to; anything
+   beyond index 6 simply has no extra delay, which is correct (it's already
+   below the fold by then). */
+div[class*="st-key-dotred_msg_user_0"], div[class*="st-key-dotred_msg_ai_0"] { animation-delay: 0ms; }
+div[class*="st-key-dotred_msg_user_1"], div[class*="st-key-dotred_msg_ai_1"] { animation-delay: 45ms; }
+div[class*="st-key-dotred_msg_user_2"], div[class*="st-key-dotred_msg_ai_2"] { animation-delay: 90ms; }
+div[class*="st-key-dotred_msg_user_3"], div[class*="st-key-dotred_msg_ai_3"] { animation-delay: 135ms; }
+div[class*="st-key-dotred_msg_user_4"], div[class*="st-key-dotred_msg_ai_4"] { animation-delay: 180ms; }
+div[class*="st-key-dotred_msg_user_5"], div[class*="st-key-dotred_msg_ai_5"] { animation-delay: 225ms; }
+div[class*="st-key-dotred_msg_user_6"], div[class*="st-key-dotred_msg_ai_6"] { animation-delay: 270ms; }
+
+div[class*="st-key-dotred_msg_user_"] {
   margin-left: auto;
   flex-direction: row-reverse;
 }
-.dotred-bubble {
+
+/* The role-tag ("dR" / "คุณ") is a small absolutely-positioned chip drawn
+   from the <span class="dotred-role-tag"> injected by _render_message —
+   using absolute positioning (rather than true flex sibling layout) keeps
+   the markdown content area a single, uninterrupted block so tables/lists
+   can use their full row width instead of being squeezed by a flex row. */
+div[class*="st-key-dotred_msg_ai_"] { padding-left: 2.375rem; }
+div[class*="st-key-dotred_msg_user_"] { padding-right: 2.375rem; }
+.dotred-role-tag {
+  position: absolute;
+  top: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  flex-shrink: 0;
+}
+div[class*="st-key-dotred_msg_ai_"] .dotred-role-tag {
+  left: 0;
+  background: var(--ink);
+  color: var(--bg);
+}
+div[class*="st-key-dotred_msg_user_"] .dotred-role-tag {
+  right: 0;
+  background: var(--accent-dim);
+  color: var(--accent-2);
+}
+
+/* The markdown content block itself — this IS the bubble now (Streamlit's
+   stMarkdownContainer, immediately following the role-tag span in the same
+   keyed container). */
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"],
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] {
   padding: 0.7rem 1rem;
   border-radius: var(--r-lg);
   font-size: 0.875rem;
   line-height: 1.65;
-  color: var(--ink);
   transition: box-shadow var(--t-base) var(--ease);
 }
-.dotred-msg.is-assistant .dotred-bubble {
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] {
   background: var(--bg-warm);
   border: 1px solid var(--border);
   border-top-left-radius: var(--r-sm);
+  color: var(--ink) !important;
 }
 /* User bubble — was --ink solid, which read as near-black text on the near-
    black bubble against the warm-beige card (the contrast bug flagged in
@@ -2353,44 +2443,98 @@ div[class*="st-key-dotred_panel_below"]:has(+ div[class*="st-key-dotred_stream_r
    intentional voices — assistant = quiet paper, user = warm accent —
    exactly the L/R rhythm Claude/ChatGPT/Gemini bubbles use, without
    introducing any color outside the existing token set. */
-.dotred-msg.is-user .dotred-bubble {
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] {
   background: var(--accent);
-  color: #fff;
   border: 1px solid var(--accent-2);
   border-top-right-radius: var(--r-sm);
   box-shadow: 0 2px 10px var(--accent-dim);
 }
-.dotred-bubble p:not(:last-child) { margin-bottom: 0.5rem; }
-.dotred-bubble ul, .dotred-bubble ol { padding-left: 1.25rem; margin: 0.4rem 0; }
-.dotred-bubble code {
-  font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  background: rgba(0,0,0,0.06);
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
+/* The global .stMarkdown color-hardening rule (near the top of this file)
+   forces --ink-2 on all markdown text with !important — override again,
+   scoped + !important, so user-bubble text stays white instead of dark ink
+   on a dark terracotta background. */
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"],
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] p,
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] li,
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] strong {
+  color: #fff !important;
 }
-.dotred-msg.is-user .dotred-bubble code {
-  background: rgba(255,255,255,0.18);
-  color: #fff;
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] p:not(:last-child),
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] p:not(:last-child) {
+  margin-bottom: 0.5rem;
+}
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] ul,
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] ol,
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] ul,
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] ol {
+  padding-left: 1.25rem;
+  margin: 0.4rem 0;
+}
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] code {
+  background: rgba(255,255,255,0.18) !important;
+  color: #fff !important;
+  border: none !important;
 }
 
-.dotred-avatar-sm {
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--r-md);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 0.6875rem;
+/* ── Markdown tables inside dotRED bubbles ────────────────────────
+   The actual fix requested: GFM tables (| col | col |) now render as real
+   <table> elements via Streamlit's own markdown parser (see chat_ui.py),
+   and this is the visual styling for them — previously entirely unstyled
+   anywhere in the project, so a table would have rendered as a cramped,
+   borderless HTML default. Kept scoped to dotRED's bubbles only, since nothing
+   elsewhere in the app currently renders user-facing markdown tables. */
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.6rem 0;
+  font-size: 0.8125rem;
+  background: var(--surface-hi);
+  border-radius: var(--r-sm);
+  overflow: hidden;
 }
-.dotred-msg.is-assistant .dotred-avatar-sm { background: var(--ink); color: var(--bg); }
-/* User avatar now mirrors the bubble's accent-on-white flip (dim accent
-   chip, same visual family as the send button) instead of a washed-out tint
-   that competed for attention against the newly-solid accent bubble. */
-.dotred-msg.is-user .dotred-avatar-sm { background: var(--accent-dim); color: var(--accent-2); }
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] th {
+  background: var(--accent-dim);
+  color: var(--accent-2) !important;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--accent);
+}
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] td {
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink-2) !important;
+  vertical-align: top;
+}
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] tr:last-child td {
+  border-bottom: none;
+}
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] tr:hover td {
+  background: var(--bg-warm);
+}
+/* User bubbles are short questions in practice, but cover the case anyway
+   for consistency — white-on-accent variant of the same table. */
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.6rem 0;
+  font-size: 0.8125rem;
+  background: rgba(255,255,255,0.08);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] th,
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] td {
+  padding: 0.5rem 0.7rem;
+  color: #fff !important;
+  border-bottom: 1px solid rgba(255,255,255,0.18);
+}
+div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] th {
+  font-weight: 600;
+  background: rgba(255,255,255,0.1);
+}
 
 /* ── Live streaming row (st.write_stream target) ─────────────────
    The centerpiece of this redesign: while dotRED is composing an answer,
@@ -2475,6 +2619,40 @@ div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"]::afte
   vertical-align: text-bottom;
   background: var(--accent);
   animation: dotred-cursor-blink 0.9s steps(1) infinite;
+}
+/* Same markdown/table treatment as the finished assistant bubbles above —
+   the in-flight stream uses the same st.write_stream → stMarkdownContainer
+   pipeline, so a table that finishes streaming mid-row needs to look
+   correct immediately, not just after the rerun moves it into history. */
+div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] {
+  color: var(--ink) !important;
+}
+div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] p:not(:last-child) {
+  margin-bottom: 0.5rem;
+}
+div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.6rem 0;
+  font-size: 0.8125rem;
+  background: var(--surface-hi);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] th {
+  background: var(--accent-dim);
+  color: var(--accent-2) !important;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.75rem;
+  border-bottom: 1px solid var(--accent);
+}
+div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] td {
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink-2) !important;
+  vertical-align: top;
 }
 
 /* ── Typing indicator ──────────────────────────────────────────── */
@@ -2631,8 +2809,9 @@ div[class*="st-key-dotred_clear_btn"] div.stButton > button:hover {
 
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .dotred-thread { max-height: 24rem; }
-  .dotred-msg { max-width: 94%; }
+  div[class*="st-key-dotred_thread"] { max-height: 24rem; }
+  div[class*="st-key-dotred_msg_user_"],
+  div[class*="st-key-dotred_msg_ai_"] { max-width: 94%; }
   .dotred-header { padding: 1rem; }
   div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type {
     padding: 0 1rem;

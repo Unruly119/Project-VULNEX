@@ -23,9 +23,6 @@
 # ────────────────────────────────────────────────────────────────
 from __future__ import annotations
 
-import html as _html
-import re
-
 import streamlit as st
 
 import chat_context
@@ -33,37 +30,29 @@ import chat_engine
 import chat_guard
 from prompt_builder import build_chat_prompt
 
-_MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
-_MD_CODE_RE = re.compile(r"`([^`]+?)`")
 
+def _render_message(role: str, content: str, index: int = 0) -> None:
+    """Render one message as REAL Streamlit markdown (st.markdown(content),
+    unsafe_allow_html=False) inside a keyed container that CSS themes as a
+    bubble — instead of hand-rolling a tiny regex-based markdown subset into
+    a raw HTML string. This is what actually fixes table/list rendering:
+    Streamlit's own markdown engine already supports GFM tables, ordered/
+    unordered lists, bold, code spans and blocks, etc. — the old
+    _render_inline_md() only understood **bold** and `code`, so anything
+    else (tables especially) rendered as literal pipe-and-dash text.
 
-def _render_inline_md(text: str) -> str:
-    """Escape then apply a tiny safe Markdown subset (bold, inline code).
-    Full Markdown parsing is intentionally out of scope — dotRED's replies
-    are short structured prose, not documents."""
-    escaped = _html.escape(text)
-    escaped = _MD_BOLD_RE.sub(r"<strong>\1</strong>", escaped)
-    escaped = _MD_CODE_RE.sub(r"<code>\1</code>", escaped)
-    paras = [f"<p>{p}</p>" for p in escaped.split("\n\n") if p.strip()]
-    return "".join(paras) if paras else f"<p>{escaped}</p>"
-
-
-def _message_html(role: str, content: str, index: int = 0) -> str:
+    Key is positional and role-prefixed (dotred_msg_user_N / dotred_msg_ai_N)
+    — NOT content-hashed — so CSS can select on the stable prefix
+    (`st-key-dotred_msg_user_` vs `st-key-dotred_msg_ai_`) for role styling,
+    and on the trailing index for the entrance stagger, without needing a
+    per-message injected <style> tag."""
     is_user = role == "user"
-    row_cls = "dotred-msg is-user" if is_user else "dotred-msg is-assistant"
+    prefix = "dotred_msg_user" if is_user else "dotred_msg_ai"
+    key = f"{prefix}_{index}"
     avatar = "คุณ" if is_user else "dR"
-    body = f"<p>{_html.escape(content)}</p>" if is_user else _render_inline_md(content)
-    # --i drives a capped stagger delay in CSS (calc(var(--i) * 40ms), clamped
-    # to the last few items) so a freshly loaded thread eases in row by row
-    # instead of popping in as one flat block — see animate.md's list-rhythm
-    # guidance. Only the most recent messages need the delay to read; older
-    # ones above the fold would otherwise pay a growing, pointless wait.
-    return (
-        f'<div class="{row_cls}" style="--i:{min(index, 6)}">'
-        f'<div class="dotred-avatar-sm">{avatar}</div>'
-        f'<div class="dotred-bubble">{body}</div>'
-        f'</div>'
-    )
+    with st.container(key=key):
+        st.markdown(f'<span class="dotred-role-tag">{avatar}</span>', unsafe_allow_html=True)
+        st.markdown(content)
 
 
 def _run_dotred_turn(
@@ -126,30 +115,25 @@ def _run_dotred_turn(
 def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> None:
     """Render the dotRED chat panel. Called from app.py under the AI Analysis
     tab, right after render_ai_analysis(...). Isolated in @st.fragment so
-    streaming a reply never reruns (or ghosts) the rest of the page."""
+    streaming a reply never reruns (or ghosts) the rest of the page.
+
+    STREAMING LAYOUT FIX: previously the live st.write_stream placeholder
+    rendered as a sibling AFTER the input form (st.container(key=...) calls
+    append at the point they're called in Python, and _run_dotred_turn() ran
+    at the very end of this function) — so the in-flight answer visibly
+    appeared BELOW the input box, outside the scrolling .dotred-thread box,
+    then "jumped" up into its correct position only once the fragment
+    rerun landed. Fixed by opening .dotred-thread's wrapper as a REAL
+    Streamlit container (not a closed markdown string) so the live stream
+    can be placed inside it, in the correct final position, from the start.
+    """
     chat_context.ensure_history_for_scan(scan_data)
     history = chat_context.get_history()
+    pending_question = st.session_state.pop("dotred_inflight_question", None)
 
-    # ── Card shell: header + thread in ONE markdown call ──────────────
-    # Matches app.py's own .sec-card convention — the whole visible card
-    # chrome (header through the last message bubble) is a single Python
-    # f-string passed to one st.markdown() call, so it genuinely nests as
-    # one DOM tree instead of producing flat sibling <div>s.
-    if not history:
-        thread_inner = (
-            '<div class="dotred-empty"><div class="dotred-empty-hint">'
-            'dotRED อ่านผลสแกนนี้ทั้งหมดแล้ว (คะแนน, headers, SSL, DNS, cookies, '
-            'CVE และคลังความรู้ความปลอดภัย) ลองเริ่มด้วยคำถามด้านล่าง หรือพิมพ์'
-            'คำถามของคุณเองก็ได้ครับ</div></div>'
-        )
-    else:
-        thread_inner = "".join(
-            _message_html(m["role"], m["content"], index=len(history) - 1 - i)
-            for i, m in enumerate(history)
-        )
-
-    card_html = f'''
-<div class="dotred-card">
+    # ── Header (its own markdown call — static, never touched by streaming) ──
+    header_html = '''
+<div class="dotred-card dotred-card-head">
   <div class="dotred-header">
     <div class="dotred-header-left">
       <div class="dotred-avatar">dR</div>
@@ -159,18 +143,43 @@ def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> No
       </div>
     </div>
   </div>
-  <div class="dotred-thread">{thread_inner}</div>
 </div>'''
-    st.markdown(card_html, unsafe_allow_html=True)
+    st.markdown(header_html, unsafe_allow_html=True)
+
+    # ── Thread — now a real st.container(key=...) instead of a closed-off
+    # markdown string, specifically so the live streaming placeholder (used
+    # only while pending_question is set) can be placed INSIDE it, in the
+    # correct scroll position, instead of appearing after the input row. ──
+    with st.container(key="dotred_thread"):
+        if not history and not pending_question:
+            st.markdown(
+                '<div class="dotred-empty"><div class="dotred-empty-hint">'
+                'dotRED อ่านผลสแกนนี้ทั้งหมดแล้ว (คะแนน, headers, SSL, DNS, cookies, '
+                'CVE และคลังความรู้ความปลอดภัย) ลองเริ่มด้วยคำถามด้านล่าง หรือพิมพ์'
+                'คำถามของคุณเองก็ได้ครับ</div></div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            for i, m in enumerate(history):
+                _render_message(m["role"], m["content"], index=len(history) - 1 - i)
+
+            if pending_question:
+                # The user's own message renders IMMEDIATELY (optimistic —
+                # before any network call), directly under the existing
+                # thread, so there's zero perceived delay for their own
+                # bubble. This is the single biggest lag-reduction: the
+                # previous version showed nothing at all until the AI's
+                # full reply streamed in.
+                _render_message("user", pending_question, index=0)
+                _run_dotred_turn(pending_question, scan_data, server_data, ai_data)
+                st.rerun(scope="fragment")
 
     # ── Chips + input, wrapped in a keyed container so index.css can
     # continue the card's visual (background/border/radius) underneath the
-    # markdown-rendered part above — these are real Streamlit widgets and
-    # cannot live inside the <div> from the st.markdown() call above. ──────
+    # thread above — these are real Streamlit widgets and cannot live inside
+    # a markdown-rendered <div>. ──────────────────────────────────────────
     with st.container(key="dotred_panel_below"):
-        # Suggested chips (empty state only — real st.button so they stay
-        # keyboard-reachable, sharing focus-visible behavior with the app).
-        if not history:
+        if not history and not pending_question:
             chips = chat_guard.suggested_questions(scan_data, server_data, ai_data)
             cols = st.columns(len(chips))
             for i, (col, q) in enumerate(zip(cols, chips)):
@@ -179,24 +188,27 @@ def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> No
                         st.session_state["dotred_pending_input"] = q
                         st.rerun(scope="fragment")
 
-        pending = st.session_state.pop("dotred_pending_input", "")
+        pending_input_val = st.session_state.pop("dotred_pending_input", "")
         with st.form(key="dotred_form", clear_on_submit=True, border=False):
             in_col, send_col, clear_col = st.columns([6, 1, 1])
             with in_col:
                 user_message = st.text_input(
                     "ถามคำถาม",
-                    value=pending,
+                    value=pending_input_val,
                     key="dotred_input_box",
                     placeholder="เช่น: ควรแก้ปัญหาไหนก่อน?",
                     label_visibility="collapsed",
+                    disabled=bool(pending_question),
                 )
             with send_col:
                 submitted = st.form_submit_button(
-                    "ส่ง", key="dotred_send_btn", use_container_width=True
+                    "ส่ง", key="dotred_send_btn", use_container_width=True,
+                    disabled=bool(pending_question),
                 )
             with clear_col:
                 cleared = st.form_submit_button(
-                    "ล้าง", key="dotred_clear_btn", use_container_width=True
+                    "ล้าง", key="dotred_clear_btn", use_container_width=True,
+                    disabled=bool(pending_question),
                 )
 
     if cleared:
@@ -204,5 +216,10 @@ def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> No
         st.rerun(scope="fragment")
 
     if submitted and user_message.strip():
-        _run_dotred_turn(user_message.strip(), scan_data, server_data, ai_data)
+        # Two-phase submit: this rerun's ONLY job is to record the question
+        # and immediately rerun again — the actual AI call happens on the
+        # NEXT pass, inside the thread container above, so the user's own
+        # bubble can render (and the input can visibly disable) before any
+        # network latency is felt at all.
+        st.session_state["dotred_inflight_question"] = user_message.strip()
         st.rerun(scope="fragment")

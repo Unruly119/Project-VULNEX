@@ -80,7 +80,10 @@ def _img_data_uri(path: str) -> str:
 # visually. The sidebar navigation has been removed — the scan page has no
 # top-left nav; the manual page carries its own "back" button instead.
 from ui_shared import inject_base_styles, manual_anchor_html, render_footer
-import chat_ui  # dotRED — "ถามต่อกับ AI" panel rendered inside the AI Analysis tab
+import chat_ui  # dotRED — floating FAB + chat popover, rendered as a sibling of
+                # st.tabs([...]) below (not nested inside any tab), so it stays
+                # open and visible across every tab switch — see chat_ui.py's
+                # module docstring for the full placement rationale.
 
 inject_base_styles()
 
@@ -901,10 +904,15 @@ if st.session_state.get("scanned"):
         "HTTP Headers", "SSL Certificate", "Scan Modules", "Raw Data"
     ])
 
+    # dotRED — floating FAB + popover, a SIBLING of the tabs (not nested in
+    # tab1 anymore). This is what makes it survive tab switches: Streamlit's
+    # tabs are a client-side show/hide over server-rendered content, not
+    # separate fragment scopes, so a widget living outside every `with
+    # tabX:` block never gets unmounted when the visible tab changes.
+    chat_ui.render_dotred_widget(scan_data, server_data, ai_data)
+
     with tab1:
         render_ai_analysis(ai_data.get("analysis", "ไม่มีข้อมูล"))
-
-        chat_ui.render_dotred_panel(scan_data, server_data, ai_data)
 
     with tab2:
         # Escape all server-originated strings before HTML injection

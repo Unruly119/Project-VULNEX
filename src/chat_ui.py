@@ -1,4 +1,4 @@
-# src/chat_ui.py — dotRED · ChatBOT panel ("ถามต่อกับ AI") ใน AI Analysis tab
+# src/chat_ui.py — dotRED · floating chat widget (FAB + popover)
 # ────────────────────────────────────────────────────────────────
 #   สถาปัตยกรรม:
 #     chat_context.py  → ความจำบทสนทนา (session_state, ไม่แตะ Supabase)
@@ -9,6 +9,22 @@
 #                        จาก ai_engine.py โดยสิ้นเชิง, stream_chat() ให้ token
 #                        ไหลออกมาทีละก้อนจริง ๆ (ไม่ใช่ตอบมาเป็นก้อนเดียวแล้วพ่นทีหลัง)
 #
+#   PLACEMENT CHANGE (was: embedded panel inside the AI Analysis tab):
+#   render_dotred_widget() is now called ONCE, right after st.tabs([...]) in
+#   app.py — a SIBLING of the tabs, not nested inside tab1. This is what
+#   makes "stays open across tab switches" work for free: Streamlit's tabs
+#   are a client-side show/hide over server-rendered content, not separate
+#   fragment scopes, so a widget living outside any `with tabX:` block never
+#   gets unmounted when the visible tab changes. Persistence is otherwise
+#   just ordinary session_state — no special cross-tab plumbing needed.
+#
+#   The FAB (bottom-right, always fixed) toggles session_state["dotred_open"].
+#   When open, the exact same panel body from the previous embedded version
+#   renders inside a keyed container that index.css pins to
+#   position:fixed — Streamlit has no native "portal" API, so pulling
+#   content out of normal document flow into a floating box is done purely
+#   in CSS against that one container's generated st-key-* class.
+#
 #   HTML rendering convention (matches app.py's .sec-card pattern exactly):
 #   every decorative wrapper is assembled as ONE Python f-string and passed to
 #   a SINGLE st.markdown(..., unsafe_allow_html=True) call — st.markdown() and
@@ -18,7 +34,7 @@
 #   form, the streaming placeholder) get their own st.container(key=...), and
 #   index.css themes those keyed containers directly.
 #
-#   ทั้ง panel อยู่ใน @st.fragment แยกจาก full-page rerun (เหมือน
+#   ทั้ง widget อยู่ใน @st.fragment แยกจาก full-page rerun (เหมือน
 #   render_pdf_report_section) กันไม่ให้ทั้งหน้า ghost ระหว่างสตรีมคำตอบ
 # ────────────────────────────────────────────────────────────────
 from __future__ import annotations
@@ -62,6 +78,8 @@ _P_SEND = '<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.6
 _P_TRASH = '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>'
 _P_LIGHTBULB = '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>'
 _P_CHEVRON_RIGHT = '<path d="m9 18 6-6-6-6"/>'
+_P_X = '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
+_P_SPARKLE = '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>'
 
 _CHIP_ICON_PATHS = {
     "file_shield": _P_FILE_SHIELD,
@@ -175,148 +193,161 @@ def _run_dotred_turn(
 
 
 @st.fragment
-def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> None:
-    """Render the dotRED chat panel. Called from app.py under the AI Analysis
-    tab, right after render_ai_analysis(...). Isolated in @st.fragment so
-    streaming a reply never reruns (or ghosts) the rest of the page.
+def render_dotred_widget(scan_data: dict, server_data: dict, ai_data: dict) -> None:
+    """Render dotRED as a floating widget: a FAB (bottom-right, always
+    visible) that toggles a chat popover on click. Called ONCE from app.py,
+    right after st.tabs([...]) — a sibling of the tabs, so it persists
+    across tab switches for free (see the module docstring's PLACEMENT
+    CHANGE note). Isolated in @st.fragment so streaming a reply never
+    reruns (or ghosts) the rest of the page.
 
-    STREAMING LAYOUT FIX: previously the live st.write_stream placeholder
-    rendered as a sibling AFTER the input form (st.container(key=...) calls
-    append at the point they're called in Python, and _run_dotred_turn() ran
-    at the very end of this function) — so the in-flight answer visibly
-    appeared BELOW the input box, outside the scrolling .dotred-thread box,
-    then "jumped" up into its correct position only once the fragment
-    rerun landed. Fixed by opening .dotred-thread's wrapper as a REAL
-    Streamlit container (not a closed markdown string) so the live stream
-    can be placed inside it, in the correct final position, from the start.
+    STREAMING LAYOUT: the live st.write_stream placeholder is placed INSIDE
+    the same st.container(key="dotred_thread") the rendered history lives
+    in (not after the input form), so an in-flight answer appears in its
+    correct final position from the first frame — no post-rerun "jump".
     """
+    is_open = st.session_state.get("dotred_open", False)
+
+    # ── The FAB itself — a real st.button so it's keyboard-reachable, kept
+    # OUTSIDE the position:fixed popover container (see index.css) since the
+    # FAB must stay clickable/visible even while the popover is closed. ────
+    fab_key = "dotred_fab_close" if is_open else "dotred_fab_open"
+    with st.container(key="dotred_fab_shell"):
+        fab_label = _i(_P_X, 22) if is_open else _i(_P_MSG_CIRCLE, 24)
+        # st.button labels don't render raw <svg> — see the chip-icon note
+        # above; the FAB icon is drawn via CSS ::before instead (index.css),
+        # keyed off dotred_fab_open / dotred_fab_close so open vs. closed
+        # gets a distinct icon (chat bubble vs. X) without a second element.
+        if st.button(" ", key=fab_key, help="dotRED — ผู้ช่วย AI"):
+            st.session_state["dotred_open"] = not is_open
+            st.rerun(scope="fragment")
+        _ = fab_label  # icon actually painted via CSS ::before, see index.css
+
+    if not is_open:
+        return
+
     chat_context.ensure_history_for_scan(scan_data)
     history = chat_context.get_history()
     pending_question = st.session_state.pop("dotred_inflight_question", None)
 
-    # ── Header (its own markdown call — static, never touched by streaming) ──
-    # Mockup match: adds a decorative sparkle + chat-bubble + shield-check
-    # cluster on the right of the header — purely visual (no live status
-    # meaning, unlike the removed engine badge), drawn as inline SVG so it
-    # stays crisp at any zoom instead of a screenshotted raster asset.
-    header_html = f'''
-<div class="dotred-card dotred-card-head">
-  <div class="dotred-header">
-    <div class="dotred-header-left">
-      <div class="dotred-avatar">dR</div>
-      <div>
-        <div class="dotred-title">dotRED</div>
-        <div class="dotred-subtitle">ถามต่อเกี่ยวกับผลสแกนนี้ได้เลย</div>
-      </div>
-    </div>
-    <div class="dotred-header-deco" aria-hidden="true">
-      <span class="dotred-deco-spark dotred-deco-spark-a">✦</span>
-      <span class="dotred-deco-spark dotred-deco-spark-b">✧</span>
-      <span class="dotred-deco-spark dotred-deco-spark-c">✦</span>
-      <div class="dotred-deco-bubble">{_i(_P_MSG_CIRCLE, 20)}</div>
-      <div class="dotred-deco-shield">{_i(_P_SHIELD_CHECK, 22)}</div>
+    # ── Popover shell — position:fixed is applied in index.css to this ONE
+    # keyed container; everything below renders as normal Streamlit content
+    # that just happens to live inside a viewport-pinned box. ─────────────
+    with st.container(key="dotred_popover"):
+        # ── Header (its own markdown call — static, never touched by
+        # streaming). Bolder/deeper color direction than the rest of the
+        # site per this feature's own creative brief — same warm terracotta
+        # family, pushed further (see the .dotred-popover-* rules in
+        # index.css), rather than the strict Fable token palette. ────────
+        header_html = f'''
+<div class="dotred-header dotred-popover-header">
+  <div class="dotred-header-left">
+    <div class="dotred-avatar dotred-avatar-glow">dR</div>
+    <div>
+      <div class="dotred-title">dotRED</div>
+      <div class="dotred-subtitle">ถามต่อเกี่ยวกับผลสแกนนี้ได้เลย</div>
     </div>
   </div>
+  <div class="dotred-header-deco" aria-hidden="true">
+    <span class="dotred-deco-spark dotred-deco-spark-a">{_i(_P_SPARKLE, 12)}</span>
+    <span class="dotred-deco-spark dotred-deco-spark-c">{_i(_P_SPARKLE, 9)}</span>
+    <div class="dotred-deco-shield">{_i(_P_SHIELD_CHECK, 20)}</div>
+  </div>
 </div>'''
-    st.markdown(header_html, unsafe_allow_html=True)
+        st.markdown(header_html, unsafe_allow_html=True)
 
-    # ── Thread — now a real st.container(key=...) instead of a closed-off
-    # markdown string, specifically so the live streaming placeholder (used
-    # only while pending_question is set) can be placed INSIDE it, in the
-    # correct scroll position, instead of appearing after the input row. ──
-    with st.container(key="dotred_thread"):
-        if not history and not pending_question:
-            st.markdown(
-                '<div class="dotred-empty"><div class="dotred-empty-hint">'
-                'dotRED อ่านผลสแกนนี้ทั้งหมดแล้ว (คะแนน, headers, SSL, DNS, cookies, '
-                'CVE และคลังความรู้ความปลอดภัย) ลองเริ่มด้วยคำถามด้านล่าง หรือพิมพ์'
-                'คำถามของคุณเองก็ได้ครับ</div></div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            for i, m in enumerate(history):
-                _render_message(m["role"], m["content"], index=len(history) - 1 - i)
+        # ── Thread — a real st.container(key=...) so the live streaming
+        # placeholder can be placed INSIDE it, in the correct scroll
+        # position, instead of appearing after the input row. ────────────
+        with st.container(key="dotred_thread"):
+            if not history and not pending_question:
+                st.markdown(
+                    '<div class="dotred-empty"><div class="dotred-empty-hint">'
+                    'dotRED อ่านผลสแกนนี้ทั้งหมดแล้ว (คะแนน, headers, SSL, DNS, cookies, '
+                    'CVE และคลังความรู้ความปลอดภัย) ลองเริ่มด้วยคำถามด้านล่าง หรือพิมพ์'
+                    'คำถามของคุณเองก็ได้ครับ</div></div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                # BUGFIX: this used to pass index=len(history)-1-i, which staggers
+                # by "how old the message is" instead of "where it sits in the
+                # rendered list" — since history is chronological (oldest first,
+                # see chat_context.get_history()), that inverted the animation:
+                # the newest message (last in the loop) got delay=0 and popped in
+                # instantly, while the OLDEST message got the longest delay and
+                # visibly animated in LAST, at the top of the thread, every single
+                # time the fragment reruns (not just on first open). Passing `i`
+                # directly makes the stagger read top-to-bottom as intended. Capped
+                # at 6 to match the highest defined .dotred_msg_*_N delay class in
+                # index.css — anything past that (long conversations) reuses the
+                # max 270ms delay instead of animating with zero delay at all.
+                for i, m in enumerate(history):
+                    _render_message(m["role"], m["content"], index=min(i, 6))
 
-            if pending_question:
-                # The user's own message renders IMMEDIATELY (optimistic —
-                # before any network call), directly under the existing
-                # thread, so there's zero perceived delay for their own
-                # bubble. This is the single biggest lag-reduction: the
-                # previous version showed nothing at all until the AI's
-                # full reply streamed in.
-                _render_message("user", pending_question, index=0)
-                _run_dotred_turn(pending_question, scan_data, server_data, ai_data)
-                st.rerun(scope="fragment")
+                if pending_question:
+                    # Optimistic render — the user's own bubble appears
+                    # before any network call, so there's zero perceived
+                    # delay for their own message. index continues from
+                    # where the history loop above left off (this message
+                    # isn't in `history` yet — it only lands there once
+                    # _run_dotred_turn's append_turn call below runs), so
+                    # it gets the next stagger slot instead of colliding
+                    # with whatever message is already sitting at index=0.
+                    _render_message("user", pending_question, index=min(len(history), 6))
+                    _run_dotred_turn(pending_question, scan_data, server_data, ai_data)
+                    st.rerun(scope="fragment")
 
-    # ── Chips + input, wrapped in a keyed container so index.css can
-    # continue the card's visual (background/border/radius) underneath the
-    # thread above — these are real Streamlit widgets and cannot live inside
-    # a markdown-rendered <div>. ──────────────────────────────────────────
-    with st.container(key="dotred_panel_below"):
-        if not history and not pending_question:
-            chips = chat_guard.suggested_questions(scan_data, server_data, ai_data)
-            cols = st.columns(len(chips))
-            for i, (col, item) in enumerate(zip(cols, chips)):
-                with col:
+        # ── Chips + input, wrapped in a keyed container so index.css can
+        # continue the popover's visual underneath the thread above. ─────
+        with st.container(key="dotred_panel_below"):
+            if not history and not pending_question:
+                chips = chat_guard.suggested_questions(scan_data, server_data, ai_data)
+                for i, item in enumerate(chips[:3]):  # popover is narrower than the
+                    # old full-width tab panel — 3 stacked rows reads better
+                    # than cramming 4 into columns at ~400px wide.
                     chip_key = f"dotred_chip_{i}"
                     icon_uri = _svg_data_uri(
                         _CHIP_ICON_PATHS.get(item["icon"], _P_FILE_SHIELD),
-                        "%23b8794f",  # URL-escaped var(--accent-2)-ish terracotta; CSS vars aren't valid inside a data: URI, so this is a fixed hex fallback matched to the Fable accent
+                        "%23c1440e",
                     )
                     st.markdown(
                         f'<style>div[class*="st-key-{chip_key}"] '
                         f'button::before{{background-image:url(\'{icon_uri}\')}}</style>',
                         unsafe_allow_html=True,
                     )
-                    # Streamlit's st.button label supports basic Markdown
-                    # (bold, line breaks via two trailing spaces + \n) since
-                    # 1.36 — used here for the title/subtitle two-line card
-                    # text instead of a second markdown call, keeping this a
-                    # single real click target with zero extra DOM nodes.
                     label = f"**{item['q']}**  \n{item['hint']}"
                     if st.button(label, key=chip_key, use_container_width=True):
                         st.session_state["dotred_pending_input"] = item["q"]
                         st.rerun(scope="fragment")
 
-        pending_input_val = st.session_state.pop("dotred_pending_input", "")
-        with st.form(key="dotred_form", clear_on_submit=True, border=False):
-            in_col, send_col, clear_col = st.columns([6, 1, 1])
-            with in_col:
-                user_message = st.text_input(
-                    "ถามคำถาม",
-                    value=pending_input_val,
-                    key="dotred_input_box",
-                    placeholder="เช่น: ควรแก้ปัญหาไหนก่อน?",
-                    label_visibility="collapsed",
-                    disabled=bool(pending_question),
-                )
-            with send_col:
-                # NOTE: st.form_submit_button's label is plain text/Markdown
-                # only — a raw <svg> string embedded in the label would NOT
-                # render as an icon (same restriction as st.button above), it
-                # would show as literal escaped text. Icons for these two
-                # buttons are drawn via CSS ::before instead (see index.css),
-                # keeping the label pure text.
-                submitted = st.form_submit_button(
-                    "ส่ง", key="dotred_send_btn",
-                    use_container_width=True, disabled=bool(pending_question),
-                )
-            with clear_col:
-                cleared = st.form_submit_button(
-                    "ล้าง", key="dotred_clear_btn",
-                    use_container_width=True, disabled=bool(pending_question),
-                )
-
-        # Footer tip bar (mockup match) — static hint, no live logic; only
-        # shown once a conversation exists, mirroring the mockup's placement
-        # directly under the input row rather than as permanent chrome that
-        # would compete with the empty-state's own onboarding hint.
-        st.markdown(
-            f'<div class="dotred-tip-bar">{_i(_P_LIGHTBULB, 16)}'
-            f'<span><strong>Tips:</strong> ความเป็นประโยชน์ที่ดี ๆ จะได้คำตอบที่ตรงประเด็นมากขึ้น</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+            pending_input_val = st.session_state.pop("dotred_pending_input", "")
+            with st.form(key="dotred_form", clear_on_submit=True, border=False):
+                in_col, send_col = st.columns([5, 1])
+                with in_col:
+                    user_message = st.text_input(
+                        "ถามคำถาม",
+                        value=pending_input_val,
+                        key="dotred_input_box",
+                        placeholder="พิมพ์คำถาม...",
+                        label_visibility="collapsed",
+                        disabled=bool(pending_question),
+                    )
+                with send_col:
+                    submitted = st.form_submit_button(
+                        "ส่ง", key="dotred_send_btn",
+                        use_container_width=True, disabled=bool(pending_question),
+                    )
+            # Clear-chat sits as its own small button below the input row,
+            # not crowded into the 3-column [text-input | send] form above —
+            # a form can only submit via form_submit_button, so a destructive
+            # "wipe history" action needs to live outside the form as an
+            # ordinary st.button anyway. Styled quietly (see index.css's
+            # dotred_clear_btn rules) so it doesn't visually compete with
+            # the primary send action right above it.
+            cleared = st.button(
+                "ล้างแชท", key="dotred_clear_btn",
+                disabled=bool(pending_question),
+            )
 
     if cleared:
         chat_context.clear_history()

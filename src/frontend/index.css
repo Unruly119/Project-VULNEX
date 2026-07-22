@@ -2180,33 +2180,49 @@ div[data-testid="stDialog"] div[role="dialog"]:has(.st-key-pdpa-body) {
 }
 
 
+
 /* ════════════════════════════════════════════════════════════════
-   dotRED — ChatBOT panel (AI Analysis tab)
-   Reuses .sec-card shell + Fable tokens as a *base*, then layers a
-   deliberate motion system on top per the redesign brief: streaming
-   should feel alive (Claude/ChatGPT/Gemini-grade), the user bubble
-   should read clearly against the card (was --ink-on-warm, now
-   --accent solid), and every interactive element gets a real
-   hover/focus state. No new color family — accent + severity tokens
-   only, staying inside the Fable Restrained register.
+   dotRED — floating FAB + chat popover
+   ────────────────────────────────────────────────────────────────
+   ARCHITECTURE CHANGE from the previous embedded-tab-panel version:
+   dotRED is no longer inline content inside the AI Analysis tab. It's now
+   a fixed-position widget — a FAB button pinned to the bottom-right corner
+   of the viewport (always visible, never scrolls away, survives every tab
+   switch since it renders as a sibling of st.tabs(), not nested inside
+   one — see chat_ui.py's PLACEMENT CHANGE note) that opens a floating
+   chat popover on click.
 
-   DOM note: .dotred-card wraps the header AND the thread in ONE
-   st.markdown() call in chat_ui.py (matching app.py's own .sec-card
-   convention: the whole visible card chrome is a single Python f-string).
-   The suggested-question chips and the input form below are separate,
-   real Streamlit widgets (st.button / st.form) that CANNOT live inside
-   that markdown call's <div> — they render as later sibling elements.
-   .dotred-panel-below wraps them via a keyed container so the same card
-   visual (background/border/radius) continues seamlessly underneath. */
+   COLOR DIRECTION — per this feature's own explicit brief: still the same
+   warm terracotta family as the rest of the site (nothing arbitrary or
+   unrelated introduced), but deliberately pushed BOLDER and DEEPER than the
+   flat Fable token discipline used everywhere else — richer gradients,
+   more shadow depth, a glowing avatar — rather than reusing the site's flat
+   card/border conventions verbatim. This section intentionally does NOT
+   inherit .sec-card's restrained look; every rule below is scoped to
+   .dotred-fab-shell / .dotred-popover / their children only, so nothing
+   here leaks into or is affected by the rest of the site's design system.
 
-/* ── dotRED-scoped keyframes ──────────────────────────────────────
-   Kept local to this section (rather than the global keyframe block
-   above) since they're single-purpose to this panel; still honour the
-   project's own prefers-reduced-motion blanket rule at the top of the
-   file, which zeroes all animation-duration/transition-duration globally. */
+   Both the FAB and the popover are real st.container(key=...) wrappers
+   pinned via position:fixed — Streamlit has no native "portal" API, so
+   pulling content out of normal document flow into a floating box is done
+   purely in CSS against each container's generated st-key-* class.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Local keyframes ──────────────────────────────────────────────
+   Honors the file's existing prefers-reduced-motion blanket rule (defined
+   near the top of this file), which zeroes all animation/transition
+   durations globally — no extra media query needed here. */
+@keyframes dotred-fab-glow-pulse {
+  0%, 100% { box-shadow: 0 6px 24px rgba(196, 98, 45, 0.38), 0 2px 8px rgba(20,20,19,0.18); }
+  50%      { box-shadow: 0 8px 32px rgba(196, 98, 45, 0.55), 0 2px 8px rgba(20,20,19,0.18); }
+}
+@keyframes dotred-popover-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
 @keyframes dotred-avatar-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
-  50%      { box-shadow: 0 0 0 5px transparent; }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 117, 74, 0.55); }
+  50%      { box-shadow: 0 0 0 6px rgba(217, 117, 74, 0); }
 }
 @keyframes dotred-cursor-blink {
   0%, 45%  { opacity: 1; }
@@ -2217,50 +2233,131 @@ div[data-testid="stDialog"] div[role="dialog"]:has(.st-key-pdpa-body) {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes dotred-glow-sweep {
-  0%   { background-position: -150% 0; }
-  100% { background-position:  150% 0; }
-}
 
-.dotred-card {
-  background: var(--surface-hi);
-  border: 1px solid var(--border);
-  border-bottom: none;
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
+/* ── The FAB ──────────────────────────────────────────────────────
+   Fixed bottom-right, above everything (very high z-index — Streamlit's
+   own chrome, toasts, and the site footer all sit well below this). The
+   icon (chat-bubble when closed, X when open) is painted via CSS
+   background-image rather than embedded in the button label, since
+   st.button()'s label is plain text/Markdown only and cannot render a
+   raw <svg> string — see chat_ui.py's _svg_data_uri usage note. */
+div[class*="st-key-dotred_fab_shell"] {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 999999;
+  width: 3.75rem;
+  height: 3.75rem;
+}
+@media (max-width: 640px) {
+  div[class*="st-key-dotred_fab_shell"] {
+    right: 1rem;
+    bottom: 1rem;
+    width: 3.25rem;
+    height: 3.25rem;
+  }
+}
+div[class*="st-key-dotred_fab_shell"] div.stButton { height: 100%; }
+div[class*="st-key-dotred_fab_shell"] div.stButton > button {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: 50%;
+  border: none;
   padding: 0;
-  margin-bottom: 0;
-  overflow: hidden;
   position: relative;
+  background: linear-gradient(145deg, #e07a45, #b8501f 65%, #9c4118);
+  box-shadow: 0 6px 24px rgba(196, 98, 45, 0.38), 0 2px 8px rgba(20,20,19,0.18);
+  animation: dotred-fab-glow-pulse 3.4s ease-in-out infinite;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-div[class*="st-key-dotred_panel_below"] {
-  background: var(--surface-hi);
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 var(--r-lg) var(--r-lg);
-  margin-bottom: 1.125rem;
-  padding: 0 0 0.5rem;
-  transition: border-color var(--t-base) var(--ease);
+div[class*="st-key-dotred_fab_shell"] div.stButton > button:hover {
+  transform: scale(1.07) translateY(-1px);
+  box-shadow: 0 10px 32px rgba(196, 98, 45, 0.5), 0 3px 10px rgba(20,20,19,0.22);
 }
-/* When a request is in flight, dotRED_stream_row exists as a live sibling
-   further down; nudge the panel border toward the accent so the whole card
-   reads as "active" without a loud state change. :has() keeps this pure CSS. */
-div[class*="st-key-dotred_panel_below"]:has(+ div[class*="st-key-dotred_stream_row"]) {
-  border-color: var(--border-hi);
+div[class*="st-key-dotred_fab_shell"] div.stButton > button:active {
+  transform: scale(0.97);
+}
+div[class*="st-key-dotred_fab_shell"] div.stButton > button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 1.6rem;
+  height: 1.6rem;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+div[class*="st-key-dotred_fab_open"] div.stButton > button::before {
+  background-image: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M7.9 20A9 9 0 1 0 4 16.1L2 22Z%22/%3E%3C/svg%3E');
+}
+div[class*="st-key-dotred_fab_close"] div.stButton > button::before {
+  background-image: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.25%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M18 6 6 18%22/%3E%3Cpath d=%22m6 6 12 12%22/%3E%3C/svg%3E');
+  transform: rotate(90deg);
+}
+div[class*="st-key-dotred_fab_shell"] div.stButton > button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
 }
 
-/* ── Header row: avatar + name ─────────────────────────────────── */
-.dotred-header {
+/* ── The popover shell ────────────────────────────────────────────
+   Fixed, anchored just above the FAB. Sized for the content that actually
+   lives inside it (icon-card chips, markdown tables) rather than an
+   arbitrary preset — 408×600 lands between a cramped small popover and an
+   oversized one. Deep, glassy, saturated treatment — deliberately bolder
+   than the rest of the site's flat surface/border convention. */
+div[class*="st-key-dotred_popover"] {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 6rem;
+  z-index: 999998;
+  width: 408px;
+  max-width: calc(100vw - 2rem);
+  height: 600px;
+  max-height: calc(100vh - 8rem);
+  display: flex;
+  flex-direction: column;
+  background: #fffdfb;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 64px rgba(60, 30, 10, 0.28),
+    0 8px 24px rgba(60, 30, 10, 0.16),
+    0 0 0 1px rgba(196, 98, 45, 0.08);
+  animation: dotred-popover-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (max-width: 640px) {
+  div[class*="st-key-dotred_popover"] {
+    right: 0.75rem;
+    left: 0.75rem;
+    bottom: 5.25rem;
+    width: auto;
+    max-width: none;
+    height: auto;
+    max-height: calc(100vh - 7rem);
+  }
+}
+
+/* ── Header (inside the popover) ──────────────────────────────────
+   Deep gradient, not the flat .bg-warm strip used elsewhere — this is the
+   boldest surface in the whole widget, matching the FAB's own gradient
+   family so the two read as one continuous object when the popover opens
+   from the button. */
+div[class*="st-key-dotred_popover"] .dotred-popover-header {
+  background: linear-gradient(135deg, #2a1810 0%, #4a2818 55%, #6b3a1f 100%);
+  padding: 1.25rem 1.375rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 1.125rem 1.375rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-warm);
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;
 }
-.dotred-header-left {
+div[class*="st-key-dotred_popover"] .dotred-header-left {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -2268,189 +2365,103 @@ div[class*="st-key-dotred_panel_below"]:has(+ div[class*="st-key-dotred_stream_r
   position: relative;
   z-index: 1;
 }
-.dotred-avatar {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--r-md);
-  background: var(--ink);
-  color: var(--bg);
+div[class*="st-key-dotred_popover"] .dotred-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #e07a45, #b8501f);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   font-family: var(--font-sans);
   font-weight: 700;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   letter-spacing: -0.01em;
-  /* A slow, quiet breathing glow — dotRED is "present," not idle chrome.
-     Subtle enough to read as ambient life rather than a loading spinner;
-     runs continuously since it signals availability, not a transient state. */
-  animation: dotred-avatar-breathe 3.2s ease-in-out infinite;
 }
-.dotred-title {
+div[class*="st-key-dotred_popover"] .dotred-avatar-glow {
+  animation: dotred-avatar-breathe 3s ease-in-out infinite;
+}
+div[class*="st-key-dotred_popover"] .dotred-title {
   font-family: var(--font-sans);
   font-weight: 600;
-  font-size: 0.9375rem;
-  color: var(--ink);
+  font-size: 1rem;
+  color: #fff;
   line-height: 1.2;
 }
-.dotred-subtitle {
+div[class*="st-key-dotred_popover"] .dotred-subtitle {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: rgba(255,255,255,0.62);
   line-height: 1.3;
 }
-
-/* Header right-side decoration (mockup match) — purely visual, replaces the
-   removed engine badge with a small sparkle + chat-bubble + shield-check
-   cluster instead of leaving the header lopsided. No live meaning; aria-
-   hidden in chat_ui.py since it conveys nothing a screen reader needs. */
-.dotred-header-deco {
+div[class*="st-key-dotred_popover"] .dotred-header-deco {
   position: relative;
-  width: 5rem;
-  height: 3rem;
+  width: 3rem;
+  height: 2.5rem;
   flex-shrink: 0;
 }
-.dotred-deco-spark {
+div[class*="st-key-dotred_popover"] .dotred-deco-spark {
   position: absolute;
-  color: var(--accent);
-  opacity: 0.55;
-  font-size: 0.75rem;
+  color: rgba(255,255,255,0.5);
   animation: dotred-avatar-breathe 2.6s ease-in-out infinite;
 }
-.dotred-deco-spark-a { top: -0.2rem; left: 0; animation-delay: 0s; }
-.dotred-deco-spark-b { top: 0.6rem; left: 1.9rem; font-size: 0.55rem; animation-delay: 0.6s; }
-.dotred-deco-spark-c { top: -0.35rem; right: 0.1rem; animation-delay: 1.1s; }
-.dotred-deco-bubble {
-  position: absolute;
-  left: 0.9rem;
-  top: 0.15rem;
-  width: 2.75rem;
-  height: 2.1rem;
-  border-radius: var(--r-md) var(--r-md) var(--r-md) 4px;
-  background: var(--accent-dim);
-  color: var(--accent-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: rotate(-4deg);
-}
-.dotred-deco-shield {
+div[class*="st-key-dotred_popover"] .dotred-deco-spark-a { top: -0.1rem; left: 0; }
+div[class*="st-key-dotred_popover"] .dotred-deco-spark-c { top: 0.1rem; right: 0.3rem; animation-delay: 1s; }
+div[class*="st-key-dotred_popover"] .dotred-deco-shield {
   position: absolute;
   right: 0;
-  bottom: -0.1rem;
-  width: 2.3rem;
-  height: 2.3rem;
+  bottom: -0.15rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: 50%;
-  background: var(--surface-hi);
-  border: 1px solid var(--border);
-  color: var(--accent);
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 @media (max-width: 640px) {
-  .dotred-header-deco { display: none; }
-}
-
-/* Footer tip bar (mockup match) — sits directly under the input row,
-   separated by the existing form top-border so it reads as a distinct
-   closing strip rather than another input control. */
-.dotred-tip-bar {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.75rem 1.375rem 0.25rem;
-  color: var(--muted);
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-.dotred-tip-bar svg {
-  color: var(--accent);
-  margin-top: 0.05rem;
-}
-.dotred-tip-bar strong {
-  color: var(--ink-2);
-  font-weight: 600;
-}
-@media (max-width: 640px) {
-  .dotred-tip-bar { padding: 0.75rem 1rem 0.25rem; }
+  div[class*="st-key-dotred_popover"] .dotred-header-deco { display: none; }
 }
 
 /* ── Message thread ────────────────────────────────────────────── */
-/* Retargeted from a plain .dotred-thread class to the keyed-container
-   selector: the thread is now a real st.container(key="dotred_thread")
-   (not a closed-off markdown string) so the live streaming placeholder can
-   render INSIDE it, in its correct scroll position, instead of appearing
-   as a sibling below the input row — see chat_ui.py's STREAMING LAYOUT FIX
-   note for the full "why". */
 div[class*="st-key-dotred_thread"] {
-  padding: 1.25rem 1.375rem 0.25rem;
-  max-height: 32rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 1.125rem 1.125rem 0.25rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  /* Anchors the scrollbar to the bottom as new content streams in, instead
-     of staying pinned to the top — the CSS-only equivalent of a JS
-     "scrollIntoView" auto-scroll. Supported in current Chrome/Edge; browsers
-     without it simply keep today's (top-anchored) behavior, which is a
-     harmless degrade, not a broken one. */
+  gap: 0.9rem;
   overflow-anchor: auto;
+  background: #fffdfb;
 }
-div[class*="st-key-dotred_thread"]::-webkit-scrollbar { width: 8px; }
+div[class*="st-key-dotred_thread"]::-webkit-scrollbar { width: 6px; }
 div[class*="st-key-dotred_thread"]::-webkit-scrollbar-track { background: transparent; }
 div[class*="st-key-dotred_thread"]::-webkit-scrollbar-thumb {
-  background: var(--border-hi);
-  border-radius: var(--r-pill);
+  background: rgba(196, 98, 45, 0.25);
+  border-radius: 999px;
 }
-/* The header now renders as its own .dotred-card (see chat_ui.py) with no
-   bottom radius/border, and the thread container continues the same card
-   visual directly underneath — same seam technique already used between
-   the card and .dotred-panel_below. */
-.dotred-card.dotred-card-head {
-  border-bottom: none;
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
-  margin-bottom: 0;
-}
-div[class*="st-key-dotred_thread"] {
-  background: var(--surface-hi);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
+.dotred-empty { padding: 0.5rem 0 1rem; }
+.dotred-empty-hint {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
-/* ── Message rows ──────────────────────────────────────────────────
-   RETARGETED from static .dotred-msg/.dotred-bubble classes on a hand-built
-   HTML string to keyed st.container(key="dotred_msg_{user|ai}_{N}")
-   wrappers around REAL st.markdown(content) calls (see chat_ui.py's
-   _render_message). This is the fix for markdown fidelity: Streamlit's own
-   markdown engine renders GFM tables, ordered/unordered lists, bold, and
-   code natively — the previous hand-rolled regex parser only understood
-   **bold** and `code`, so anything else (tables especially, which the model
-   frequently produces) rendered as literal pipe-and-dash text.
-
-   The [class*="st-key-dotred_msg_user_"] / [...ai_...] prefix match works
-   regardless of the trailing index, since Streamlit always appends the
-   exact key string somewhere in the container's class list. */
+/* ── Message rows (same st.markdown-per-message architecture as the
+   previous tab-panel version, retargeted for the popover's narrower,
+   bolder frame) ──────────────────────────────────────────────────── */
 div[class*="st-key-dotred_msg_user_"],
 div[class*="st-key-dotred_msg_ai_"] {
   display: flex;
-  gap: 0.625rem;
-  max-width: 88%;
-  margin-bottom: 1rem;
+  gap: 0.5rem;
+  max-width: 90%;
   position: relative;
-  /* Opacity-only entrance — matches the project's own fix for the fade-up
-     ghosting bug (see keyframes comment above): a translateY here would
-     promote each bubble to its own GPU layer and leave a stale composited
-     ghost during Streamlit's rerun-heavy stream updates. */
   animation: fade-in var(--t-base) var(--ease) both;
 }
-/* Stagger delay per position — index baked into the key's trailing digits,
-   matched via attribute-contains against each concrete small number since
-   CSS has no way to read a number out of a class string generically. Covers
-   the same 0–6 range the previous --i variable was capped to; anything
-   beyond index 6 simply has no extra delay, which is correct (it's already
-   below the fold by then). */
 div[class*="st-key-dotred_msg_user_0"], div[class*="st-key-dotred_msg_ai_0"] { animation-delay: 0ms; }
 div[class*="st-key-dotred_msg_user_1"], div[class*="st-key-dotred_msg_ai_1"] { animation-delay: 45ms; }
 div[class*="st-key-dotred_msg_user_2"], div[class*="st-key-dotred_msg_ai_2"] { animation-delay: 90ms; }
@@ -2458,84 +2469,56 @@ div[class*="st-key-dotred_msg_user_3"], div[class*="st-key-dotred_msg_ai_3"] { a
 div[class*="st-key-dotred_msg_user_4"], div[class*="st-key-dotred_msg_ai_4"] { animation-delay: 180ms; }
 div[class*="st-key-dotred_msg_user_5"], div[class*="st-key-dotred_msg_ai_5"] { animation-delay: 225ms; }
 div[class*="st-key-dotred_msg_user_6"], div[class*="st-key-dotred_msg_ai_6"] { animation-delay: 270ms; }
+div[class*="st-key-dotred_msg_user_"] { margin-left: auto; flex-direction: row-reverse; }
 
-div[class*="st-key-dotred_msg_user_"] {
-  margin-left: auto;
-  flex-direction: row-reverse;
-}
-
-/* The role-tag ("dR" / "คุณ") is now a CSS ::before pseudo-element on the
-   keyed container itself — NOT a separate <span> via its own st.markdown()
-   call. That was the two-box bug: a second st.markdown() call inside the
-   same container creates a second stMarkdownContainer DOM sibling, and the
-   bubble-styling rule below targets ALL stMarkdownContainer elements in the
-   wrapper, not just the "real" content one — so the avatar span rendered as
-   its own full-width, near-empty bubble stacked in the same row. A ::before
-   costs zero extra DOM nodes, so there's now exactly one stMarkdownContainer
-   per message, guaranteed. */
-div[class*="st-key-dotred_msg_ai_"] { padding-left: 2.375rem; }
-div[class*="st-key-dotred_msg_user_"] { padding-right: 2.375rem; }
+div[class*="st-key-dotred_msg_ai_"] { padding-left: 2.1rem; }
+div[class*="st-key-dotred_msg_user_"] { padding-right: 2.1rem; }
 div[class*="st-key-dotred_msg_ai_"]::before,
 div[class*="st-key-dotred_msg_user_"]::before {
   position: absolute;
   top: 0;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--r-md);
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-sans);
   font-weight: 700;
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
 }
 div[class*="st-key-dotred_msg_ai_"]::before {
   content: "dR";
   left: 0;
-  background: var(--ink);
-  color: var(--bg);
+  background: linear-gradient(145deg, #4a2818, #2a1810);
+  color: #fff;
 }
 div[class*="st-key-dotred_msg_user_"]::before {
   content: "คุณ";
   right: 0;
-  background: var(--accent-dim);
-  color: var(--accent-2);
+  background: rgba(196, 98, 45, 0.14);
+  color: #a8511f;
 }
 
-/* The markdown content block itself — this IS the bubble now (Streamlit's
-   ONE stMarkdownContainer per message, the avatar no longer being a second
-   one — see the ::before fix above). */
 div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"],
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] {
-  padding: 0.7rem 1rem;
-  border-radius: var(--r-lg);
-  font-size: 0.875rem;
-  line-height: 1.65;
-  transition: box-shadow var(--t-base) var(--ease);
+  padding: 0.65rem 0.9rem;
+  border-radius: 14px;
+  font-size: 0.8125rem;
+  line-height: 1.6;
 }
 div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] {
-  background: var(--bg-warm);
-  border: 1px solid var(--border);
-  border-top-left-radius: var(--r-sm);
+  background: #f7f1ea;
+  border: 1px solid rgba(196, 98, 45, 0.12);
+  border-top-left-radius: 4px;
   color: var(--ink) !important;
 }
-/* User bubble — was --ink solid, which read as near-black text on the near-
-   black bubble against the warm-beige card (the contrast bug flagged in
-   review). Resolved to --accent (Fable's own terracotta, already the
-   brand's one accent color) so the two message roles read as two distinct,
-   intentional voices — assistant = quiet paper, user = warm accent —
-   exactly the L/R rhythm Claude/ChatGPT/Gemini bubbles use, without
-   introducing any color outside the existing token set. */
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] {
-  background: var(--accent);
-  border: 1px solid var(--accent-2);
-  border-top-right-radius: var(--r-sm);
-  box-shadow: 0 2px 10px var(--accent-dim);
+  background: linear-gradient(135deg, #d9754a, #b8501f);
+  border: none;
+  border-top-right-radius: 4px;
+  box-shadow: 0 3px 10px rgba(196, 98, 45, 0.28);
 }
-/* The global .stMarkdown color-hardening rule (near the top of this file)
-   forces --ink-2 on all markdown text with !important — override again,
-   scoped + !important, so user-bubble text stays white instead of dark ink
-   on a dark terracotta background. */
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"],
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] p,
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] li,
@@ -2544,462 +2527,287 @@ div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] strong
 }
 div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] p:not(:last-child),
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] p:not(:last-child) {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.45rem;
 }
 div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] ul,
 div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] ol,
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] ul,
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] ol {
-  padding-left: 1.25rem;
-  margin: 0.4rem 0;
+  padding-left: 1.1rem;
+  margin: 0.35rem 0;
 }
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] code {
-  background: rgba(255,255,255,0.18) !important;
+  background: rgba(255,255,255,0.2) !important;
   color: #fff !important;
   border: none !important;
 }
 
-/* ── Markdown tables inside dotRED bubbles ────────────────────────
-   The actual fix requested: GFM tables (| col | col |) now render as real
-   <table> elements via Streamlit's own markdown parser (see chat_ui.py),
-   and this is the visual styling for them — previously entirely unstyled
-   anywhere in the project, so a table would have rendered as a cramped,
-   borderless HTML default. Kept scoped to dotRED's bubbles only, since nothing
-   elsewhere in the app currently renders user-facing markdown tables. */
-div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] table {
+/* Markdown tables inside dotRED bubbles */
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] table,
+div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0.6rem 0;
-  font-size: 0.8125rem;
-  background: var(--surface-hi);
-  border-radius: var(--r-sm);
+  margin: 0.55rem 0;
+  font-size: 0.75rem;
+  background: #fff;
+  border-radius: 8px;
   overflow: hidden;
 }
-div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] th {
-  background: var(--accent-dim);
-  color: var(--accent-2) !important;
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] th,
+div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] th {
+  background: rgba(196, 98, 45, 0.12);
+  color: #a8511f !important;
   font-weight: 600;
   text-align: left;
-  padding: 0.5rem 0.7rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.02em;
-  border-bottom: 1px solid var(--accent);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.6875rem;
+  border-bottom: 1px solid rgba(196, 98, 45, 0.3);
 }
-div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] td {
-  padding: 0.5rem 0.7rem;
+div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] td,
+div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] td {
+  padding: 0.45rem 0.6rem;
   border-bottom: 1px solid var(--border);
   color: var(--ink-2) !important;
   vertical-align: top;
 }
-div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] tr:last-child td {
-  border-bottom: none;
-}
-div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"] tr:hover td {
-  background: var(--bg-warm);
-}
-/* User bubbles are short questions in practice, but cover the case anyway
-   for consistency — white-on-accent variant of the same table. */
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0.6rem 0;
-  font-size: 0.8125rem;
-  background: rgba(255,255,255,0.08);
-  border-radius: var(--r-sm);
-  overflow: hidden;
+  width: 100%; border-collapse: collapse; margin: 0.55rem 0;
+  font-size: 0.75rem; background: rgba(255,255,255,0.1); border-radius: 8px;
 }
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] th,
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] td {
-  padding: 0.5rem 0.7rem;
-  color: #fff !important;
+  padding: 0.45rem 0.6rem; color: #fff !important;
   border-bottom: 1px solid rgba(255,255,255,0.18);
 }
-div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] th {
-  font-weight: 600;
-  background: rgba(255,255,255,0.1);
-}
 
-/* ── Live streaming row (st.write_stream target) ─────────────────
-   The centerpiece of this redesign: while dotRED is composing an answer,
-   this row is the ONE place the interface communicates "real work is
-   happening" (see animate.md's perceived-performance note — a beat of
-   visible thinking reads as more trustworthy than an instant, suspiciously
-   easy answer for an AI-security-analysis feature).
-
-   st.markdown() and st.write_stream() render as SIBLING elements in
-   Streamlit's DOM, not nested inside each other — so rather than hand-
-   nesting <div> open/close tags across two calls (which breaks: they'd
-   render as three flat siblings), the keyed container itself becomes the
-   bubble, with the "dR" avatar drawn as a CSS ::before pseudo-element.
-   This guarantees correct nesting regardless of Streamlit's internal DOM
-   structure, since it only depends on the one wrapper Streamlit always
-   attaches the `key=` class to. */
+/* ── Live streaming row ─────────────────────────────────────────── */
 div[class*="st-key-dotred_stream_row"] {
   position: relative;
-  max-width: 88%;
-  margin: 1rem 0 0 2.375rem; /* room for the ::before avatar; matches .dotred-thread's row gap */
-  background: var(--bg-warm);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  border-top-left-radius: var(--r-sm);
-  padding: 0.7rem 1rem;
-  font-size: 0.875rem;
-  line-height: 1.65;
+  max-width: 90%;
+  margin: 0.9rem 0 0 2.1rem;
+  background: #f7f1ea;
+  border: 1px solid rgba(196, 98, 45, 0.12);
+  border-radius: 14px;
+  border-top-left-radius: 4px;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
   color: var(--ink);
   animation: fade-in var(--t-base) var(--ease) both;
-  /* A thin sweeping accent highlight along the top edge — communicates
-     active generation without a spinner or a jarring color swap. Built as
-     a background-image on a 2px-tall pseudo band via ::after so it can
-     safely animate background-position (cheap; no layout, no repaint of
-     the text content above it). */
-  box-shadow: 0 2px 12px var(--accent-dim);
+  box-shadow: 0 2px 10px rgba(196, 98, 45, 0.1);
 }
 div[class*="st-key-dotred_stream_row"]::before {
   content: "dR";
   position: absolute;
-  left: -2.375rem;
+  left: -2.1rem;
   top: 0;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--r-md);
-  background: var(--ink);
-  color: var(--bg);
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #4a2818, #2a1810);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-sans);
   font-weight: 700;
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   animation: dotred-avatar-breathe 1.4s ease-in-out infinite;
 }
-div[class*="st-key-dotred_stream_row"]::after {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  pointer-events: none;
-  background: linear-gradient(90deg,
-    transparent, var(--accent-glow), transparent);
-  background-size: 200% 100%;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: dotred-glow-sweep 1.8s linear infinite;
-}
-/* A live text cursor at the end of the in-progress answer — the single
-   clearest "still typing" signal, matching the ChatGPT/Claude/Gemini
-   convention the brief calls out by name. st.write_stream renders into a
-   stMarkdownContainer inside this row; ::after on that container (not the
-   row itself) keeps the cursor glued to wherever the text currently ends,
-   including through Streamlit's internal re-paints as chunks arrive. */
-div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"]::after {
-  content: "";
-  display: inline-block;
-  width: 2px;
-  height: 0.9em;
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  background: var(--accent);
-  animation: dotred-cursor-blink 0.9s steps(1) infinite;
-}
-/* Same markdown/table treatment as the finished assistant bubbles above —
-   the in-flight stream uses the same st.write_stream → stMarkdownContainer
-   pipeline, so a table that finishes streaming mid-row needs to look
-   correct immediately, not just after the rerun moves it into history. */
 div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] {
   color: var(--ink) !important;
 }
 div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] p:not(:last-child) {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.45rem;
 }
-div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0.6rem 0;
-  font-size: 0.8125rem;
-  background: var(--surface-hi);
-  border-radius: var(--r-sm);
-  overflow: hidden;
-}
-div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] th {
-  background: var(--accent-dim);
-  color: var(--accent-2) !important;
-  font-weight: 600;
-  text-align: left;
-  padding: 0.5rem 0.7rem;
-  font-size: 0.75rem;
-  border-bottom: 1px solid var(--accent);
-}
-div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"] td {
-  padding: 0.5rem 0.7rem;
-  border-bottom: 1px solid var(--border);
-  color: var(--ink-2) !important;
-  vertical-align: top;
+div[class*="st-key-dotred_stream_row"] [data-testid="stMarkdownContainer"]::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 0.85em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: #c4622d;
+  animation: dotred-cursor-blink 0.9s steps(1) infinite;
 }
 
-/* ── Typing indicator ──────────────────────────────────────────── */
-.dotred-typing {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.7rem 1rem;
-}
-.dotred-typing-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--muted);
-  animation: dotred-bounce 1.1s ease-in-out infinite;
-}
-.dotred-typing-dot:nth-child(2) { animation-delay: 0.15s; }
-.dotred-typing-dot:nth-child(3) { animation-delay: 0.3s; }
-@keyframes dotred-bounce {
-  0%, 60%, 100% { opacity: 0.3; transform: scale(0.85); }
-  30% { opacity: 1; transform: scale(1); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dotred-typing-dot { animation: none; opacity: 0.6; }
+/* ── Chips + input panel (below the thread) ───────────────────────
+   Continues the popover body — same cream surface as the thread above,
+   no visible seam between the two, since both live inside one continuous
+   fixed box (see the .dotred-popover shell rule). ────────────────────── */
+div[class*="st-key-dotred_panel_below"] {
+  flex-shrink: 0;
+  background: #fffdfb;
+  border-top: 1px solid rgba(196, 98, 45, 0.1);
+  padding: 0.75rem 1.125rem 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-/* ── Empty state: suggested question chips ────────────────────── */
-.dotred-empty {
-  padding: 0.5rem 0 1.25rem;
-}
-.dotred-empty-hint {
-  font-size: 0.8125rem;
-  color: var(--muted);
-  margin-bottom: 0.875rem;
-  line-height: 1.6;
-}
-
-/* The chip row sits inside .dotred-panel_below (the keyed container that
-   continues the card visual below the markdown-rendered thread) — it needs
-   its own horizontal padding since that wrapper has none by default. */
-div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type {
-  padding: 0.25rem 1.375rem 0;
-  gap: 0.5rem !important;
-}
-/* Each chip's own column gets the stagger — targeting stColumn (not the
-   button) means the delay applies to a stable, always-present wrapper
-   rather than fighting Streamlit's own button re-mount timing. Capped at
-   4 chips (suggested_questions() never returns more), so the total stagger
-   budget stays at 240ms — comfortably under animate.md's list-rhythm cap. */
-div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
-  > div[data-testid="stColumn"] {
-  animation: dotred-chip-in var(--t-base) var(--ease) both;
-}
-div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
-  > div[data-testid="stColumn"]:nth-child(1) { animation-delay: 0ms;  }
-div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
-  > div[data-testid="stColumn"]:nth-child(2) { animation-delay: 60ms; }
-div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
-  > div[data-testid="stColumn"]:nth-child(3) { animation-delay: 120ms; }
-div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
-  > div[data-testid="stColumn"]:nth-child(4) { animation-delay: 180ms; }
-
-/* Chips redesigned as icon cards (mockup match) — was a small pill row,
-   now a bigger card: icon-in-circle drawn via ::before (background-image
-   data-uri injected per-chip by chat_ui.py, since a raw <svg> can't live
-   inside a real st.button label), bold title + subtitle as the two-line
-   Markdown label text, and a chevron via ::after. Still a single real
-   st.button per chip — keyboard-reachable, one click target, zero extra
-   DOM nodes for the icon. */
+/* ── Suggested-question chips ──────────────────────────────────────
+   Full-width cards, left-aligned (BaseWeb centers button labels by
+   default — overridden below), icon painted via ::before background-image
+   set inline per-chip by chat_ui.py's _svg_data_uri helper. Label markdown
+   is "**question**\n\nhint", so BaseWeb renders it as two stacked <p>
+   elements inside the button; :first-child carries the bold question,
+   :last-child the muted hint. */
 div[class*="st-key-dotred_chip_"] div.stButton > button {
-  position: relative;
-  background: var(--surface) !important;
-  color: var(--ink-2) !important;
+  background: #fff !important;
   border: 1px solid var(--border) !important;
-  border-radius: var(--r-lg) !important;
-  padding: 0.9rem 2.5rem 0.9rem 3.5rem !important;
-  min-height: 4.5rem;
-  font-size: 0.8125rem !important;
-  font-weight: 500 !important;
+  border-radius: 12px !important;
+  padding: 0.7rem 0.8rem 0.7rem 2.6rem !important;
   text-align: left !important;
+  display: block !important;
   white-space: normal !important;
-  line-height: 1.5 !important;
-  transition: border-color var(--t-fast) var(--ease),
-              color        var(--t-fast) var(--ease),
-              background   var(--t-fast) var(--ease),
-              box-shadow   var(--t-fast) var(--ease),
-              transform    var(--t-fast) var(--ease) !important;
+  animation: dotred-chip-in var(--t-base) var(--ease) both;
+  transition: border-color 160ms var(--ease), background 160ms var(--ease),
+              transform 160ms var(--ease);
 }
-/* Title line (the **bold** first line of the Markdown label) reads at the
-   base ink color and larger weight; the subtitle line underneath (the
-   hint text) is deliberately muted — this two-tier contrast is what the
-   mockup's title/subtitle split communicates, achieved purely through
-   Streamlit's own Markdown-in-label bold parsing rather than a second
-   element. */
-div[class*="st-key-dotred_chip_"] div.stButton > button p {
-  margin: 0 !important;
+div[class*="st-key-dotred_chip_0"] div.stButton > button { animation-delay: 0ms; }
+div[class*="st-key-dotred_chip_1"] div.stButton > button { animation-delay: 55ms; }
+div[class*="st-key-dotred_chip_2"] div.stButton > button { animation-delay: 110ms; }
+div[class*="st-key-dotred_chip_"] div.stButton > button:hover {
+  background: rgba(196, 98, 45, 0.05) !important;
+  border-color: rgba(196, 98, 45, 0.35) !important;
+  transform: translateY(-1px);
 }
-div[class*="st-key-dotred_chip_"] div.stButton > button strong {
-  display: block;
-  color: var(--ink) !important;
-  font-size: 0.875rem;
-  font-weight: 600;
-  margin-bottom: 0.15rem;
+div[class*="st-key-dotred_chip_"] div.stButton > button:active {
+  transform: translateY(0);
 }
-/* Icon circle */
+div[class*="st-key-dotred_chip_"] div.stButton {
+  position: relative;
+}
 div[class*="st-key-dotred_chip_"] div.stButton > button::before {
   content: "";
   position: absolute;
-  left: 0.9rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 50%;
-  background-color: var(--accent-dim);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 1.1rem;
-  transition: background-color var(--t-fast) var(--ease);
-}
-/* Chevron */
-div[class*="st-key-dotred_chip_"] div.stButton > button::after {
-  content: "";
-  position: absolute;
-  right: 1rem;
-  top: 50%;
-  width: 0.8rem;
-  height: 0.8rem;
-  transform: translateY(-50%) rotate(45deg);
-  border-top: 2px solid var(--muted);
-  border-right: 2px solid var(--muted);
-  transition: border-color var(--t-fast) var(--ease),
-              transform    var(--t-fast) var(--ease);
-}
-div[class*="st-key-dotred_chip_"] div.stButton > button:hover {
-  border-color: var(--accent) !important;
-  background: var(--accent-dim) !important;
-  box-shadow: 0 4px 14px var(--accent-dim) !important;
-  transform: translateY(-1px);
-}
-div[class*="st-key-dotred_chip_"] div.stButton > button:hover::before {
-  background-color: var(--accent);
-}
-div[class*="st-key-dotred_chip_"] div.stButton > button:hover::after {
-  border-color: var(--accent);
-  transform: translateY(-50%) rotate(45deg) translateX(2px);
-}
-div[class*="st-key-dotred_chip_"] div.stButton > button:active {
-  background: var(--accent-glow) !important;
-  transform: translateY(0);
-}
-/* On mobile the two-chip row wraps to one column — the card format reads
-   naturally full-width; no separate mobile chip style is needed beyond
-   the existing responsive column stacking already in the app's base CSS. */
-
-/* ── Input row ─────────────────────────────────────────────────── */
-/* The form (st.form key="dotred_form") also needs the card's own side
-   padding + a top divider, since it's a sibling of the chip row inside the
-   same borderless .dotred-panel_below wrapper. */
-div[class*="st-key-dotred_panel_below"] div[data-testid="stForm"] {
-  padding: 1rem 1.375rem 0.5rem;
-  border-top: 1px solid var(--border);
-  margin-top: 0.5rem;
-  background: transparent;
-}
-div[class*="st-key-dotred_input_box"] div[data-baseweb="input"] > div {
-  background: var(--surface) !important;
-  border-radius: var(--r-md) !important;
-  transition: border-color var(--t-fast) var(--ease),
-              box-shadow   var(--t-fast) var(--ease) !important;
-}
-/* Streamlit's global focus rule already handles the border color; add the
-   accent glow ring here so the input matches the same focus treatment as
-   every other text field in the app (see the base div[data-baseweb="input"]
-   rule near the top of the file) instead of relying on inheritance alone. */
-div[class*="st-key-dotred_input_box"] div[data-baseweb="input"]:focus-within {
-  box-shadow: 0 0 0 3px var(--accent-dim) !important;
-}
-/* Send/clear icons — drawn via ::before since st.form_submit_button's label
-   is plain text/Markdown only and cannot render a raw <svg> string; a
-   second markdown() call isn't an option either (form_submit_button has no
-   equivalent slot for one). Uses the same currentColor-independent stroke
-   trick as the chip icons: a fixed hex baked into the data URI, matched to
-   whatever text color that button state already uses. */
-div[class*="st-key-dotred_send_btn"] div.stButton > button,
-div[class*="st-key-dotred_clear_btn"] div.stButton > button {
-  position: relative;
-  padding-left: 2.1rem !important;
-}
-div[class*="st-key-dotred_send_btn"] div.stButton > button::before,
-div[class*="st-key-dotred_clear_btn"] div.stButton > button::before {
-  content: "";
-  position: absolute;
   left: 0.85rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 0.9rem;
-  height: 0.9rem;
+  top: 0.75rem;
+  width: 1.05rem;
+  height: 1.05rem;
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
 }
-div[class*="st-key-dotred_send_btn"] div.stButton > button::before {
-  background-image: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z%22/%3E%3Cpath d=%22m21.854 2.147-10.94 10.939%22/%3E%3C/svg%3E');
+div[class*="st-key-dotred_chip_"] div.stButton > button p {
+  margin: 0 !important;
+  text-align: left !important;
+  line-height: 1.35 !important;
+  white-space: normal !important;
 }
-div[class*="st-key-dotred_clear_btn"] div.stButton > button::before {
-  background-image: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%236b6258%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6%22/%3E%3Cpath d=%22M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2%22/%3E%3Cline x1=%2210%22 x2=%2210%22 y1=%2211%22 y2=%2217%22/%3E%3Cline x1=%2214%22 x2=%2214%22 y1=%2211%22 y2=%2217%22/%3E%3C/svg%3E');
-}
-div[class*="st-key-dotred_clear_btn"] div.stButton > button:hover::before {
-  background-image: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23c1440e%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6%22/%3E%3Cpath d=%22M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2%22/%3E%3Cline x1=%2210%22 x2=%2210%22 y1=%2211%22 y2=%2217%22/%3E%3Cline x1=%2214%22 x2=%2214%22 y1=%2211%22 y2=%2217%22/%3E%3C/svg%3E');
-}
-div[class*="st-key-dotred_send_btn"] div.stButton > button {
-  background: var(--accent) !important;
-  color: #fff !important;
+div[class*="st-key-dotred_chip_"] div.stButton > button p:first-child {
+  font-size: 0.8125rem !important;
   font-weight: 600 !important;
-  transition: background var(--t-fast) var(--ease),
-              box-shadow var(--t-fast) var(--ease) !important;
+  color: var(--ink) !important;
 }
-div[class*="st-key-dotred_send_btn"] div.stButton > button:hover {
-  background: var(--accent-2) !important;
-  box-shadow: 0 3px 12px var(--accent-glow) !important;
+div[class*="st-key-dotred_chip_"] div.stButton > button p:last-child:not(:first-child) {
+  font-size: 0.6875rem !important;
+  font-weight: 400 !important;
+  color: var(--muted) !important;
+  margin-top: 0.15rem !important;
 }
-div[class*="st-key-dotred_send_btn"] div.stButton > button:active {
-  background: var(--accent-2) !important;
-  box-shadow: 0 1px 4px var(--accent-dim) !important;
+
+/* ── Input row (inside dotred_form) ────────────────────────────────
+   [text input | send button] as a 5:1 column split (see chat_ui.py).
+   Selectors follow the same real, confirmed pattern already used for the
+   auth form elsewhere in this file: div[data-baseweb="input"] for the
+   BaseWeb text field, div[data-testid="stFormSubmitButton"] for the send
+   button (forms use a distinct submit-button testid, not div.stButton). */
+div[class*="st-key-dotred_form"] div[data-baseweb="input"] > div {
+  background: #fff !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--r-pill) !important;
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
 }
+div[class*="st-key-dotred_form"] div[data-baseweb="input"]:focus-within > div {
+  border-color: rgba(196, 98, 45, 0.45) !important;
+  box-shadow: 0 0 0 3px rgba(196, 98, 45, 0.12) !important;
+}
+div[class*="st-key-dotred_form"] div[data-baseweb="input"] input {
+  font-family: var(--font-sans) !important;
+  font-size: 0.8125rem !important;
+  padding: 0.55rem 1rem !important;
+  color: var(--ink) !important;
+}
+div[class*="st-key-dotred_form"] div[data-baseweb="input"] input::placeholder {
+  color: var(--muted) !important;
+}
+div[class*="st-key-dotred_form"] div[data-baseweb="input"] input:disabled {
+  opacity: 0.6 !important;
+}
+
+/* Send button — round, matches the FAB's own gradient family so it reads
+   as the same object language rather than the site's flat --ink default. */
+div[class*="st-key-dotred_form"] div[data-testid="stFormSubmitButton"] > button {
+  width: 100% !important;
+  height: 2.35rem !important;
+  min-height: 0 !important;
+  border-radius: var(--r-pill) !important;
+  border: none !important;
+  padding: 0 !important;
+  background: linear-gradient(145deg, #e07a45, #b8501f 65%, #9c4118) !important;
+  color: #fff !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  box-shadow: 0 3px 10px rgba(196, 98, 45, 0.3) !important;
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease),
+              opacity 160ms var(--ease) !important;
+}
+div[class*="st-key-dotred_form"] div[data-testid="stFormSubmitButton"] > button:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 5px 16px rgba(196, 98, 45, 0.4) !important;
+}
+div[class*="st-key-dotred_form"] div[data-testid="stFormSubmitButton"] > button:active {
+  transform: translateY(0) !important;
+}
+div[class*="st-key-dotred_form"] div[data-testid="stFormSubmitButton"] > button:disabled {
+  opacity: 0.55 !important;
+  box-shadow: none !important;
+}
+div[class*="st-key-dotred_form"] div[data-testid="stFormSubmitButton"] > button * {
+  color: inherit !important;
+}
+div[class*="st-key-dotred_form"] div[data-testid="stFormSubmitButton"] > button:focus-visible {
+  outline: 2px solid #fff !important;
+  outline-offset: 2px !important;
+}
+
+/* Clear-chat — small, quiet secondary action; deliberately not competing
+   with the send button's color/weight, per chat_ui.py's own comment on
+   why it sits outside the form as a plain st.button. */
 div[class*="st-key-dotred_clear_btn"] div.stButton > button {
   background: transparent !important;
+  border: none !important;
   color: var(--muted) !important;
-  border: 1px solid var(--border) !important;
-  transition: color        var(--t-fast) var(--ease),
-              border-color var(--t-fast) var(--ease) !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  padding: 0.2rem 0.3rem !important;
+  align-self: flex-start;
+  transition: color 140ms var(--ease) !important;
 }
 div[class*="st-key-dotred_clear_btn"] div.stButton > button:hover {
-  color: var(--c-crit) !important;
-  border-color: var(--c-crit-bdr) !important;
-  background: var(--c-crit-bg) !important;
+  color: var(--accent) !important;
+  background: transparent !important;
+}
+div[class*="st-key-dotred_clear_btn"] div.stButton > button:disabled {
+  opacity: 0.5 !important;
 }
 
-/* ── Error banner (inline, not a modal — product register) ──────── */
-.dotred-error {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.625rem;
-  padding: 0.75rem 1rem;
-  margin: 0 1.375rem 1rem;
-  border-radius: var(--r-md);
-  background: var(--c-high-bg);
-  border: 1px solid var(--c-high-bdr);
-  color: var(--c-high);
-  font-size: 0.8125rem;
-  line-height: 1.5;
+/* Align the [text-input | send-button] column pair at their vertical
+   center — st.columns() default-aligns to the top, which visually
+   mismatches a ~2.4rem input against a ~2.35rem round button unless
+   pinned explicitly, same convention as .st-key-auth-topbar above. */
+div[class*="st-key-dotred_form"] [data-testid="stHorizontalBlock"] {
+  align-items: center !important;
+  gap: 0.5rem !important;
 }
 
-/* ── Responsive ───────────────────────────────────────────────── */
-@media (max-width: 640px) {
-  div[class*="st-key-dotred_thread"] { max-height: 24rem; }
-  div[class*="st-key-dotred_msg_user_"],
-  div[class*="st-key-dotred_msg_ai_"] { max-width: 94%; }
-  .dotred-header { padding: 1rem; }
-  div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type {
-    padding: 0 1rem;
-  }
-  div[class*="st-key-dotred_panel_below"] div[data-testid="stForm"] {
-    padding: 0.875rem 1rem 0.5rem;
-  }
+/* Tighten the gap Streamlit's own vertical-block wrapper inserts between
+   the three stacked chip buttons — dotred_panel_below's flex `gap` only
+   spaces its own direct children (the chip stack as a whole, the form,
+   the clear button), not the individual chips nested one level deeper
+   inside Streamlit's auto-generated stVerticalBlock around them. */
+div[class*="st-key-dotred_panel_below"] [data-testid="stVerticalBlock"] {
+  gap: 0.4rem !important;
 }

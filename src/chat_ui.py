@@ -31,6 +31,60 @@ import chat_guard
 from prompt_builder import build_chat_prompt
 
 
+# ── Inline SVG icons ────────────────────────────────────────────────
+# Local copy of app.py's _i() Lucide-style helper (not imported — app.py
+# itself imports chat_ui, so importing back would create a circular import).
+# Same convention: stroke=currentColor, so icon color always follows CSS.
+def _i(p: str, s: int, xs: str = "") -> str:
+    st_v = f"vertical-align:middle;flex-shrink:0{';' + xs if xs else ''}"
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{s}" height="{s}"'
+        f' viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+        f' stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
+        f' style="{st_v}">{p}</svg>'
+    )
+
+
+_P_SHIELD_CHECK = (
+    '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'
+    '<path d="m9 12 2 2 4-4"/>'
+)
+_P_MSG_CIRCLE = '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>'
+_P_FILE_SHIELD = (
+    '<path d="M4 22V4a2 2 0 0 1 2-2h9l5 5v4"/><path d="M14 2v5h5"/>'
+    '<path d="M18 22a3 3 0 0 0 3-3v-1a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v1a3 3 0 0 0 3 3Z"/>'
+)
+_P_TRIANGLE_ALERT = (
+    '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/>'
+    '<path d="M12 9v4"/><path d="M12 17h.01"/>'
+)
+_P_SEND = '<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>'
+_P_TRASH = '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>'
+_P_LIGHTBULB = '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>'
+_P_CHEVRON_RIGHT = '<path d="m9 18 6-6-6-6"/>'
+
+_CHIP_ICON_PATHS = {
+    "file_shield": _P_FILE_SHIELD,
+    "alert": _P_TRIANGLE_ALERT,
+}
+
+
+def _svg_data_uri(paths: str, color: str) -> str:
+    """Build a background-image-ready data: URI for an inline SVG icon.
+    Used to draw chip icons via CSS background-image instead of an extra
+    st.markdown() call — same zero-extra-DOM-node principle as the message
+    avatar ::before fix above, applied here to keep st.button()'s label as
+    plain text (buttons can't render arbitrary raw <svg> in their label)."""
+    import urllib.parse
+
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+        f'fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" '
+        f'stroke-linejoin="round">{paths}</svg>'
+    )
+    return "data:image/svg+xml," + urllib.parse.quote(svg)
+
+
 def _render_message(role: str, content: str, index: int = 0) -> None:
     """Render one message as REAL Streamlit markdown (st.markdown(content),
     unsafe_allow_html=False) inside a keyed container that CSS themes as a
@@ -45,13 +99,22 @@ def _render_message(role: str, content: str, index: int = 0) -> None:
     — NOT content-hashed — so CSS can select on the stable prefix
     (`st-key-dotred_msg_user_` vs `st-key-dotred_msg_ai_`) for role styling,
     and on the trailing index for the entrance stagger, without needing a
-    per-message injected <style> tag."""
+    per-message injected <style> tag.
+
+    BUGFIX: the role avatar used to be its OWN st.markdown() call (a
+    <span class="dotred-role-tag">) placed before the content markdown call.
+    Two st.markdown() calls in the same keyed container = two separate
+    stMarkdownContainer DOM siblings — and the bubble CSS targets ALL
+    stMarkdownContainer elements inside the key wrapper, not just the
+    "real" one. Result: the avatar span rendered as its OWN full-width
+    empty-ish bubble stacked in the same row (the two-box bug). Fixed by
+    dropping the avatar into a CSS ::before pseudo-element on the container
+    itself instead — zero extra markdown call, so there's only ever ONE
+    stMarkdownContainer per message, guaranteed."""
     is_user = role == "user"
     prefix = "dotred_msg_user" if is_user else "dotred_msg_ai"
     key = f"{prefix}_{index}"
-    avatar = "คุณ" if is_user else "dR"
     with st.container(key=key):
-        st.markdown(f'<span class="dotred-role-tag">{avatar}</span>', unsafe_allow_html=True)
         st.markdown(content)
 
 
@@ -132,7 +195,11 @@ def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> No
     pending_question = st.session_state.pop("dotred_inflight_question", None)
 
     # ── Header (its own markdown call — static, never touched by streaming) ──
-    header_html = '''
+    # Mockup match: adds a decorative sparkle + chat-bubble + shield-check
+    # cluster on the right of the header — purely visual (no live status
+    # meaning, unlike the removed engine badge), drawn as inline SVG so it
+    # stays crisp at any zoom instead of a screenshotted raster asset.
+    header_html = f'''
 <div class="dotred-card dotred-card-head">
   <div class="dotred-header">
     <div class="dotred-header-left">
@@ -141,6 +208,13 @@ def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> No
         <div class="dotred-title">dotRED</div>
         <div class="dotred-subtitle">ถามต่อเกี่ยวกับผลสแกนนี้ได้เลย</div>
       </div>
+    </div>
+    <div class="dotred-header-deco" aria-hidden="true">
+      <span class="dotred-deco-spark dotred-deco-spark-a">✦</span>
+      <span class="dotred-deco-spark dotred-deco-spark-b">✧</span>
+      <span class="dotred-deco-spark dotred-deco-spark-c">✦</span>
+      <div class="dotred-deco-bubble">{_i(_P_MSG_CIRCLE, 20)}</div>
+      <div class="dotred-deco-shield">{_i(_P_SHIELD_CHECK, 22)}</div>
     </div>
   </div>
 </div>'''
@@ -182,10 +256,26 @@ def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> No
         if not history and not pending_question:
             chips = chat_guard.suggested_questions(scan_data, server_data, ai_data)
             cols = st.columns(len(chips))
-            for i, (col, q) in enumerate(zip(cols, chips)):
+            for i, (col, item) in enumerate(zip(cols, chips)):
                 with col:
-                    if st.button(q, key=f"dotred_chip_{i}", use_container_width=True):
-                        st.session_state["dotred_pending_input"] = q
+                    chip_key = f"dotred_chip_{i}"
+                    icon_uri = _svg_data_uri(
+                        _CHIP_ICON_PATHS.get(item["icon"], _P_FILE_SHIELD),
+                        "%23b8794f",  # URL-escaped var(--accent-2)-ish terracotta; CSS vars aren't valid inside a data: URI, so this is a fixed hex fallback matched to the Fable accent
+                    )
+                    st.markdown(
+                        f'<style>div[class*="st-key-{chip_key}"] '
+                        f'button::before{{background-image:url(\'{icon_uri}\')}}</style>',
+                        unsafe_allow_html=True,
+                    )
+                    # Streamlit's st.button label supports basic Markdown
+                    # (bold, line breaks via two trailing spaces + \n) since
+                    # 1.36 — used here for the title/subtitle two-line card
+                    # text instead of a second markdown call, keeping this a
+                    # single real click target with zero extra DOM nodes.
+                    label = f"**{item['q']}**  \n{item['hint']}"
+                    if st.button(label, key=chip_key, use_container_width=True):
+                        st.session_state["dotred_pending_input"] = item["q"]
                         st.rerun(scope="fragment")
 
         pending_input_val = st.session_state.pop("dotred_pending_input", "")
@@ -201,15 +291,32 @@ def render_dotred_panel(scan_data: dict, server_data: dict, ai_data: dict) -> No
                     disabled=bool(pending_question),
                 )
             with send_col:
+                # NOTE: st.form_submit_button's label is plain text/Markdown
+                # only — a raw <svg> string embedded in the label would NOT
+                # render as an icon (same restriction as st.button above), it
+                # would show as literal escaped text. Icons for these two
+                # buttons are drawn via CSS ::before instead (see index.css),
+                # keeping the label pure text.
                 submitted = st.form_submit_button(
-                    "ส่ง", key="dotred_send_btn", use_container_width=True,
-                    disabled=bool(pending_question),
+                    "ส่ง", key="dotred_send_btn",
+                    use_container_width=True, disabled=bool(pending_question),
                 )
             with clear_col:
                 cleared = st.form_submit_button(
-                    "ล้าง", key="dotred_clear_btn", use_container_width=True,
-                    disabled=bool(pending_question),
+                    "ล้าง", key="dotred_clear_btn",
+                    use_container_width=True, disabled=bool(pending_question),
                 )
+
+        # Footer tip bar (mockup match) — static hint, no live logic; only
+        # shown once a conversation exists, mirroring the mockup's placement
+        # directly under the input row rather than as permanent chrome that
+        # would compete with the empty-state's own onboarding hint.
+        st.markdown(
+            f'<div class="dotred-tip-bar">{_i(_P_LIGHTBULB, 16)}'
+            f'<span><strong>Tips:</strong> ความเป็นประโยชน์ที่ดี ๆ จะได้คำตอบที่ตรงประเด็นมากขึ้น</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     if cleared:
         chat_context.clear_history()

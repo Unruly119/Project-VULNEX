@@ -2300,6 +2300,83 @@ div[class*="st-key-dotred_panel_below"]:has(+ div[class*="st-key-dotred_stream_r
   line-height: 1.3;
 }
 
+/* Header right-side decoration (mockup match) — purely visual, replaces the
+   removed engine badge with a small sparkle + chat-bubble + shield-check
+   cluster instead of leaving the header lopsided. No live meaning; aria-
+   hidden in chat_ui.py since it conveys nothing a screen reader needs. */
+.dotred-header-deco {
+  position: relative;
+  width: 5rem;
+  height: 3rem;
+  flex-shrink: 0;
+}
+.dotred-deco-spark {
+  position: absolute;
+  color: var(--accent);
+  opacity: 0.55;
+  font-size: 0.75rem;
+  animation: dotred-avatar-breathe 2.6s ease-in-out infinite;
+}
+.dotred-deco-spark-a { top: -0.2rem; left: 0; animation-delay: 0s; }
+.dotred-deco-spark-b { top: 0.6rem; left: 1.9rem; font-size: 0.55rem; animation-delay: 0.6s; }
+.dotred-deco-spark-c { top: -0.35rem; right: 0.1rem; animation-delay: 1.1s; }
+.dotred-deco-bubble {
+  position: absolute;
+  left: 0.9rem;
+  top: 0.15rem;
+  width: 2.75rem;
+  height: 2.1rem;
+  border-radius: var(--r-md) var(--r-md) var(--r-md) 4px;
+  background: var(--accent-dim);
+  color: var(--accent-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-4deg);
+}
+.dotred-deco-shield {
+  position: absolute;
+  right: 0;
+  bottom: -0.1rem;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 50%;
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+@media (max-width: 640px) {
+  .dotred-header-deco { display: none; }
+}
+
+/* Footer tip bar (mockup match) — sits directly under the input row,
+   separated by the existing form top-border so it reads as a distinct
+   closing strip rather than another input control. */
+.dotred-tip-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 1.375rem 0.25rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.dotred-tip-bar svg {
+  color: var(--accent);
+  margin-top: 0.05rem;
+}
+.dotred-tip-bar strong {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .dotred-tip-bar { padding: 0.75rem 1rem 0.25rem; }
+}
+
 /* ── Message thread ────────────────────────────────────────────── */
 /* Retargeted from a plain .dotred-thread class to the keyed-container
    selector: the thread is now a real st.container(key="dotred_thread")
@@ -2387,14 +2464,19 @@ div[class*="st-key-dotred_msg_user_"] {
   flex-direction: row-reverse;
 }
 
-/* The role-tag ("dR" / "คุณ") is a small absolutely-positioned chip drawn
-   from the <span class="dotred-role-tag"> injected by _render_message —
-   using absolute positioning (rather than true flex sibling layout) keeps
-   the markdown content area a single, uninterrupted block so tables/lists
-   can use their full row width instead of being squeezed by a flex row. */
+/* The role-tag ("dR" / "คุณ") is now a CSS ::before pseudo-element on the
+   keyed container itself — NOT a separate <span> via its own st.markdown()
+   call. That was the two-box bug: a second st.markdown() call inside the
+   same container creates a second stMarkdownContainer DOM sibling, and the
+   bubble-styling rule below targets ALL stMarkdownContainer elements in the
+   wrapper, not just the "real" content one — so the avatar span rendered as
+   its own full-width, near-empty bubble stacked in the same row. A ::before
+   costs zero extra DOM nodes, so there's now exactly one stMarkdownContainer
+   per message, guaranteed. */
 div[class*="st-key-dotred_msg_ai_"] { padding-left: 2.375rem; }
 div[class*="st-key-dotred_msg_user_"] { padding-right: 2.375rem; }
-.dotred-role-tag {
+div[class*="st-key-dotred_msg_ai_"]::before,
+div[class*="st-key-dotred_msg_user_"]::before {
   position: absolute;
   top: 0;
   width: 1.75rem;
@@ -2406,22 +2488,23 @@ div[class*="st-key-dotred_msg_user_"] { padding-right: 2.375rem; }
   font-family: var(--font-sans);
   font-weight: 700;
   font-size: 0.6875rem;
-  flex-shrink: 0;
 }
-div[class*="st-key-dotred_msg_ai_"] .dotred-role-tag {
+div[class*="st-key-dotred_msg_ai_"]::before {
+  content: "dR";
   left: 0;
   background: var(--ink);
   color: var(--bg);
 }
-div[class*="st-key-dotred_msg_user_"] .dotred-role-tag {
+div[class*="st-key-dotred_msg_user_"]::before {
+  content: "คุณ";
   right: 0;
   background: var(--accent-dim);
   color: var(--accent-2);
 }
 
 /* The markdown content block itself — this IS the bubble now (Streamlit's
-   stMarkdownContainer, immediately following the role-tag span in the same
-   keyed container). */
+   ONE stMarkdownContainer per message, the avatar no longer being a second
+   one — see the ::before fix above). */
 div[class*="st-key-dotred_msg_ai_"] [data-testid="stMarkdownContainer"],
 div[class*="st-key-dotred_msg_user_"] [data-testid="stMarkdownContainer"] {
   padding: 0.7rem 1rem;
@@ -2715,31 +2798,98 @@ div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:fir
 div[class*="st-key-dotred_panel_below"] div[data-testid="stHorizontalBlock"]:first-of-type
   > div[data-testid="stColumn"]:nth-child(4) { animation-delay: 180ms; }
 
-/* Chips are rendered as real Streamlit buttons (st.button) so they are
-   keyboard-reachable and share focus-visible behavior with the rest of the
-   app; this class only retargets their box model to look like pills. */
+/* Chips redesigned as icon cards (mockup match) — was a small pill row,
+   now a bigger card: icon-in-circle drawn via ::before (background-image
+   data-uri injected per-chip by chat_ui.py, since a raw <svg> can't live
+   inside a real st.button label), bold title + subtitle as the two-line
+   Markdown label text, and a chevron via ::after. Still a single real
+   st.button per chip — keyboard-reachable, one click target, zero extra
+   DOM nodes for the icon. */
 div[class*="st-key-dotred_chip_"] div.stButton > button {
+  position: relative;
   background: var(--surface) !important;
   color: var(--ink-2) !important;
   border: 1px solid var(--border) !important;
-  border-radius: var(--r-pill) !important;
-  padding: 0.45rem 1rem !important;
+  border-radius: var(--r-lg) !important;
+  padding: 0.9rem 2.5rem 0.9rem 3.5rem !important;
+  min-height: 4.5rem;
   font-size: 0.8125rem !important;
   font-weight: 500 !important;
+  text-align: left !important;
+  white-space: normal !important;
+  line-height: 1.5 !important;
   transition: border-color var(--t-fast) var(--ease),
               color        var(--t-fast) var(--ease),
               background   var(--t-fast) var(--ease),
-              box-shadow   var(--t-fast) var(--ease) !important;
+              box-shadow   var(--t-fast) var(--ease),
+              transform    var(--t-fast) var(--ease) !important;
+}
+/* Title line (the **bold** first line of the Markdown label) reads at the
+   base ink color and larger weight; the subtitle line underneath (the
+   hint text) is deliberately muted — this two-tier contrast is what the
+   mockup's title/subtitle split communicates, achieved purely through
+   Streamlit's own Markdown-in-label bold parsing rather than a second
+   element. */
+div[class*="st-key-dotred_chip_"] div.stButton > button p {
+  margin: 0 !important;
+}
+div[class*="st-key-dotred_chip_"] div.stButton > button strong {
+  display: block;
+  color: var(--ink) !important;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+/* Icon circle */
+div[class*="st-key-dotred_chip_"] div.stButton > button::before {
+  content: "";
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background-color: var(--accent-dim);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 1.1rem;
+  transition: background-color var(--t-fast) var(--ease);
+}
+/* Chevron */
+div[class*="st-key-dotred_chip_"] div.stButton > button::after {
+  content: "";
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  width: 0.8rem;
+  height: 0.8rem;
+  transform: translateY(-50%) rotate(45deg);
+  border-top: 2px solid var(--muted);
+  border-right: 2px solid var(--muted);
+  transition: border-color var(--t-fast) var(--ease),
+              transform    var(--t-fast) var(--ease);
 }
 div[class*="st-key-dotred_chip_"] div.stButton > button:hover {
   border-color: var(--accent) !important;
-  color: var(--accent) !important;
   background: var(--accent-dim) !important;
-  box-shadow: 0 2px 8px var(--accent-dim) !important;
+  box-shadow: 0 4px 14px var(--accent-dim) !important;
+  transform: translateY(-1px);
+}
+div[class*="st-key-dotred_chip_"] div.stButton > button:hover::before {
+  background-color: var(--accent);
+}
+div[class*="st-key-dotred_chip_"] div.stButton > button:hover::after {
+  border-color: var(--accent);
+  transform: translateY(-50%) rotate(45deg) translateX(2px);
 }
 div[class*="st-key-dotred_chip_"] div.stButton > button:active {
   background: var(--accent-glow) !important;
+  transform: translateY(0);
 }
+/* On mobile the two-chip row wraps to one column — the card format reads
+   naturally full-width; no separate mobile chip style is needed beyond
+   the existing responsive column stacking already in the app's base CSS. */
 
 /* ── Input row ─────────────────────────────────────────────────── */
 /* The form (st.form key="dotred_form") also needs the card's own side
@@ -2763,6 +2913,39 @@ div[class*="st-key-dotred_input_box"] div[data-baseweb="input"] > div {
    rule near the top of the file) instead of relying on inheritance alone. */
 div[class*="st-key-dotred_input_box"] div[data-baseweb="input"]:focus-within {
   box-shadow: 0 0 0 3px var(--accent-dim) !important;
+}
+/* Send/clear icons — drawn via ::before since st.form_submit_button's label
+   is plain text/Markdown only and cannot render a raw <svg> string; a
+   second markdown() call isn't an option either (form_submit_button has no
+   equivalent slot for one). Uses the same currentColor-independent stroke
+   trick as the chip icons: a fixed hex baked into the data URI, matched to
+   whatever text color that button state already uses. */
+div[class*="st-key-dotred_send_btn"] div.stButton > button,
+div[class*="st-key-dotred_clear_btn"] div.stButton > button {
+  position: relative;
+  padding-left: 2.1rem !important;
+}
+div[class*="st-key-dotred_send_btn"] div.stButton > button::before,
+div[class*="st-key-dotred_clear_btn"] div.stButton > button::before {
+  content: "";
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.9rem;
+  height: 0.9rem;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+div[class*="st-key-dotred_send_btn"] div.stButton > button::before {
+  background-image: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z%22/%3E%3Cpath d=%22m21.854 2.147-10.94 10.939%22/%3E%3C/svg%3E');
+}
+div[class*="st-key-dotred_clear_btn"] div.stButton > button::before {
+  background-image: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%236b6258%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6%22/%3E%3Cpath d=%22M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2%22/%3E%3Cline x1=%2210%22 x2=%2210%22 y1=%2211%22 y2=%2217%22/%3E%3Cline x1=%2214%22 x2=%2214%22 y1=%2211%22 y2=%2217%22/%3E%3C/svg%3E');
+}
+div[class*="st-key-dotred_clear_btn"] div.stButton > button:hover::before {
+  background-image: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23c1440e%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6%22/%3E%3Cpath d=%22M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2%22/%3E%3Cline x1=%2210%22 x2=%2210%22 y1=%2211%22 y2=%2217%22/%3E%3Cline x1=%2214%22 x2=%2214%22 y1=%2211%22 y2=%2217%22/%3E%3C/svg%3E');
 }
 div[class*="st-key-dotred_send_btn"] div.stButton > button {
   background: var(--accent) !important;

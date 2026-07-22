@@ -111,42 +111,75 @@ def sanitize_reply(text: str) -> str:
 
 
 # ── Suggested questions (empty-state) ─────────────────────────────
-def suggested_questions(scan_data: dict, server_data: dict, ai_data: dict) -> list[str]:
-    """สร้างคำถามแนะนำ 3-4 ข้อจาก findings จริงของ scan นี้ (ไม่ใช้ AI — deterministic)."""
-    qs: list[str] = []
+def suggested_questions(scan_data: dict, server_data: dict, ai_data: dict) -> list[dict]:
+    """สร้างคำถามแนะนำ 3-4 ข้อจาก findings จริงของ scan นี้ (ไม่ใช้ AI — deterministic).
+
+    คืนค่าเป็น list[dict] ({"q": คำถาม, "hint": คำอธิบายสั้น, "icon": ชื่อไอคอน})
+    แทน list[str] เดิม — เพื่อรองรับดีไซน์ chip แบบการ์ด (มี subtitle + icon ใน
+    แต่ละใบ ตาม mockup) การเลือกไอคอนจริงยังอยู่ฝั่ง chat_ui.py (ไฟล์นี้ไม่ผูก
+    กับ SVG ใด ๆ) — "icon" ที่คืนมาเป็นแค่ชื่อ key ให้ chat_ui.py ไป map เอง."""
+    qs: list[dict] = []
     scan_data = scan_data or {}
     server_data = server_data or {}
 
     headers = scan_data.get("headers", {}) or {}
     missing = headers.get("headers_missing", []) or []
     if missing:
-        qs.append(f"ควรแก้ {missing[0]} ยังไง?")
+        qs.append({
+            "q": f"ควรแก้ {missing[0]} ยังไง?",
+            "hint": "แนะนำแนวทางปรับปรุงให้ปลอดภัยยิ่งขึ้น",
+            "icon": "file_shield",
+        })
 
     ssl = scan_data.get("ssl", {}) or {}
     if not ssl.get("valid"):
-        qs.append("ปัญหา SSL ที่เจอร้ายแรงแค่ไหน?")
+        qs.append({
+            "q": "ปัญหา SSL ที่เจอร้ายแรงแค่ไหน?",
+            "hint": "ประเมินความเสี่ยงจากใบรับรองที่มีปัญหา",
+            "icon": "alert",
+        })
     elif ssl.get("days_left", 999) < 30:
-        qs.append("ใบรับรอง SSL ใกล้หมดอายุ ต้องทำอะไรบ้าง?")
+        qs.append({
+            "q": "ใบรับรอง SSL ใกล้หมดอายุ ต้องทำอะไรบ้าง?",
+            "hint": "เตรียมต่ออายุก่อนใบรับรองหมดอายุจริง",
+            "icon": "alert",
+        })
 
     vulns = server_data.get("vulnerabilities", []) or []
     if vulns:
-        qs.append(f"{vulns[0].get('cve', 'CVE ที่พบ')} อันตรายแค่ไหน?")
+        qs.append({
+            "q": f"{vulns[0].get('cve', 'CVE ที่พบ')} อันตรายแค่ไหน?",
+            "hint": "ประเมินผลกระทบของช่องโหว่ที่ตรวจพบ",
+            "icon": "alert",
+        })
 
     dns = scan_data.get("dns", {}) or {}
     if not dns.get("error"):
         if not (dns.get("spf", {}) or {}).get("present"):
-            qs.append("ทำไมต้องมี SPF/DMARC?")
+            qs.append({
+                "q": "ทำไมต้องมี SPF/DMARC?",
+                "hint": "ป้องกันการปลอมแปลงอีเมลจากโดเมนนี้",
+                "icon": "file_shield",
+            })
 
     if not qs:
-        qs.append("สรุปผลสแกนให้ฟังหน่อย")
-    qs.append("ควรแก้อะไรก่อนเป็นอันดับแรก?")
+        qs.append({
+            "q": "สรุปผลสแกนให้ฟังหน่อย",
+            "hint": "ภาพรวมคะแนนความปลอดภัยและจุดสำคัญ",
+            "icon": "file_shield",
+        })
+    qs.append({
+        "q": "ควรแก้ไขอะไรก่อนเป็นอันดับแรก?",
+        "hint": "จัดลำดับความเสี่ยงและสิ่งที่ควรเร่งแก้ไข",
+        "icon": "alert",
+    })
 
     seen = set()
     out = []
-    for q in qs:
-        if q not in seen:
-            seen.add(q)
-            out.append(q)
+    for item in qs:
+        if item["q"] not in seen:
+            seen.add(item["q"])
+            out.append(item)
         if len(out) >= 4:
             break
     return out

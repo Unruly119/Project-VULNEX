@@ -2737,7 +2737,10 @@ div[class*="st-key-dotred_form"] div[data-baseweb="input"] input:disabled {
 }
 
 /* Send button — round, matches the FAB's own gradient family so it reads
-   as the same object language rather than the site's flat --ink default. */
+   as the same object language rather than the site's flat --ink default.
+   Label is a single space (see chat_ui.py) — the paper-plane icon is
+   painted via ::before since form_submit_button's label is plain text/
+   Markdown only and cannot render a raw <svg> string. */
 div[class*="st-key-dotred_form"] div[data-testid="stFormSubmitButton"] > button {
   width: 100% !important;
   height: 2.35rem !important;
@@ -2745,14 +2748,24 @@ div[class*="st-key-dotred_form"] div[data-testid="stFormSubmitButton"] > button 
   border-radius: var(--r-pill) !important;
   border: none !important;
   padding: 0 !important;
+  position: relative;
   background: linear-gradient(145deg, #e07a45, #b8501f 65%, #9c4118) !important;
   color: #fff !important;
-  font-family: var(--font-sans) !important;
-  font-size: 0.75rem !important;
-  font-weight: 600 !important;
   box-shadow: 0 3px 10px rgba(196, 98, 45, 0.3) !important;
   transition: transform 160ms var(--ease), box-shadow 160ms var(--ease),
               opacity 160ms var(--ease) !important;
+}
+div[class*="st-key-dotred_form"] div[data-testid="stFormSubmitButton"] > button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 1rem;
+  height: 1rem;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  background-image: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z%22/%3E%3Cpath d=%22m21.854 2.147-10.94 10.939%22/%3E%3C/svg%3E');
 }
 div[class*="st-key-dotred_form"] div[data-testid="stFormSubmitButton"] > button:hover {
   transform: translateY(-1px) !important;

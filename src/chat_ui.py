@@ -336,7 +336,7 @@ def render_dotred_widget(scan_data: dict, server_data: dict, ai_data: dict) -> N
 
             pending_input_val = st.session_state.pop("dotred_pending_input", "")
             with st.form(key="dotred_form", clear_on_submit=True, border=False):
-                in_col, send_col = st.columns([5, 1])
+                in_col, send_col = st.columns([6, 1])
                 with in_col:
                     user_message = st.text_input(
                         "ถามคำถาม",
@@ -347,8 +347,18 @@ def render_dotred_widget(scan_data: dict, server_data: dict, ai_data: dict) -> N
                         disabled=bool(pending_question),
                     )
                 with send_col:
+                    # Round icon-only send button (Claude/ChatGPT pattern,
+                    # per explicit request) — label is a single space, not
+                    # "ส่ง" text, since the button is themed to a circle in
+                    # index.css (scoped via the FORM's own key, which reliably
+                    # becomes an st-key-* class — unlike an individual
+                    # st.button's key, which was the root cause of the
+                    # chip-icon blank-square bug fixed above) and the
+                    # paper-plane icon is painted via ::before
+                    # (form_submit_button's label is plain text/Markdown
+                    # only and cannot render a raw <svg> string).
                     submitted = st.form_submit_button(
-                        "ส่ง", key="dotred_send_btn",
+                        " ", key="dotred_send_btn",
                         use_container_width=True, disabled=bool(pending_question),
                     )
             # Clear-chat sits as its own small button below the input row,

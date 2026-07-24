@@ -310,15 +310,29 @@ def render_dotred_widget(scan_data: dict, server_data: dict, ai_data: dict) -> N
                         _CHIP_ICON_PATHS.get(item["icon"], _P_FILE_SHIELD),
                         "%23c1440e",
                     )
-                    st.markdown(
-                        f'<style>div[class*="st-key-{chip_key}"] '
-                        f'button::before{{background-image:url(\'{icon_uri}\')}}</style>',
-                        unsafe_allow_html=True,
-                    )
-                    label = f"**{item['q']}**  \n{item['hint']}"
-                    if st.button(label, key=chip_key, use_container_width=True):
-                        st.session_state["dotred_pending_input"] = item["q"]
-                        st.rerun(scope="fragment")
+                    # BUGFIX: the icon rendered as a blank white square
+                    # because the per-chip <style> override targeted
+                    # div[class*="st-key-{chip_key}"] button::before, but
+                    # st.button()'s own `key=` is NOT guaranteed to surface
+                    # as an `st-key-*` class directly on a wrapper around
+                    # THAT SPECIFIC button the way st.container(key=...)
+                    # does — so the selector matched nothing and the ::before
+                    # in index.css's base rule (which has no background-image
+                    # of its own) painted as an empty 1.05rem box instead.
+                    # Wrapping the button in its own st.container(key=...) — the
+                    # same pattern the FAB already uses successfully — makes
+                    # the st-key-* class land on a real, guaranteed wrapper.
+                    with st.container(key=chip_key):
+                        st.markdown(
+                            f'<style>div[class*="st-key-{chip_key}"] '
+                            f'div.stButton > button::before'
+                            f'{{background-image:url(\'{icon_uri}\')}}</style>',
+                            unsafe_allow_html=True,
+                        )
+                        label = f"**{item['q']}**  \n{item['hint']}"
+                        if st.button(label, key=f"{chip_key}_btn", use_container_width=True):
+                            st.session_state["dotred_pending_input"] = item["q"]
+                            st.rerun(scope="fragment")
 
             pending_input_val = st.session_state.pop("dotred_pending_input", "")
             with st.form(key="dotred_form", clear_on_submit=True, border=False):
